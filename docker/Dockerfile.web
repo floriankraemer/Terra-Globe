@@ -1,0 +1,22 @@
+FROM node:20-bookworm-slim
+
+RUN corepack enable && corepack prepare pnpm@9 --activate
+
+WORKDIR /workspace
+
+COPY package.json pnpm-workspace.yaml ./
+COPY packages/core/package.json packages/core/package.json
+COPY packages/map/package.json packages/map/package.json
+COPY packages/storage-indexeddb/package.json packages/storage-indexeddb/package.json
+COPY packages/storage-sqlite/package.json packages/storage-sqlite/package.json
+COPY packages/storage-remote/package.json packages/storage-remote/package.json
+COPY packages/ui/package.json packages/ui/package.json
+COPY e2e/playwright/package.json e2e/playwright/package.json
+
+RUN pnpm install --frozen-lockfile || pnpm install
+
+COPY . .
+
+EXPOSE 5173 4173
+
+CMD ["pnpm", "--filter", "@webglobe/ui", "dev"]

@@ -1,0 +1,60 @@
+services:
+  web-dev:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web
+    command: pnpm --filter @webglobe/ui dev -- --host 0.0.0.0
+    user: "${UID:-1000}:${GID:-1000}"
+    ports:
+      - "5173:5173"
+    volumes:
+      - .:/workspace
+      - web_node_modules:/workspace/node_modules
+    environment:
+      - CHOKIDAR_USEPOLLING=1
+      - HOME=/tmp
+
+  web-build:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web
+    command: pnpm --filter @webglobe/ui build
+    user: "${UID:-1000}:${GID:-1000}"
+    volumes:
+      - .:/workspace
+      - web_node_modules:/workspace/node_modules
+    environment:
+      - HOME=/tmp
+
+  test:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web
+    command: pnpm --filter "./packages/*" test
+    user: "${UID:-1000}:${GID:-1000}"
+    volumes:
+      - .:/workspace
+      - web_node_modules:/workspace/node_modules
+    environment:
+      - HOME=/tmp
+
+  tauri-linux-build:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.tauri-linux
+    # Runs as root: only writes to the target/ and cargo-registry named
+    # volumes (gitignored build caches), never back into the bind-mounted
+    # source tree, so host-file ownership is not a concern here.
+    volumes:
+      - .:/workspace
+      - tauri_node_modules:/workspace/node_modules
+      - tauri_target:/workspace/src-tauri/target
+      - cargo_registry:/usr/local/cargo/registry
+    environment:
+      - HOME=/tmp
+
+volumes:
+  web_node_modules:
+  tauri_node_modules:
+  tauri_target:
+  cargo_registry:

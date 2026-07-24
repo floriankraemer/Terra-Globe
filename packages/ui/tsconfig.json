@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "jsx": "react-jsx",
+    "composite": true
+  },
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"],
+  "references": [
+    { "path": "../core" },
+    { "path": "../map" },
+    { "path": "../storage-indexeddb" },
+    { "path": "../storage-sqlite" }
+  ]
+}

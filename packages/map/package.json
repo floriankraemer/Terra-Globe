@@ -1,0 +1,24 @@
+{
+  "name": "@webglobe/map",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src test --config ../../eslint.config.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@webglobe/core": "workspace:*",
+    "cesium": "^1.121.1"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^2.1.4",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4"
+  }
+}

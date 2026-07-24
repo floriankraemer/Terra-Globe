@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>Revier Bischhausen II</name>
+    <Folder>
+      <name>Grenzen</name>
+      <Placemark>
+        <name>Aussengrenze</name>
+        <MultiGeometry>
+          <Polygon>
+            <outerBoundaryIs>
+              <LinearRing>
+                <coordinates>9.0,51.0,0 9.1,51.0,0 9.1,51.1,0 9.0,51.1,0 9.0,51.0,0</coordinates>
+              </LinearRing>
+            </outerBoundaryIs>
+          </Polygon>
+          <Polygon>
+            <outerBoundaryIs>
+              <LinearRing>
+                <coordinates>9.2,51.2,0 9.3,51.2,0 9.3,51.3,0 9.2,51.3,0 9.2,51.2,0</coordinates>
+              </LinearRing>
+            </outerBoundaryIs>
+          </Polygon>
+        </MultiGeometry>
+      </Placemark>
+      <Placemark>
+        <name>Wanderweg</name>
+        <LineString>
+          <coordinates>9.0,51.0,0 9.05,51.05,0 9.1,51.1,0</coordinates>
+        </LineString>
+      </Placemark>
+    </Folder>
+    <Placemark>
+      <name>Hochsitz</name>
+      <Point>
+        <coordinates>9.05,51.05,0</coordinates>
+      </Point>
+    </Placemark>
+  </Document>
+</kml>

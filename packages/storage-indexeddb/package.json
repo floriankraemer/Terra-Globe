@@ -1,0 +1,25 @@
+{
+  "name": "@webglobe/storage-indexeddb",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint src test --config ../../eslint.config.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@webglobe/core": "workspace:*",
+    "dexie": "^4.0.10"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^2.1.4",
+    "fake-indexeddb": "^6.0.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4"
+  }
+}

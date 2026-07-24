@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <Folder>
+      <name>My Places</name>
+      <Placemark>
+        <name>Brandenburg Gate</name>
+        <description>Berlin landmark</description>
+        <Point>
+          <coordinates>13.377704,52.516275,0</coordinates>
+        </Point>
+      </Placemark>
+    </Folder>
+  </Document>
+</kml>

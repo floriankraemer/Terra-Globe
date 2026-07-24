@@ -1,0 +1,10 @@
+.git
+node_modules
+**/node_modules
+**/dist
+**/target
+src-tauri/target
+**/coverage
+e2e/playwright/test-results
+e2e/playwright/playwright-report
+.vite
