@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatArea, formatCoordinate, formatDistance } from "../../src/domain/units.js";
+import { formatArea, formatCoordinate, formatDistance, formatDuration } from "../../src/domain/units.js";
 
 describe("formatDistance", () => {
   it("formats meters under 1km in metric", () => {
@@ -16,6 +16,20 @@ describe("formatDistance", () => {
 
   it("formats long distances in imperial as miles", () => {
     expect(formatDistance(1609.344, "imperial")).toBe("1.00 mi");
+  });
+});
+
+describe("formatDuration", () => {
+  it("formats under an hour as minutes only", () => {
+    expect(formatDuration(25 * 60)).toBe("25 min");
+  });
+
+  it("formats an hour or more as hours and minutes", () => {
+    expect(formatDuration(90 * 60)).toBe("1 h 30 min");
+  });
+
+  it("rounds to the nearest minute", () => {
+    expect(formatDuration(89)).toBe("1 min");
   });
 });
 

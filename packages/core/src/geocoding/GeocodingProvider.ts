@@ -11,4 +11,6 @@ export interface GeocodeResult {
  */
 export interface GeocodingProvider {
   search(query: string): Promise<GeocodeResult[]>;
+  /** Reverse geocode a point to a human-readable label, or null if none was found. */
+  reverse(point: GeoPoint): Promise<string | null>;
 }

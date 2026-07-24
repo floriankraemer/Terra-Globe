@@ -9,4 +9,5 @@ export * from "./drawing/DrawingController.js";
 export * from "./drawing/IScreenPicker.js";
 export * from "./drawing/CesiumScreenPicker.js";
 export * from "./ruler/RulerController.js";
+export * from "./routing/RouteController.js";
 export * from "./sync/EntitySynchronizer.js";

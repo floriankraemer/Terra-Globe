@@ -1,3 +1,4 @@
+import type { GeoPoint } from "../domain/geometry.js";
 import type { GeocodeResult, GeocodingProvider } from "./GeocodingProvider.js";
 
 const OPENCAGE_SEARCH_URL = "https://api.opencagedata.com/geocode/v1/json";
@@ -48,5 +49,20 @@ export class OpenCageGeocodingProvider implements GeocodingProvider {
     }
 
     return mapOpenCageResults(await response.json());
+  }
+
+  async reverse(point: GeoPoint): Promise<string | null> {
+    const url = new URL(OPENCAGE_SEARCH_URL);
+    url.searchParams.set("q", `${point.lat}+${point.lon}`);
+    url.searchParams.set("key", this.apiKey);
+
+    const response = await this.fetchImpl(url, { headers: { Accept: "application/json" } });
+    if (!response.ok) {
+      throw new Error(
+        `OpenCage reverse geocode failed: ${response.status} ${response.statusText}`,
+      );
+    }
+
+    return mapOpenCageResults(await response.json())[0]?.label ?? null;
   }
 }

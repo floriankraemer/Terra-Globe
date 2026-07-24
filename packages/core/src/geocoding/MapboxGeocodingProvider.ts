@@ -1,3 +1,4 @@
+import type { GeoPoint } from "../domain/geometry.js";
 import type { GeocodeResult, GeocodingProvider } from "./GeocodingProvider.js";
 
 const MAPBOX_GEOCODING_BASE_URL = "https://api.mapbox.com/geocoding/v5/mapbox.places";
@@ -50,5 +51,19 @@ export class MapboxGeocodingProvider implements GeocodingProvider {
     }
 
     return mapMapboxResults(await response.json());
+  }
+
+  async reverse(point: GeoPoint): Promise<string | null> {
+    const url = new URL(`${MAPBOX_GEOCODING_BASE_URL}/${point.lon},${point.lat}.json`);
+    url.searchParams.set("access_token", this.apiKey);
+
+    const response = await this.fetchImpl(url, { headers: { Accept: "application/json" } });
+    if (!response.ok) {
+      throw new Error(
+        `Mapbox reverse geocode failed: ${response.status} ${response.statusText}`,
+      );
+    }
+
+    return mapMapboxResults(await response.json())[0]?.label ?? null;
   }
 }

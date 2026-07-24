@@ -11,6 +11,7 @@ vi.mock("@webglobe/core", async () => {
     ...actual,
     testTileProviderConfig: vi.fn(),
     testGeocodingProviderConfig: vi.fn(),
+    testRoutingProviderConfig: vi.fn(),
   };
 });
 
@@ -59,6 +60,30 @@ describe("ProvidersTab", () => {
       kind: "tile",
       preset: "mapbox-streets",
       name: "My Mapbox",
+    });
+  });
+
+  it("submits the add-provider form for a routing provider", async () => {
+    const onAdd = vi.fn(() => "new-id");
+    const user = userEvent.setup();
+    render(
+      <ProvidersTab
+        providers={[]}
+        secretStore={fakeSecretStore()}
+        onAdd={onAdd}
+        onSetEnabled={vi.fn()}
+        onRemove={vi.fn()}
+      />,
+    );
+
+    await user.selectOptions(screen.getByLabelText("Type"), "routing");
+    await user.type(screen.getByLabelText("Name"), "My GraphHopper");
+    await user.click(screen.getByRole("button", { name: "Add Provider" }));
+
+    expect(onAdd).toHaveBeenCalledWith({
+      kind: "routing",
+      preset: "osrm",
+      name: "My GraphHopper",
     });
   });
 

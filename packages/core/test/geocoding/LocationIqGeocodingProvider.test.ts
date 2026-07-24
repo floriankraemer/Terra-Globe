@@ -48,4 +48,26 @@ describe("LocationIqGeocodingProvider", () => {
     const provider = new LocationIqGeocodingProvider("key", fetchImpl);
     expect(await provider.search("x")).toEqual([]);
   });
+
+  it("reverse() maps a single Nominatim-shaped result to a label", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse({ display_name: "Berlin, Germany", lat: "52.5200066", lon: "13.4049540" }),
+      );
+    const provider = new LocationIqGeocodingProvider("secret-key", fetchImpl);
+
+    const label = await provider.reverse({ lon: 13.404954, lat: 52.5200066 });
+
+    expect(label).toBe("Berlin, Germany");
+    const [url] = fetchImpl.mock.calls[0] as [URL];
+    expect(url.origin + url.pathname).toBe("https://us1.locationiq.com/v1/reverse");
+    expect(url.searchParams.get("key")).toBe("secret-key");
+  });
+
+  it("reverse() throws on an HTTP error response", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({}, { ok: false, status: 401 }));
+    const provider = new LocationIqGeocodingProvider("bad-key", fetchImpl);
+    await expect(provider.reverse({ lon: 0, lat: 0 })).rejects.toThrow(/401/);
+  });
 });

@@ -1,11 +1,14 @@
 import { useState } from "react";
 import {
   GEOCODING_PRESETS,
+  ROUTING_PRESETS,
   TILE_PRESETS,
   testGeocodingProviderConfig,
+  testRoutingProviderConfig,
   testTileProviderConfig,
   type GeocodingPresetId,
   type ProviderConfig,
+  type RoutingPresetId,
   type SecretStore,
   type TilePresetId,
 } from "@webglobe/core";
@@ -24,6 +27,15 @@ type Kind = ProviderConfig["kind"];
 
 const TILE_PRESET_OPTIONS = Object.values(TILE_PRESETS);
 const GEOCODING_PRESET_OPTIONS = Object.values(GEOCODING_PRESETS);
+const ROUTING_PRESET_OPTIONS = Object.values(ROUTING_PRESETS);
+
+const KIND_LABELS: Record<Kind, string> = { tile: "Tile", geocoding: "Geocoding", routing: "Routing" };
+
+function presetOptionsFor(kind: Kind) {
+  if (kind === "tile") return TILE_PRESET_OPTIONS;
+  if (kind === "geocoding") return GEOCODING_PRESET_OPTIONS;
+  return ROUTING_PRESET_OPTIONS;
+}
 
 export function ProvidersTab({
   providers,
@@ -40,13 +52,11 @@ export function ProvidersTab({
     Record<string, { status: TestStatus; error?: string }>
   >({});
 
-  const presetOptions = kind === "tile" ? TILE_PRESET_OPTIONS : GEOCODING_PRESET_OPTIONS;
+  const presetOptions = presetOptionsFor(kind);
 
   function handleKindChange(nextKind: Kind) {
     setKind(nextKind);
-    const firstOption =
-      nextKind === "tile" ? TILE_PRESET_OPTIONS[0]! : GEOCODING_PRESET_OPTIONS[0]!;
-    setPresetId(firstOption.id);
+    setPresetId(presetOptionsFor(nextKind)[0]!.id);
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -57,7 +67,9 @@ export function ProvidersTab({
     const id =
       kind === "tile"
         ? onAdd({ kind: "tile", preset: presetId as TilePresetId, name: trimmedName })
-        : onAdd({ kind: "geocoding", preset: presetId as GeocodingPresetId, name: trimmedName });
+        : kind === "geocoding"
+          ? onAdd({ kind: "geocoding", preset: presetId as GeocodingPresetId, name: trimmedName })
+          : onAdd({ kind: "routing", preset: presetId as RoutingPresetId, name: trimmedName });
     if (apiKey.trim().length > 0) {
       void secretStore.set(id, apiKey.trim());
     }
@@ -71,7 +83,9 @@ export function ProvidersTab({
     const result =
       config.kind === "tile"
         ? await testTileProviderConfig(config, key)
-        : await testGeocodingProviderConfig(config, key);
+        : config.kind === "geocoding"
+          ? await testGeocodingProviderConfig(config, key)
+          : await testRoutingProviderConfig(config, key);
     setTestState((s) => ({
       ...s,
       [config.id]: { status: result.ok ? "success" : "failure", error: result.error },
@@ -104,9 +118,7 @@ export function ProvidersTab({
           return (
             <li key={config.id} className="provider-item">
               <span className="provider-item-name">{config.name}</span>
-              <span className="provider-item-kind">
-                {config.kind === "tile" ? "Tile" : "Geocoding"}
-              </span>
+              <span className="provider-item-kind">{KIND_LABELS[config.kind]}</span>
               <span className={`provider-status-badge ${state.status}`} title={state.error}>
                 {state.status}
               </span>
@@ -130,6 +142,7 @@ export function ProvidersTab({
           <select value={kind} onChange={(e) => handleKindChange(e.target.value as Kind)}>
             <option value="tile">Tile (basemap)</option>
             <option value="geocoding">Geocoding (address search)</option>
+            <option value="routing">Routing (route planner)</option>
           </select>
         </label>
         <label className="placemark-editor-field">

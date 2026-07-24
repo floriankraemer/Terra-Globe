@@ -3,10 +3,13 @@ import type * as Cesium from "cesium";
 import {
   createPointGeometry,
   NominatimGeocodingProvider,
+  OsrmRoutingProvider,
   type GeocodeResult,
   type GeocodingProvider,
   type GeocodingProviderConfig,
   type LineStringGeometry,
+  type RoutingProvider,
+  type RoutingProviderConfig,
 } from "@webglobe/core";
 import {
   flyToGeometry,
@@ -26,6 +29,9 @@ import { ImportExportToolbar } from "../features/import-export/ImportExportToolb
 import { RulerToolbar } from "../features/ruler/RulerToolbar.js";
 import { RulerPanel } from "../features/ruler/RulerPanel.js";
 import { useRuler } from "../features/ruler/useRuler.js";
+import { RoutePlannerToolbar } from "../features/route-planner/RoutePlannerToolbar.js";
+import { RoutePlannerPanel } from "../features/route-planner/RoutePlannerPanel.js";
+import { useRoutePlanner } from "../features/route-planner/useRoutePlanner.js";
 import { useImportExport } from "../features/import-export/useImportExport.js";
 import { Notice, type NoticeData } from "../features/notice/Notice.js";
 import { PlacemarkEditor } from "../features/placemark-editor/PlacemarkEditor.js";
@@ -34,6 +40,7 @@ import { useSettings } from "../features/settings/useSettings.js";
 import { useFloatingPanel } from "./useFloatingPanel.js";
 import { useResizableWidth } from "./useResizableWidth.js";
 import { createGeocodingProvider } from "../platform/createGeocodingProvider.js";
+import { createRoutingProvider } from "../platform/createRoutingProvider.js";
 import { createSecretStore } from "../platform/createSecretStore.js";
 import { buildTileSources } from "../platform/tileProviderRegistry.js";
 
@@ -98,12 +105,24 @@ export function App() {
     maxHeight: 600,
     storageKey: "webglobe:rulerPanelGeometry",
   });
+  const routePlannerPanel = useFloatingPanel({
+    initial: { x: window.innerWidth - 300 - 12, y: 56, width: 300, height: 260 },
+    minWidth: 240,
+    minHeight: 160,
+    maxWidth: 480,
+    maxHeight: 600,
+    storageKey: "webglobe:routePlannerPanelGeometry",
+  });
   const secretStore = useRef(createSecretStore()).current;
   const settings = useSettings(secretStore);
   const [geocodingProvider, setGeocodingProvider] = useState<GeocodingProvider>(
     () => new NominatimGeocodingProvider(),
   );
   const geocoding = useGeocoding(geocodingProvider);
+  const routeStopSearch = useGeocoding(geocodingProvider);
+  const [routingProvider, setRoutingProvider] = useState<RoutingProvider>(
+    () => new OsrmRoutingProvider(),
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -127,6 +146,19 @@ export function App() {
       cancelled = true;
     };
   }, [settings.providers, secretStore]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const active = settings.providers.find(
+      (p): p is RoutingProviderConfig => p.kind === "routing" && p.enabled,
+    );
+    createRoutingProvider(active, secretStore).then((provider) => {
+      if (!cancelled) setRoutingProvider(provider);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [settings.providers, secretStore]);
   const onReadyRef = useRef((handle: { viewer: Cesium.Viewer }) => {
     setViewer(handle.viewer);
     // Exposed for E2E tests to inspect camera state (e.g. after a fly-to);
@@ -142,6 +174,7 @@ export function App() {
 
   const library = useLibrary(viewer);
   const ruler = useRuler(viewer);
+  const routePlanner = useRoutePlanner(viewer, routingProvider, geocodingProvider);
   const { mode, selectTool, finish, cancel } = useDrawing(
     viewer,
     (geometry) => {
@@ -193,6 +226,7 @@ export function App() {
           disabled={!library.ready}
           onSelectTool={(tool) => {
             ruler.cancel();
+            routePlanner.cancel();
             selectTool(tool);
           }}
           onFinish={finish}
@@ -204,11 +238,24 @@ export function App() {
           vertexCount={ruler.vertexCount}
           onStart={() => {
             cancel();
+            routePlanner.cancel();
             ruler.start();
           }}
           onUndo={ruler.undo}
           onFinish={ruler.finish}
           onCancel={ruler.cancel}
+        />
+        <RoutePlannerToolbar
+          active={routePlanner.active}
+          disabled={!library.ready}
+          waypointCount={routePlanner.stops.length}
+          onStart={() => {
+            cancel();
+            ruler.cancel();
+            routePlanner.start();
+          }}
+          onFinish={routePlanner.finish}
+          onCancel={routePlanner.cancel}
         />
         <AddressSearchBox
           disabled={!viewer}
@@ -402,6 +449,51 @@ export function App() {
                 : "placemark-editor-resize-handle"
             }
             onMouseDown={rulerPanel.startResize}
+          />
+        </div>
+      )}
+      {(routePlanner.active || routePlanner.stops.length > 0) && (
+        <div
+          className="route-planner-panel-panel"
+          style={{
+            left: routePlannerPanel.geometry.x,
+            top: routePlannerPanel.geometry.y,
+            width: routePlannerPanel.geometry.width,
+            height: routePlannerPanel.geometry.height,
+          }}
+        >
+          <RoutePlannerPanel
+            stops={routePlanner.stops}
+            mode={routePlanner.mode}
+            alternatives={routePlanner.alternatives}
+            selectedIndex={routePlanner.selectedIndex}
+            totalDistanceMeters={routePlanner.totalDistanceMeters}
+            totalDurationSeconds={routePlanner.totalDurationSeconds}
+            loading={routePlanner.loading}
+            error={routePlanner.error}
+            unitSystem={settings.unitSystem}
+            searchStatus={routeStopSearch.status}
+            searchResults={routeStopSearch.results}
+            searchError={routeStopSearch.error}
+            onDragStart={routePlannerPanel.startDrag}
+            onClose={routePlanner.cancel}
+            onChangeMode={routePlanner.setMode}
+            onSearch={(query) => void routeStopSearch.search(query)}
+            onSelectSearchResult={(result: GeocodeResult) => {
+              routePlanner.addStop(result.point, result.label);
+              routeStopSearch.reset();
+            }}
+            onRemoveStop={routePlanner.removeStop}
+            onMoveStop={routePlanner.reorderStop}
+            onSelectAlternative={routePlanner.selectAlternative}
+          />
+          <div
+            className={
+              routePlannerPanel.isResizing
+                ? "placemark-editor-resize-handle resizing"
+                : "placemark-editor-resize-handle"
+            }
+            onMouseDown={routePlannerPanel.startResize}
           />
         </div>
       )}

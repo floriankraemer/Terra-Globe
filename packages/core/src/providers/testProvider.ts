@@ -2,8 +2,13 @@ import { LocationIqGeocodingProvider } from "../geocoding/LocationIqGeocodingPro
 import { MapboxGeocodingProvider } from "../geocoding/MapboxGeocodingProvider.js";
 import { OpenCageGeocodingProvider } from "../geocoding/OpenCageGeocodingProvider.js";
 import type { GeocodingProvider } from "../geocoding/GeocodingProvider.js";
+import { OsrmRoutingProvider } from "../routing/OsrmRoutingProvider.js";
+import { GraphHopperRoutingProvider } from "../routing/GraphHopperRoutingProvider.js";
+import { OpenRouteServiceRoutingProvider } from "../routing/OpenRouteServiceRoutingProvider.js";
+import { MapboxRoutingProvider } from "../routing/MapboxRoutingProvider.js";
+import type { RoutingProvider } from "../routing/RoutingProvider.js";
 import { TILE_PRESETS } from "./catalog/tilePresets.js";
-import type { GeocodingProviderConfig, TileProviderConfig } from "./ProviderConfig.js";
+import type { GeocodingProviderConfig, RoutingProviderConfig, TileProviderConfig } from "./ProviderConfig.js";
 
 export interface ProviderTestResult {
   ok: boolean;
@@ -58,6 +63,41 @@ export async function testGeocodingProviderConfig(
 ): Promise<ProviderTestResult> {
   try {
     await createGeocodingAdapter(config, apiKey, fetchImpl).search("Berlin");
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export function createRoutingAdapter(
+  config: RoutingProviderConfig,
+  apiKey: string,
+  fetchImpl?: typeof fetch,
+): RoutingProvider {
+  switch (config.preset) {
+    case "osrm":
+      return new OsrmRoutingProvider(undefined, fetchImpl);
+    case "graphhopper":
+      return new GraphHopperRoutingProvider(apiKey, fetchImpl);
+    case "openrouteservice":
+      return new OpenRouteServiceRoutingProvider(apiKey, fetchImpl);
+    case "mapbox-directions":
+      return new MapboxRoutingProvider(apiKey, fetchImpl);
+  }
+}
+
+const TEST_ROUTE_WAYPOINTS = [
+  { lon: 13.404954, lat: 52.5200066 },
+  { lon: 13.42, lat: 52.51 },
+];
+
+export async function testRoutingProviderConfig(
+  config: RoutingProviderConfig,
+  apiKey: string,
+  fetchImpl: typeof fetch = fetch.bind(globalThis),
+): Promise<ProviderTestResult> {
+  try {
+    await createRoutingAdapter(config, apiKey, fetchImpl).route(TEST_ROUTE_WAYPOINTS, "car");
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };

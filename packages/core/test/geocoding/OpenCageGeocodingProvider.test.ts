@@ -55,4 +55,31 @@ describe("OpenCageGeocodingProvider", () => {
     const provider = new OpenCageGeocodingProvider("key", fetchImpl);
     expect(await provider.search("x")).toEqual([]);
   });
+
+  it("reverse() maps the first result to a label", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonResponse({
+        results: [{ formatted: "Berlin, Germany", geometry: { lat: 52.5200066, lng: 13.404954 } }],
+      }),
+    );
+    const provider = new OpenCageGeocodingProvider("secret-key", fetchImpl);
+
+    const label = await provider.reverse({ lon: 13.404954, lat: 52.5200066 });
+
+    expect(label).toBe("Berlin, Germany");
+    const [url] = fetchImpl.mock.calls[0] as [URL];
+    expect(url.searchParams.get("q")).toBe("52.5200066+13.404954");
+  });
+
+  it("reverse() returns null for no match", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ results: [] }));
+    const provider = new OpenCageGeocodingProvider("key", fetchImpl);
+    expect(await provider.reverse({ lon: 0, lat: 0 })).toBeNull();
+  });
+
+  it("reverse() throws on an HTTP error response", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({}, { ok: false, status: 401 }));
+    const provider = new OpenCageGeocodingProvider("bad-key", fetchImpl);
+    await expect(provider.reverse({ lon: 0, lat: 0 })).rejects.toThrow(/401/);
+  });
 });

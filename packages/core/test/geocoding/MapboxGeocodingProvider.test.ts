@@ -55,4 +55,31 @@ describe("MapboxGeocodingProvider", () => {
     const provider = new MapboxGeocodingProvider("token", fetchImpl);
     expect(await provider.search("x")).toEqual([]);
   });
+
+  it("reverse() maps the first feature to a label", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonResponse({
+        features: [{ place_name: "Berlin, Germany", center: [13.404954, 52.5200066] }],
+      }),
+    );
+    const provider = new MapboxGeocodingProvider("secret-token", fetchImpl);
+
+    const label = await provider.reverse({ lon: 13.404954, lat: 52.5200066 });
+
+    expect(label).toBe("Berlin, Germany");
+    const [url] = fetchImpl.mock.calls[0] as [URL];
+    expect(url.pathname).toContain("13.404954,52.5200066.json");
+  });
+
+  it("reverse() returns null for no match", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ features: [] }));
+    const provider = new MapboxGeocodingProvider("token", fetchImpl);
+    expect(await provider.reverse({ lon: 0, lat: 0 })).toBeNull();
+  });
+
+  it("reverse() throws on an HTTP error response", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({}, { ok: false, status: 401 }));
+    const provider = new MapboxGeocodingProvider("bad-token", fetchImpl);
+    await expect(provider.reverse({ lon: 0, lat: 0 })).rejects.toThrow(/401/);
+  });
 });

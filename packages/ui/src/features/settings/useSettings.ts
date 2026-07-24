@@ -43,6 +43,7 @@ function isProviderConfig(value: unknown): value is ProviderConfig {
   }
   if (candidate.kind === "tile") return typeof candidate.preset === "string";
   if (candidate.kind === "geocoding") return typeof candidate.preset === "string";
+  if (candidate.kind === "routing") return typeof candidate.preset === "string";
   return false;
 }
 
@@ -112,7 +113,7 @@ export function useSettings(secretStore: SecretStore): UseSettingsResult {
       const target = prev.providers.find((p) => p.id === id);
       const providers = prev.providers.map((p) => {
         if (p.id === id) return { ...p, enabled };
-        if (enabled && target?.kind === "geocoding" && p.kind === "geocoding") {
+        if (enabled && target && target.kind !== "tile" && p.kind === target.kind) {
           return { ...p, enabled: false };
         }
         return p;

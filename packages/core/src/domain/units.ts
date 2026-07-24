@@ -21,6 +21,14 @@ export function formatDistance(meters: number, system: UnitSystem): string {
   return `${(meters / 1000).toFixed(2)} km`;
 }
 
+export function formatDuration(seconds: number): string {
+  const totalMinutes = Math.round(seconds / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours === 0) return `${minutes} min`;
+  return `${hours} h ${minutes} min`;
+}
+
 export function formatArea(squareMeters: number, system: UnitSystem): string {
   if (system === "imperial") {
     const squareFeet = squareMeters / SQUARE_METERS_PER_SQUARE_FOOT;

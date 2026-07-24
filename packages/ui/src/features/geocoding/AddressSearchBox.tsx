@@ -9,6 +9,8 @@ export interface AddressSearchBoxProps {
   error: string | null;
   onSearch: (query: string) => void;
   onSelectResult: (result: GeocodeResult) => void;
+  /** Keeps the "Address" text in the accessibility tree but hides it visually. */
+  hideLabel?: boolean;
 }
 
 export function AddressSearchBox({
@@ -18,6 +20,7 @@ export function AddressSearchBox({
   error,
   onSearch,
   onSelectResult,
+  hideLabel,
 }: AddressSearchBoxProps) {
   const [query, setQuery] = useState("");
 
@@ -31,7 +34,7 @@ export function AddressSearchBox({
         }}
       >
         <label className="address-search-label">
-          Address
+          <span className={hideLabel ? "visually-hidden" : undefined}>Address</span>
           <input
             type="text"
             value={query}
