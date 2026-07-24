@@ -219,7 +219,10 @@ button {
   padding: var(--space-2);
 }
 
-.tree ul {
+/* Indent only nested (child-folder) lists, not the root list itself -
+   `.tree ul` would also match the top-level list, doubling up with `.tree`'s
+   own padding and making the left edge indent more than the right. */
+.tree li ul {
   padding-left: var(--space-4);
 }
 
