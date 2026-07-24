@@ -2,13 +2,16 @@ import {
   NotFoundError,
   createFolder,
   createPlacemark,
+  createScreenOverlay,
   type DeleteFolderOptions,
   type Folder,
   type ImportBatchPayload,
   type NewFolder,
   type NewPlacemark,
+  type NewScreenOverlay,
   type Placemark,
   type PlacesRepository,
+  type ScreenOverlay,
   type Style,
 } from "@webglobe/core";
 import { migrate } from "./migrate.js";
@@ -155,6 +158,32 @@ export class SqlitePlacesRepository implements PlacesRepository {
     return style;
   }
 
+  async listScreenOverlays(folderId: string | null): Promise<ScreenOverlay[]> {
+    await this.init();
+    const rows = await this.driver.select<Row>(
+      folderId === null
+        ? "SELECT data FROM screen_overlays WHERE folder_id IS NULL"
+        : "SELECT data FROM screen_overlays WHERE folder_id = ?",
+      folderId === null ? [] : [folderId],
+    );
+    return rows.map((r) => JSON.parse(r.data) as ScreenOverlay).sort((a, b) => a.order - b.order);
+  }
+
+  async createScreenOverlay(input: NewScreenOverlay): Promise<ScreenOverlay> {
+    await this.init();
+    const overlay = createScreenOverlay(input);
+    await this.driver.execute(
+      "INSERT INTO screen_overlays (id, folder_id, data) VALUES (?, ?, ?)",
+      [overlay.id, overlay.folderId, JSON.stringify(overlay)],
+    );
+    return overlay;
+  }
+
+  async deleteScreenOverlay(id: string): Promise<void> {
+    await this.init();
+    await this.driver.execute("DELETE FROM screen_overlays WHERE id = ?", [id]);
+  }
+
   async importBatch(payload: ImportBatchPayload): Promise<void> {
     await this.init();
     for (const folder of payload.folders) {
@@ -174,6 +203,12 @@ export class SqlitePlacesRepository implements PlacesRepository {
         style.id,
         JSON.stringify(style),
       ]);
+    }
+    for (const overlay of payload.screenOverlays ?? []) {
+      await this.driver.execute(
+        "INSERT OR REPLACE INTO screen_overlays (id, folder_id, data) VALUES (?, ?, ?)",
+        [overlay.id, overlay.folderId, JSON.stringify(overlay)],
+      );
     }
   }
 }

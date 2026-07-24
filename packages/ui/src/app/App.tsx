@@ -24,6 +24,7 @@ import { AddressSearchBox } from "../features/geocoding/AddressSearchBox.js";
 import { useGeocoding } from "../features/geocoding/useGeocoding.js";
 import { FolderTree } from "../features/folders/FolderTree.js";
 import { useLibrary } from "../features/folders/useLibrary.js";
+import { ScreenOverlayLayer } from "../features/screen-overlays/ScreenOverlayLayer.js";
 import { HeightProfilePanel } from "../features/height-profile/HeightProfilePanel.js";
 import { ImportExportToolbar } from "../features/import-export/ImportExportToolbar.js";
 import { RulerToolbar } from "../features/ruler/RulerToolbar.js";
@@ -512,6 +513,7 @@ export function App() {
         />
       )}
       <CesiumViewerHost baseLayer={baseLayer} onReady={onReadyRef.current} />
+      <ScreenOverlayLayer overlays={library.screenOverlays} />
     </div>
   );
 }

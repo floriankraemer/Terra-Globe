@@ -1,5 +1,6 @@
 import type { Folder, NewFolder } from "../domain/folder.js";
 import type { NewPlacemark, Placemark } from "../domain/placemark.js";
+import type { NewScreenOverlay, ScreenOverlay } from "../domain/screenOverlay.js";
 import type { Style } from "../domain/style.js";
 
 export interface DeleteFolderOptions {
@@ -10,6 +11,7 @@ export interface ImportBatchPayload {
   folders: Folder[];
   placemarks: Placemark[];
   styles: Style[];
+  screenOverlays?: ScreenOverlay[];
 }
 
 /**
@@ -31,6 +33,10 @@ export interface PlacesRepository {
 
   getStyle(id: string): Promise<Style | null>;
   upsertStyle(style: Style): Promise<Style>;
+
+  listScreenOverlays(folderId: string | null): Promise<ScreenOverlay[]>;
+  createScreenOverlay(overlay: NewScreenOverlay): Promise<ScreenOverlay>;
+  deleteScreenOverlay(id: string): Promise<void>;
 
   importBatch(payload: ImportBatchPayload): Promise<void>;
 }

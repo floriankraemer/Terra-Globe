@@ -1,4 +1,4 @@
-import { parseKml, parseKmz, serializeKml, serializeKmz } from "@webglobe/core";
+import { parseKml, parseKmz, resolveNetworkLinks, serializeKml, serializeKmz } from "@webglobe/core";
 import type { UseLibraryResult } from "../folders/useLibrary.js";
 
 export interface ImportSummary {
@@ -32,6 +32,9 @@ export function useImportExport(library: UseLibraryResult) {
         result = isKmz
           ? await parseKmz(new Uint8Array(await file.arrayBuffer()))
           : parseKml(await file.text());
+        if (result.networkLinks.length > 0) {
+          result = await resolveNetworkLinks(result);
+        }
       } catch (err) {
         throw new Error(
           `Could not read "${file.name}": ${err instanceof Error ? err.message : String(err)}`,

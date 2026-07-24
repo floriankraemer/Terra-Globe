@@ -30,7 +30,7 @@ test("importing KML with MultiGeometry and a LineString imports everything, incl
   await expect(page.locator(".places-panel").getByText("Wanderweg")).toBeVisible();
 });
 
-test("importing KML with a genuinely unsupported geometry (e.g. a Model) shows a warning but still imports the rest", async ({
+test("importing KML with a Model geometry (e.g. COLLADA .dae, which Cesium can't render) still imports it as a fallback marker, with no warning", async ({
   page,
 }) => {
   await page.goto("/");
@@ -63,11 +63,10 @@ test("importing KML with a genuinely unsupported geometry (e.g. a Model) shows a
 
   const notice = page.getByRole("alert");
   await expect(notice).toBeVisible({ timeout: 15_000 });
-  await expect(notice).toContainText("Imported 1 placemark(s)");
-  await expect(notice).toContainText("skipped");
-  await expect(notice).toContainText("3D Hut");
+  await expect(notice).toContainText("Imported 2 placemark(s)");
+  await expect(notice).not.toContainText("skipped");
   await expect(page.getByText("Camp")).toBeVisible();
-  await expect(page.locator(".places-panel").getByText("3D Hut")).not.toBeVisible();
+  await expect(page.locator(".places-panel").getByText("3D Hut")).toBeVisible();
 });
 
 test("importing an invalid file shows an error notice instead of failing silently", async ({

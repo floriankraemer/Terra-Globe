@@ -1,5 +1,10 @@
 import { createFolder, type Folder, type NewFolder } from "../domain/folder.js";
 import { createPlacemark, type NewPlacemark, type Placemark } from "../domain/placemark.js";
+import {
+  createScreenOverlay,
+  type NewScreenOverlay,
+  type ScreenOverlay,
+} from "../domain/screenOverlay.js";
 import type { Style } from "../domain/style.js";
 import {
   NotFoundError,
@@ -12,6 +17,7 @@ export class InMemoryPlacesRepository implements PlacesRepository {
   private folders = new Map<string, Folder>();
   private placemarks = new Map<string, Placemark>();
   private styles = new Map<string, Style>();
+  private screenOverlays = new Map<string, ScreenOverlay>();
 
   async getFolder(id: string): Promise<Folder | null> {
     return this.folders.get(id) ?? null;
@@ -93,9 +99,28 @@ export class InMemoryPlacesRepository implements PlacesRepository {
     return style;
   }
 
+  async listScreenOverlays(folderId: string | null): Promise<ScreenOverlay[]> {
+    return [...this.screenOverlays.values()]
+      .filter((overlay) => overlay.folderId === folderId)
+      .sort((a, b) => a.order - b.order);
+  }
+
+  async createScreenOverlay(input: NewScreenOverlay): Promise<ScreenOverlay> {
+    const overlay = createScreenOverlay(input);
+    this.screenOverlays.set(overlay.id, overlay);
+    return overlay;
+  }
+
+  async deleteScreenOverlay(id: string): Promise<void> {
+    this.screenOverlays.delete(id);
+  }
+
   async importBatch(payload: ImportBatchPayload): Promise<void> {
     for (const folder of payload.folders) this.folders.set(folder.id, folder);
     for (const placemark of payload.placemarks) this.placemarks.set(placemark.id, placemark);
     for (const style of payload.styles) this.styles.set(style.id, style);
+    for (const overlay of payload.screenOverlays ?? []) {
+      this.screenOverlays.set(overlay.id, overlay);
+    }
   }
 }

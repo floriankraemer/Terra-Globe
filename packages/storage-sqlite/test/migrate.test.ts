@@ -16,7 +16,13 @@ describe("migrate", () => {
       .map((r) => (r as { name: string }).name)
       .sort();
 
-    expect(tables).toEqual(["folders", "placemarks", "schema_migrations", "styles"]);
+    expect(tables).toEqual([
+      "folders",
+      "placemarks",
+      "schema_migrations",
+      "screen_overlays",
+      "styles",
+    ]);
   });
 
   it("is idempotent - running twice does not error or duplicate schema_migrations rows", async () => {
@@ -27,6 +33,6 @@ describe("migrate", () => {
     await migrate(driver);
 
     const rows = db.prepare("SELECT version FROM schema_migrations").all();
-    expect(rows).toEqual([{ version: 1 }]);
+    expect(rows).toEqual([{ version: 2 }]);
   });
 });

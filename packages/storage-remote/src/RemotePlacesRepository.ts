@@ -4,8 +4,10 @@ import type {
   ImportBatchPayload,
   NewFolder,
   NewPlacemark,
+  NewScreenOverlay,
   Placemark,
   PlacesRepository,
+  ScreenOverlay,
   Style,
 } from "@webglobe/core";
 
@@ -63,6 +65,18 @@ export class RemotePlacesRepository implements PlacesRepository {
 
   upsertStyle(style: Style): Promise<Style> {
     return this.local.upsertStyle(style);
+  }
+
+  listScreenOverlays(folderId: string | null): Promise<ScreenOverlay[]> {
+    return this.local.listScreenOverlays(folderId);
+  }
+
+  createScreenOverlay(overlay: NewScreenOverlay): Promise<ScreenOverlay> {
+    return this.local.createScreenOverlay(overlay);
+  }
+
+  deleteScreenOverlay(id: string): Promise<void> {
+    return this.local.deleteScreenOverlay(id);
   }
 
   importBatch(payload: ImportBatchPayload): Promise<void> {

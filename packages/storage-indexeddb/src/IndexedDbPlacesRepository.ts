@@ -3,13 +3,16 @@ import {
   NotFoundError,
   createFolder,
   createPlacemark,
+  createScreenOverlay,
   type DeleteFolderOptions,
   type Folder,
   type ImportBatchPayload,
   type NewFolder,
   type NewPlacemark,
+  type NewScreenOverlay,
   type Placemark,
   type PlacesRepository,
+  type ScreenOverlay,
   type Style,
 } from "@webglobe/core";
 
@@ -17,6 +20,7 @@ class WebGlobeDexie extends Dexie {
   folders!: Table<Folder, string>;
   placemarks!: Table<Placemark, string>;
   styles!: Table<Style, string>;
+  screenOverlays!: Table<ScreenOverlay, string>;
 
   constructor(dbName: string) {
     super(dbName);
@@ -24,6 +28,12 @@ class WebGlobeDexie extends Dexie {
       folders: "id, parentId, order",
       placemarks: "id, folderId",
       styles: "id",
+    });
+    this.version(2).stores({
+      folders: "id, parentId, order",
+      placemarks: "id, folderId",
+      styles: "id",
+      screenOverlays: "id, folderId",
     });
   }
 }
@@ -122,16 +132,36 @@ export class IndexedDbPlacesRepository implements PlacesRepository {
     return style;
   }
 
+  async listScreenOverlays(folderId: string | null): Promise<ScreenOverlay[]> {
+    const overlays =
+      folderId === null
+        ? await this.db.screenOverlays.filter((o) => o.folderId === null).toArray()
+        : await this.db.screenOverlays.where("folderId").equals(folderId).toArray();
+    return overlays.sort((a, b) => a.order - b.order);
+  }
+
+  async createScreenOverlay(input: NewScreenOverlay): Promise<ScreenOverlay> {
+    const overlay = createScreenOverlay(input);
+    await this.db.screenOverlays.add(overlay);
+    return overlay;
+  }
+
+  async deleteScreenOverlay(id: string): Promise<void> {
+    await this.db.screenOverlays.delete(id);
+  }
+
   async importBatch(payload: ImportBatchPayload): Promise<void> {
     await this.db.transaction(
       "rw",
       this.db.folders,
       this.db.placemarks,
       this.db.styles,
+      this.db.screenOverlays,
       async () => {
         await this.db.folders.bulkPut(payload.folders);
         await this.db.placemarks.bulkPut(payload.placemarks);
         await this.db.styles.bulkPut(payload.styles);
+        await this.db.screenOverlays.bulkPut(payload.screenOverlays ?? []);
       },
     );
   }

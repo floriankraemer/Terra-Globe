@@ -8,6 +8,8 @@ export interface Folder {
   order: number;
   createdAt: string;
   updatedAt: string;
+  description?: string;
+  open?: boolean;
 }
 
 export interface NewFolder {
@@ -15,6 +17,8 @@ export interface NewFolder {
   parentId: string | null;
   order: number;
   visibility?: boolean;
+  description?: string;
+  open?: boolean;
 }
 
 export function createFolder(input: NewFolder): Folder {
@@ -30,5 +34,7 @@ export function createFolder(input: NewFolder): Folder {
     order: input.order,
     createdAt: now,
     updatedAt: now,
+    description: input.description,
+    open: input.open,
   };
 }

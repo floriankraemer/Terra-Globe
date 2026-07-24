@@ -18,6 +18,12 @@ export const SCHEMA_STATEMENTS: readonly string[] = [
      id TEXT PRIMARY KEY,
      data TEXT NOT NULL
    )`,
+  `CREATE TABLE IF NOT EXISTS screen_overlays (
+     id TEXT PRIMARY KEY,
+     folder_id TEXT,
+     data TEXT NOT NULL
+   )`,
+  `CREATE INDEX IF NOT EXISTS idx_screen_overlays_folder_id ON screen_overlays(folder_id)`,
 ];
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;

@@ -97,7 +97,7 @@ describe("parseKml - resilience against real-world KML", () => {
     expect(parsed.warnings[0]).toMatch(/BadPolygon/);
   });
 
-  it("skips a folder/placemark with no supported geometry at all (e.g. GroundOverlay) without throwing", () => {
+  it("skips a malformed GroundOverlay (missing LatLonBox/Icon) without throwing, but keeps parsing the rest", () => {
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
   <Document>
@@ -118,6 +118,24 @@ describe("parseKml - resilience against real-world KML", () => {
     const parsed = parseKml(xml);
     expect(parsed.placemarks).toHaveLength(1);
     expect(parsed.placemarks[0]!.name).toBe("Marker");
+  });
+
+  it("imports a well-formed GroundOverlay as a placemark", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <GroundOverlay>
+      <name>Map image</name>
+      <Icon><href>https://example.com/map.png</href></Icon>
+      <LatLonBox><north>1</north><south>0</south><east>1</east><west>0</west></LatLonBox>
+    </GroundOverlay>
+  </Document>
+</kml>`;
+
+    const parsed = parseKml(xml);
+    expect(parsed.placemarks).toHaveLength(1);
+    expect(parsed.placemarks[0]!.geometry.type).toBe("GroundOverlay");
+    expect(parsed.warnings).toEqual([]);
   });
 
   it("throws a clear error for fundamentally invalid input", () => {

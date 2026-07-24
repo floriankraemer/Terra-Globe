@@ -6,6 +6,7 @@ import type {
   PlacemarkGeometry,
   Placemark,
   PlacesRepository,
+  ScreenOverlay,
   Style,
 } from "@webglobe/core";
 import { CesiumEntityFactory, EntitySynchronizer, type PlacemarkStyleEdits } from "@webglobe/map";
@@ -15,6 +16,7 @@ export interface UseLibraryResult {
   ready: boolean;
   folders: Folder[];
   placemarks: Placemark[];
+  screenOverlays: ScreenOverlay[];
   selectedFolderId: string | null;
   selectFolder: (id: string | null) => void;
   createFolder: (parentId: string | null, name: string) => Promise<void>;
@@ -33,7 +35,12 @@ export interface UseLibraryResult {
   previewPlacemarkEdits: (id: string, edits: { name: string; style: PlacemarkStyleEdits }) => void;
   getPlacemarkStyle: (id: string) => Promise<PlacemarkStyleEdits>;
   importPlaces: (payload: ImportBatchPayload) => Promise<void>;
-  exportAll: () => Promise<{ folders: Folder[]; placemarks: Placemark[]; styles: Style[] }>;
+  exportAll: () => Promise<{
+    folders: Folder[];
+    placemarks: Placemark[];
+    styles: Style[];
+    screenOverlays: ScreenOverlay[];
+  }>;
 }
 
 const DEFAULT_STYLE: PlacemarkStyleEdits = {
@@ -76,11 +83,21 @@ async function collectAllPlacemarks(
   return groups.flat();
 }
 
+async function collectAllScreenOverlays(
+  repo: PlacesRepository,
+  folders: Folder[],
+): Promise<ScreenOverlay[]> {
+  const folderIds: (string | null)[] = [null, ...folders.map((f) => f.id)];
+  const groups = await Promise.all(folderIds.map((id) => repo.listScreenOverlays(id)));
+  return groups.flat();
+}
+
 /** Owns the PlacesRepository, keeps folder/placemark UI state and live Cesium entities in sync. */
 export function useLibrary(viewer: Cesium.Viewer | null): UseLibraryResult {
   const [ready, setReady] = useState(false);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [placemarks, setPlacemarks] = useState<Placemark[]>([]);
+  const [screenOverlays, setScreenOverlays] = useState<ScreenOverlay[]>([]);
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
   const repoRef = useRef<PlacesRepository | null>(null);
   const syncRef = useRef<EntitySynchronizer | null>(null);
@@ -98,9 +115,11 @@ export function useLibrary(viewer: Cesium.Viewer | null): UseLibraryResult {
     const seq = ++refreshSeqRef.current;
     const allFolders = await collectAllFolders(repo);
     const allPlacemarks = await collectAllPlacemarks(repo, allFolders);
+    const allScreenOverlays = await collectAllScreenOverlays(repo, allFolders);
     if (refreshSeqRef.current !== seq) return;
     setFolders(allFolders);
     setPlacemarks(allPlacemarks);
+    setScreenOverlays(allScreenOverlays);
   }
 
   useEffect(() => {
@@ -126,6 +145,7 @@ export function useLibrary(viewer: Cesium.Viewer | null): UseLibraryResult {
     ready,
     folders,
     placemarks,
+    screenOverlays,
     selectedFolderId,
     selectFolder: setSelectedFolderId,
     async createFolder(parentId, name) {
@@ -265,16 +285,22 @@ export function useLibrary(viewer: Cesium.Viewer | null): UseLibraryResult {
     },
     async exportAll() {
       const repo = repoRef.current;
-      if (!repo) return { folders: [], placemarks: [], styles: [] };
+      if (!repo) return { folders: [], placemarks: [], styles: [], screenOverlays: [] };
       const allFolders = await collectAllFolders(repo);
       const allPlacemarks = await collectAllPlacemarks(repo, allFolders);
+      const allScreenOverlays = await collectAllScreenOverlays(repo, allFolders);
       const styleIds = [
         ...new Set(allPlacemarks.map((p) => p.styleId).filter((id): id is string => id !== null)),
       ];
       const styles = (await Promise.all(styleIds.map((id) => repo.getStyle(id)))).filter(
         (s): s is Style => s !== null,
       );
-      return { folders: allFolders, placemarks: allPlacemarks, styles };
+      return {
+        folders: allFolders,
+        placemarks: allPlacemarks,
+        styles,
+        screenOverlays: allScreenOverlays,
+      };
     },
   };
 }

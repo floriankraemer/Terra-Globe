@@ -4,10 +4,28 @@ import {
   createPointGeometry,
   createPolygonGeometry,
   createRectangleGeometry,
+  type CircleGeometry,
   type GeoPoint,
-  type PlacemarkGeometry,
+  type LineStringGeometry,
+  type PointGeometry,
+  type PolygonGeometry,
+  type RectangleGeometry,
 } from "../../domain/geometry.js";
 import { circleToPolygonRing } from "./circleApproximation.js";
+
+/**
+ * GroundOverlay and Model are not `<Placemark><Point|LineString|Polygon>`
+ * shapes - they're structurally different KML elements (GroundOverlay is a
+ * sibling Feature to Placemark; Model has Location/Orientation/Scale/Link
+ * children). They're parsed/serialized directly in parseKml.ts/serializeKml.ts
+ * and never flow through this shape-family mapping.
+ */
+export type ShapePlacemarkGeometry =
+  | PointGeometry
+  | CircleGeometry
+  | RectangleGeometry
+  | PolygonGeometry
+  | LineStringGeometry;
 
 export type KmlGeometryElement = "Point" | "Polygon" | "LineString";
 
@@ -45,7 +63,7 @@ function rectangleRing(bounds: {
  * original shape parameters in ExtendedData so re-importing into this app
  * reconstructs the exact Circle/Rectangle rather than a polygon approximation.
  */
-export function domainGeometryToKml(geometry: PlacemarkGeometry): KmlGeometryResult {
+export function domainGeometryToKml(geometry: ShapePlacemarkGeometry): KmlGeometryResult {
   switch (geometry.type) {
     case "Point":
       return { element: "Point", rings: [[geometry.coordinates]], extendedData: [] };
@@ -87,7 +105,7 @@ export function kmlToDomainGeometry(
   element: KmlGeometryElement,
   rings: GeoPoint[][],
   extendedData: Record<string, string>,
-): PlacemarkGeometry {
+): ShapePlacemarkGeometry {
   const shape = extendedData["webglobe:shape"];
 
   if (shape === "rectangle") {

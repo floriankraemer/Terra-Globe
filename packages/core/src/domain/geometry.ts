@@ -1,7 +1,10 @@
+export type AltitudeMode = "clampToGround" | "relativeToGround" | "absolute";
+
 export interface GeoPoint {
   lon: number;
   lat: number;
   altitude?: number;
+  altitudeMode?: AltitudeMode;
 }
 
 export interface PointGeometry {
@@ -27,15 +30,43 @@ export interface PolygonGeometry {
   type: "Polygon";
   outerRing: GeoPoint[];
   innerRings?: GeoPoint[][];
+  tessellate?: boolean;
+  extrudeHeight?: number;
 }
 
 export interface LineStringGeometry {
   type: "LineString";
   path: GeoPoint[];
+  tessellate?: boolean;
+  /** Parallel array to `path` (gx:Track "when" timestamps), ISO 8601. */
+  timestamps?: string[];
+}
+
+export interface GroundOverlayGeometry {
+  type: "GroundOverlay";
+  bounds: RectangleBounds;
+  imageUrl: string;
+  rotation?: number;
+}
+
+export interface ModelGeometry {
+  type: "Model";
+  position: GeoPoint;
+  modelUri: string;
+  scale?: number;
+  heading?: number;
+  tilt?: number;
+  roll?: number;
 }
 
 export type PlacemarkGeometry =
-  PointGeometry | CircleGeometry | RectangleGeometry | PolygonGeometry | LineStringGeometry;
+  | PointGeometry
+  | CircleGeometry
+  | RectangleGeometry
+  | PolygonGeometry
+  | LineStringGeometry
+  | GroundOverlayGeometry
+  | ModelGeometry;
 
 function assertInRange(value: number, min: number, max: number, label: string): void {
   if (!Number.isFinite(value) || value < min || value > max) {
@@ -93,16 +124,78 @@ function assertValidRing(ring: GeoPoint[], label: string): void {
 export function createPolygonGeometry(
   outerRing: GeoPoint[],
   innerRings?: GeoPoint[][],
+  options?: { tessellate?: boolean; extrudeHeight?: number },
 ): PolygonGeometry {
   assertValidRing(outerRing, "outer ring");
   innerRings?.forEach((ring) => assertValidRing(ring, "inner ring"));
-  return { type: "Polygon", outerRing, innerRings };
+  return {
+    type: "Polygon",
+    outerRing,
+    innerRings,
+    tessellate: options?.tessellate,
+    extrudeHeight: options?.extrudeHeight,
+  };
 }
 
-export function createLineStringGeometry(path: GeoPoint[]): LineStringGeometry {
+export function createLineStringGeometry(
+  path: GeoPoint[],
+  options?: { tessellate?: boolean; timestamps?: string[] },
+): LineStringGeometry {
   if (path.length < 2) {
     throw new Error(`path must have at least 2 points, got ${path.length}`);
   }
   path.forEach(assertValidGeoPoint);
-  return { type: "LineString", path };
+  if (options?.timestamps && options.timestamps.length !== path.length) {
+    throw new Error(
+      `timestamps length (${options.timestamps.length}) must match path length (${path.length})`,
+    );
+  }
+  return {
+    type: "LineString",
+    path,
+    tessellate: options?.tessellate,
+    timestamps: options?.timestamps,
+  };
+}
+
+export function createGroundOverlayGeometry(
+  bounds: RectangleBounds,
+  imageUrl: string,
+  rotation?: number,
+): GroundOverlayGeometry {
+  const { north, south, east, west } = bounds;
+  assertInRange(north, -90, 90, "north");
+  assertInRange(south, -90, 90, "south");
+  assertInRange(east, -180, 180, "east");
+  assertInRange(west, -180, 180, "west");
+  if (south >= north) {
+    throw new Error(`south (${south}) must be less than north (${north})`);
+  }
+  if (west >= east) {
+    throw new Error(`west (${west}) must be less than east (${east})`);
+  }
+  if (imageUrl.trim().length === 0) {
+    throw new Error("imageUrl must not be empty");
+  }
+  return { type: "GroundOverlay", bounds, imageUrl, rotation };
+}
+
+export function createModelGeometry(
+  position: GeoPoint,
+  modelUri: string,
+  options?: { scale?: number; heading?: number; tilt?: number; roll?: number },
+): ModelGeometry {
+  assertValidGeoPoint(position);
+  if (modelUri.trim().length === 0) {
+    throw new Error("modelUri must not be empty");
+  }
+  return {
+    type: "Model",
+    position,
+    modelUri,
+    scale: options?.scale,
+    heading: options?.heading,
+    tilt: options?.tilt,
+    roll: options?.roll,
+  };
 }

@@ -27,5 +27,12 @@ export function geometryCenter(geometry: PlacemarkGeometry): GeoPoint {
       });
       return { lon: sum.lon / path.length, lat: sum.lat / path.length };
     }
+    case "GroundOverlay":
+      return {
+        lon: (geometry.bounds.east + geometry.bounds.west) / 2,
+        lat: (geometry.bounds.north + geometry.bounds.south) / 2,
+      };
+    case "Model":
+      return geometry.position;
   }
 }

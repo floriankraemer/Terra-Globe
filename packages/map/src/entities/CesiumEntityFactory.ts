@@ -5,6 +5,7 @@ import {
   type CircleGeometry,
   type GeoPoint,
   type LineStringGeometry,
+  type ModelGeometry,
   type PlacemarkGeometry,
   type PointGeometry,
   type PolygonGeometry,
@@ -12,6 +13,36 @@ import {
   type Style,
 } from "@webglobe/core";
 import type { EntityHandle, IEntityFactory } from "./IEntityFactory.js";
+
+const HEIGHT_REFERENCE = {
+  clampToGround: Cesium.HeightReference.CLAMP_TO_GROUND,
+  relativeToGround: Cesium.HeightReference.RELATIVE_TO_GROUND,
+  absolute: Cesium.HeightReference.NONE,
+} as const;
+
+// KML Model.Link can point at any 3D format (COLLADA .dae is the KML norm) -
+// Cesium's ModelGraphics only loads glTF, so anything else falls back to a
+// plain point marker rather than a new model-conversion subsystem.
+function isGltfUri(uri: string): boolean {
+  return /\.(gltf|glb)(\?.*)?$/i.test(uri);
+}
+
+function modelOrientation(geometry: ModelGeometry): Cesium.Property | undefined {
+  if (geometry.heading === undefined && geometry.tilt === undefined && geometry.roll === undefined) {
+    return undefined;
+  }
+  const position = Cesium.Cartesian3.fromDegrees(
+    geometry.position.lon,
+    geometry.position.lat,
+    geometry.position.altitude ?? 0,
+  );
+  const hpr = new Cesium.HeadingPitchRoll(
+    Cesium.Math.toRadians(geometry.heading ?? 0),
+    Cesium.Math.toRadians(geometry.tilt ?? 0),
+    Cesium.Math.toRadians(geometry.roll ?? 0),
+  );
+  return new Cesium.ConstantProperty(Cesium.Transforms.headingPitchRollQuaternion(position, hpr));
+}
 
 const DEFAULT_OUTLINE_COLOR = Cesium.Color.DODGERBLUE;
 const DEFAULT_OUTLINE_WIDTH = 2;
@@ -133,12 +164,19 @@ function toGeometryOptions(
   switch (geometry.type) {
     case "Point":
       return {
-        position: Cesium.Cartesian3.fromDegrees(geometry.coordinates.lon, geometry.coordinates.lat),
+        position: Cesium.Cartesian3.fromDegrees(
+          geometry.coordinates.lon,
+          geometry.coordinates.lat,
+          geometry.coordinates.altitude,
+        ),
         point: {
           pixelSize: 10,
           color: style ? Cesium.Color.fromCssColorString(style.fillColor) : Cesium.Color.RED,
           outlineColor: outlineColor(style),
           outlineWidth: 1,
+          heightReference: geometry.coordinates.altitudeMode
+            ? HEIGHT_REFERENCE[geometry.coordinates.altitudeMode]
+            : undefined,
         },
       };
     case "Circle":
@@ -183,6 +221,7 @@ function toGeometryOptions(
           fill: filled(style),
           material: fillColor(style),
           outline: false,
+          extrudedHeight: geometry.extrudeHeight,
         },
       };
     case "LineString":
@@ -193,8 +232,42 @@ function toGeometryOptions(
           ),
           width: outlineWidth(style),
           material: outlineColor(style),
+          clampToGround: geometry.tessellate,
         },
       };
+    case "GroundOverlay":
+      return {
+        rectangle: {
+          coordinates: Cesium.Rectangle.fromDegrees(
+            geometry.bounds.west,
+            geometry.bounds.south,
+            geometry.bounds.east,
+            geometry.bounds.north,
+          ),
+          material: new Cesium.ImageMaterialProperty({ image: geometry.imageUrl }),
+          rotation: geometry.rotation !== undefined ? Cesium.Math.toRadians(geometry.rotation) : undefined,
+        },
+      };
+    case "Model": {
+      const position = Cesium.Cartesian3.fromDegrees(
+        geometry.position.lon,
+        geometry.position.lat,
+        geometry.position.altitude ?? 0,
+      );
+      if (!isGltfUri(geometry.modelUri)) {
+        // Non-glTF (typically KML's usual COLLADA .dae) - show a plain
+        // marker rather than skip the placemark entirely.
+        return {
+          position,
+          point: { pixelSize: 10, color: Cesium.Color.RED, outlineColor: Cesium.Color.WHITE, outlineWidth: 1 },
+        };
+      }
+      return {
+        position,
+        orientation: modelOrientation(geometry),
+        model: { uri: geometry.modelUri, scale: geometry.scale },
+      };
+    }
     default: {
       const exhaustiveCheck: never = geometry;
       throw new Error(`Unhandled geometry type: ${JSON.stringify(exhaustiveCheck)}`);
@@ -292,6 +365,11 @@ function toDynamicGeometryOptions(
           material: outlineColor(style),
         },
       };
+    // GroundOverlay/Model aren't created via the interactive drawing tools,
+    // so no live-drag preview is needed - fall back to the static options.
+    case "GroundOverlay":
+    case "Model":
+      return toGeometryOptions(shape, style);
     default: {
       const exhaustiveCheck: never = shape;
       throw new Error(`Unhandled geometry type: ${JSON.stringify(exhaustiveCheck)}`);
@@ -423,6 +501,10 @@ export class CesiumEntityFactory implements IEntityFactory {
     entity.polyline = options.polyline
       ? new Cesium.PolylineGraphics(options.polyline as Cesium.PolylineGraphics.ConstructorOptions)
       : undefined;
+    entity.model = options.model
+      ? new Cesium.ModelGraphics(options.model as Cesium.ModelGraphics.ConstructorOptions)
+      : undefined;
+    entity.orientation = options.orientation as Cesium.Property | undefined;
     entity.label = options.label ? new Cesium.LabelGraphics(options.label) : undefined;
 
     this.syncOutlineEntities(handle.entityId, geometry, style);

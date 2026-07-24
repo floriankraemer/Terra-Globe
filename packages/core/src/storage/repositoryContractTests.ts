@@ -196,5 +196,44 @@ export function sharedRepositoryContractTests(
       expect(await repo.getPlacemark("p1")).toEqual(placemark);
       expect(await repo.getStyle("s1")).toEqual(style);
     });
+
+    it("creates, lists, and deletes screen overlays", async () => {
+      const repo = await createRepository();
+      const anchor = { x: 0, y: 1, xUnits: "fraction", yUnits: "fraction" } as const;
+      const created = await repo.createScreenOverlay({
+        name: "Legend",
+        folderId: null,
+        imageUrl: "legend.png",
+        overlayXY: anchor,
+        screenXY: anchor,
+      });
+
+      const listed = await repo.listScreenOverlays(null);
+      expect(listed.map((o) => o.id)).toEqual([created.id]);
+
+      await repo.deleteScreenOverlay(created.id);
+      expect(await repo.listScreenOverlays(null)).toEqual([]);
+    });
+
+    it("imports a batch including screen overlays", async () => {
+      const repo = await createRepository();
+      const anchor = { x: 0, y: 1, xUnits: "fraction", yUnits: "fraction" } as const;
+      const overlay = {
+        id: "so1",
+        folderId: null,
+        name: "Watermark",
+        imageUrl: "watermark.png",
+        overlayXY: anchor,
+        screenXY: anchor,
+        visibility: true,
+        order: 0,
+        createdAt: "now",
+        updatedAt: "now",
+      };
+
+      await repo.importBatch({ folders: [], placemarks: [], styles: [], screenOverlays: [overlay] });
+
+      expect(await repo.listScreenOverlays(null)).toEqual([overlay]);
+    });
   });
 }
