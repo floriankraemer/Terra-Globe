@@ -313,6 +313,7 @@ export function App() {
             unitSystem={settings.unitSystem}
             coordinateFormat={settings.coordinateFormat}
             onDragStart={placemarkPanel.startDrag}
+            onPreview={(patch) => library.previewPlacemarkEdits(editingPlacemark.id, patch)}
             onClose={() => setSelectedPlacemarkId(null)}
             onDelete={() => {
               // Wait for the delete (including its internal refresh()) before

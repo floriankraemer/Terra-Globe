@@ -224,6 +224,212 @@ describe("PlacemarkEditor - Point (marker)", () => {
   });
 });
 
+describe("PlacemarkEditor - live preview", () => {
+  it("previews a color change on mount and again on every change", () => {
+    const onPreview = vi.fn();
+    render(
+      <PlacemarkEditor
+        placemark={placemark()}
+        style={style()}
+        onSave={vi.fn()}
+        onClose={vi.fn()}
+        onDelete={vi.fn()}
+        onPreview={onPreview}
+      />,
+    );
+    onPreview.mockClear();
+
+    fireEvent.change(screen.getByLabelText("Color"), { target: { value: "#00ff00" } });
+
+    expect(onPreview).toHaveBeenCalledWith({
+      name: "Berlin",
+      style: expect.objectContaining({ fillColor: "#00ff00", outlineColor: "#00ff00" }),
+    });
+  });
+
+  it("reverts the preview to the original name/style on unsaved Close", async () => {
+    const onPreview = vi.fn();
+    const user = userEvent.setup();
+    const { unmount } = render(
+      <PlacemarkEditor
+        placemark={placemark()}
+        style={style()}
+        onSave={vi.fn()}
+        onClose={vi.fn()}
+        onDelete={vi.fn()}
+        onPreview={onPreview}
+      />,
+    );
+
+    await user.clear(screen.getByLabelText("Name"));
+    await user.type(screen.getByLabelText("Name"), "Munich");
+    fireEvent.change(screen.getByLabelText("Color"), { target: { value: "#00ff00" } });
+    onPreview.mockClear();
+
+    unmount();
+
+    expect(onPreview).toHaveBeenCalledWith({ name: "Berlin", style: style() });
+  });
+
+  it("does not revert the preview after a successful Save", async () => {
+    const onPreview = vi.fn();
+    const user = userEvent.setup();
+    const { unmount } = render(
+      <PlacemarkEditor
+        placemark={placemark()}
+        style={style()}
+        onSave={vi.fn()}
+        onClose={vi.fn()}
+        onDelete={vi.fn()}
+        onPreview={onPreview}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("Color"), { target: { value: "#00ff00" } });
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    onPreview.mockClear();
+
+    unmount();
+
+    expect(onPreview).not.toHaveBeenCalled();
+  });
+
+  it("does not revert the preview after a confirmed Delete", async () => {
+    const onPreview = vi.fn();
+    const user = userEvent.setup();
+    const { unmount } = render(
+      <PlacemarkEditor
+        placemark={placemark()}
+        style={style()}
+        onSave={vi.fn()}
+        onClose={vi.fn()}
+        onDelete={vi.fn()}
+        onPreview={onPreview}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    const dialog = screen.getByRole("alertdialog", { name: "Delete placemark?" });
+    await user.click(within(dialog).getByRole("button", { name: "Delete" }));
+    onPreview.mockClear();
+
+    unmount();
+
+    expect(onPreview).not.toHaveBeenCalled();
+  });
+});
+
+describe("PlacemarkEditor - close confirmation", () => {
+  it("closes immediately when nothing changed", async () => {
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <PlacemarkEditor
+        placemark={placemark()}
+        style={style()}
+        onSave={vi.fn()}
+        onClose={onClose}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(onClose).toHaveBeenCalled();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+  });
+
+  it("asks to confirm when there are unsaved edits, instead of closing immediately", async () => {
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <PlacemarkEditor
+        placemark={placemark()}
+        style={style()}
+        onSave={vi.fn()}
+        onClose={onClose}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    await user.type(screen.getByLabelText("Name"), " Trip");
+    await user.click(screen.getByRole("button", { name: "Close" }));
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole("alertdialog", { name: "Unsaved changes" })).toBeInTheDocument();
+  });
+
+  it("Cancel dismisses the dialog and keeps editing", async () => {
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <PlacemarkEditor
+        placemark={placemark()}
+        style={style()}
+        onSave={vi.fn()}
+        onClose={onClose}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    await user.type(screen.getByLabelText("Name"), " Trip");
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    const dialog = screen.getByRole("alertdialog", { name: "Unsaved changes" });
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Name")).toHaveValue("Berlin Trip");
+  });
+
+  it("Discard closes without saving", async () => {
+    const onClose = vi.fn();
+    const onSave = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <PlacemarkEditor
+        placemark={placemark()}
+        style={style()}
+        onSave={onSave}
+        onClose={onClose}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    await user.type(screen.getByLabelText("Name"), " Trip");
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    const dialog = screen.getByRole("alertdialog", { name: "Unsaved changes" });
+    await user.click(within(dialog).getByRole("button", { name: "Discard" }));
+
+    expect(onSave).not.toHaveBeenCalled();
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("Save persists the edits and closes", async () => {
+    const onClose = vi.fn();
+    const onSave = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <PlacemarkEditor
+        placemark={placemark()}
+        style={style()}
+        onSave={onSave}
+        onClose={onClose}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    await user.type(screen.getByLabelText("Name"), " Trip");
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    const dialog = screen.getByRole("alertdialog", { name: "Unsaved changes" });
+    await user.click(within(dialog).getByRole("button", { name: "Save" }));
+
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ name: "Berlin Trip", description: "Capital of Germany" }),
+    );
+  });
+});
+
 describe("PlacemarkEditor - LineString", () => {
   const linePlacemark = placemark({
     geometry: {

@@ -5,6 +5,9 @@ export interface ConfirmModalProps {
   cancelLabel?: string;
   onConfirm: () => void;
   onCancel: () => void;
+  /** Optional third action (e.g. "Save") shown before Confirm/Cancel. */
+  extraLabel?: string;
+  onExtra?: () => void;
 }
 
 export function ConfirmModal({
@@ -14,6 +17,8 @@ export function ConfirmModal({
   cancelLabel = "Cancel",
   onConfirm,
   onCancel,
+  extraLabel,
+  onExtra,
 }: ConfirmModalProps) {
   return (
     <div className="modal-overlay" onClick={onCancel}>
@@ -27,6 +32,11 @@ export function ConfirmModal({
         <div className="confirm-modal-title">{title}</div>
         <p className="confirm-modal-message">{message}</p>
         <div className="confirm-modal-actions">
+          {extraLabel && onExtra && (
+            <button type="button" className="btn" onClick={onExtra}>
+              {extraLabel}
+            </button>
+          )}
           <button type="button" className="btn btn-danger" onClick={onConfirm}>
             {confirmLabel}
           </button>

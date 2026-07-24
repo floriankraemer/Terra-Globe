@@ -3,6 +3,7 @@ import {
   type Folder,
   type NewPlacemark,
   type Placemark,
+  type PlacemarkGeometry,
   type PlacesRepository,
 } from "@webglobe/core";
 import type { IEntityFactory } from "../entities/IEntityFactory.js";
@@ -77,6 +78,22 @@ export class EntitySynchronizer {
       updated.name,
     );
     return updated;
+  }
+
+  /**
+   * Renders an in-progress edit (name/style) on the live entity without persisting anything.
+   * Used by the placemark editor for live preview; Save later calls updatePlacemark/
+   * savePlacemarkEdits to actually persist, Close/unmount calls this again with the
+   * original name/style to discard the preview.
+   */
+  previewPlacemark(
+    id: string,
+    geometry: PlacemarkGeometry,
+    name: string,
+    styleEdits: PlacemarkStyleEdits,
+  ): void {
+    const style = createStyle({ ...styleEdits, fillOpacity: FILL_OPACITY });
+    this.entityFactory.updateEntity({ entityId: id }, geometry, style, name);
   }
 
   /** Creates a solid-colored (outlined + filled) style for a placemark - used by markers. */

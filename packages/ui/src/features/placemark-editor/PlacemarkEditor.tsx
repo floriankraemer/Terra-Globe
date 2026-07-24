@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ConfirmModal } from "../confirm/ConfirmModal.js";
 import {
   circleAreaSquareMeters,
@@ -31,6 +31,8 @@ export interface PlacemarkEditorProps {
   onClose: () => void;
   onDelete: () => void;
   onDragStart?: (e: React.MouseEvent) => void;
+  /** Called on every draft change (and once more, with the original values, on unsaved close/unmount) so the live map entity can preview edits before Save. */
+  onPreview?: (patch: { name: string; style: PlacemarkStyleEdits }) => void;
 }
 
 function geometryMeasurements(
@@ -65,6 +67,7 @@ export function PlacemarkEditor({
   onClose,
   onDelete,
   onDragStart,
+  onPreview,
 }: PlacemarkEditorProps) {
   const geometryType = placemark.geometry.type;
   const isPoint = geometryType === "Point";
@@ -77,6 +80,7 @@ export function PlacemarkEditor({
   const [description, setDescription] = useState(placemark.description ?? "");
   const [draftStyle, setDraftStyle] = useState(style);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [confirmingClose, setConfirmingClose] = useState(false);
 
   // `style` is resolved via a separate async Style lookup, so it can arrive
   // after this component has already mounted with the caller's placeholder
@@ -89,12 +93,56 @@ export function PlacemarkEditor({
     setDraftStyle((prev) => ({ ...prev, ...patch }));
   }
 
+  const onPreviewRef = useRef(onPreview);
+  onPreviewRef.current = onPreview;
+
+  // Last-persisted name/style, refreshed every render so it stays correct
+  // even if the async `style` prop above resolves after mount.
+  const originalRef = useRef({ name: placemark.name, style });
+  originalRef.current = { name: placemark.name, style };
+
+  // A successful Save/Delete already leaves the live entity in the correct
+  // state (new persisted style, or removed) - skip the unmount revert then.
+  const suppressRevertRef = useRef(false);
+
+  // Preview every draft change on the live map entity. `description` has no
+  // visual representation on the entity, so it's intentionally left out -
+  // its "revert on close" is already free since it's never pushed anywhere
+  // until Save.
+  useEffect(() => {
+    onPreviewRef.current?.({ name, style: draftStyle });
+  }, [name, draftStyle]);
+
+  useEffect(() => {
+    return () => {
+      if (!suppressRevertRef.current) onPreviewRef.current?.(originalRef.current);
+    };
+  }, []);
+
+  const isDirty =
+    name !== placemark.name ||
+    description !== (placemark.description ?? "") ||
+    draftStyle.outlineEnabled !== style.outlineEnabled ||
+    draftStyle.outlineColor !== style.outlineColor ||
+    draftStyle.outlineWidth !== style.outlineWidth ||
+    draftStyle.filled !== style.filled ||
+    draftStyle.fillColor !== style.fillColor;
+
+  function requestClose(): void {
+    if (isDirty) {
+      setConfirmingClose(true);
+    } else {
+      onClose();
+    }
+  }
+
   return (
     <form
       className="placemark-editor"
       aria-label="Edit placemark"
       onSubmit={(e) => {
         e.preventDefault();
+        suppressRevertRef.current = true;
         onSave({ name, description, style: draftStyle });
       }}
     >
@@ -209,7 +257,7 @@ export function PlacemarkEditor({
         <button type="submit" className="btn">
           Save
         </button>
-        <button type="button" className="btn" onClick={onClose}>
+        <button type="button" className="btn" onClick={requestClose}>
           Close
         </button>
         <button type="button" className="btn btn-danger" onClick={() => setConfirmingDelete(true)}>
@@ -222,10 +270,31 @@ export function PlacemarkEditor({
           title="Delete placemark?"
           message={`Are you sure you want to delete "${name}"? This cannot be undone.`}
           onConfirm={() => {
+            suppressRevertRef.current = true;
             setConfirmingDelete(false);
             onDelete();
           }}
           onCancel={() => setConfirmingDelete(false)}
+        />
+      )}
+
+      {confirmingClose && (
+        <ConfirmModal
+          title="Unsaved changes"
+          message={`Save changes to "${name}" before closing?`}
+          confirmLabel="Discard"
+          cancelLabel="Cancel"
+          extraLabel="Save"
+          onExtra={() => {
+            setConfirmingClose(false);
+            suppressRevertRef.current = true;
+            onSave({ name, description, style: draftStyle });
+          }}
+          onConfirm={() => {
+            setConfirmingClose(false);
+            onClose();
+          }}
+          onCancel={() => setConfirmingClose(false)}
         />
       )}
     </form>

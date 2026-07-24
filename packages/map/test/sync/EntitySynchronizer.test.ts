@@ -176,6 +176,31 @@ describe("EntitySynchronizer", () => {
     expect(style?.fillColor).toBe("#00ff00");
   });
 
+  it("previewPlacemark updates the live entity without persisting anything", async () => {
+    const repo = new InMemoryPlacesRepository();
+    const factory = new FakeEntityFactory();
+    const sync = new EntitySynchronizer(repo, factory);
+    const placemark = await sync.persistPlacemark({
+      name: "Old",
+      folderId: null,
+      geometry: createPointGeometry({ lon: 0, lat: 0 }),
+    });
+
+    sync.previewPlacemark(placemark.id, placemark.geometry, "Draft name", {
+      outlineEnabled: true,
+      outlineColor: "#00ff00",
+      outlineWidth: 3,
+      filled: true,
+      fillColor: "#00ff00",
+    });
+
+    expect(factory.entities.get(placemark.id)?.name).toBe("Draft name");
+    expect(factory.entities.get(placemark.id)?.style?.fillColor).toBe("#00ff00");
+    const stored = await repo.getPlacemark(placemark.id);
+    expect(stored?.name).toBe("Old");
+    expect(stored?.styleId).toBeNull();
+  });
+
   it("removes the entity when a placemark is deleted", async () => {
     const repo = new InMemoryPlacesRepository();
     const factory = new FakeEntityFactory();

@@ -30,6 +30,7 @@ export interface UseLibraryResult {
     id: string,
     edits: { name: string; description: string; style: PlacemarkStyleEdits },
   ) => Promise<void>;
+  previewPlacemarkEdits: (id: string, edits: { name: string; style: PlacemarkStyleEdits }) => void;
   getPlacemarkStyle: (id: string) => Promise<PlacemarkStyleEdits>;
   importPlaces: (payload: ImportBatchPayload) => Promise<void>;
   exportAll: () => Promise<{ folders: Folder[]; placemarks: Placemark[]; styles: Style[] }>;
@@ -233,6 +234,12 @@ export function useLibrary(viewer: Cesium.Viewer | null): UseLibraryResult {
         style: edits.style,
       });
       await refresh();
+    },
+    previewPlacemarkEdits(id, edits) {
+      const sync = syncRef.current;
+      const placemark = placemarks.find((p) => p.id === id);
+      if (!sync || !placemark) return;
+      sync.previewPlacemark(id, placemark.geometry, edits.name, edits.style);
     },
     async getPlacemarkStyle(id) {
       const repo = repoRef.current;
