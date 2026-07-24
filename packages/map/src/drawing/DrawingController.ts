@@ -6,7 +6,7 @@ import {
   createRectangleGeometry,
   type GeoPoint,
   type PlacemarkGeometry,
-} from "@webglobe/core";
+} from "@terra-globe/core";
 import type { IEntityFactory } from "../entities/IEntityFactory.js";
 import { circleRadiusMeters, rectangleFromCorners } from "./geometryMath.js";
 

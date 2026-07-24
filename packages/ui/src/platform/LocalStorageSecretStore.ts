@@ -1,6 +1,6 @@
-import type { SecretStore } from "@webglobe/core";
+import type { SecretStore } from "@terra-globe/core";
 
-const STORAGE_KEY = "webglobe:secrets";
+const STORAGE_KEY = "terra-globe:secrets";
 
 function readAll(): Record<string, string> {
   try {

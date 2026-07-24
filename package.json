@@ -1,5 +1,5 @@
 {
-  "name": "webglobe",
+  "name": "terra-globe",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@9.15.9",
@@ -7,7 +7,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "pnpm --filter @webglobe/ui dev",
+    "dev": "pnpm --filter @terra-globe/ui dev",
     "build": "pnpm --filter \"./packages/*\" build",
     "test": "pnpm --filter \"./packages/*\" test",
     "test:coverage": "pnpm --filter \"./packages/*\" test:coverage",

@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import type { GeocodeResult, GeocodingProvider } from "@webglobe/core";
+import type { GeocodeResult, GeocodingProvider } from "@terra-globe/core";
 
 export type GeocodingStatus = "idle" | "loading" | "ready" | "error";
 

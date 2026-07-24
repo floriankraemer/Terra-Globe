@@ -1,5 +1,5 @@
 {
-  "name": "@webglobe/e2e-playwright",
+  "name": "@terra-globe/e2e-playwright",
   "version": "0.0.0",
   "private": true,
   "type": "module",

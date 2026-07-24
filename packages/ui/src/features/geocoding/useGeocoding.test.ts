@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { FakeGeocodingProvider, type GeocodingProvider } from "@webglobe/core";
+import { FakeGeocodingProvider, type GeocodingProvider } from "@terra-globe/core";
 import { useGeocoding } from "./useGeocoding.js";
 
 const BERLIN = { label: "Berlin, Germany", point: { lon: 13.4, lat: 52.5 } };

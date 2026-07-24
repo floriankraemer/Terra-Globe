@@ -77,7 +77,7 @@ describe("serializeKml / parseKml round trip", () => {
     expect(parsed.styles).toEqual([style]);
   });
 
-  it("gracefully imports plain third-party KML with no webglobe ExtendedData", () => {
+  it("gracefully imports plain third-party KML with no terra-globe ExtendedData", () => {
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <kml xmlns="http://www.opengis.net/kml/2.2">
   <Document>
@@ -392,6 +392,6 @@ describe("serializeKml / parseKml round trip", () => {
     expect(panorama.geometry.type).toBe("GroundOverlay");
     const snapshot = parsed.placemarks.find((p) => p.name === "Snapshot")!;
     expect(snapshot.geometry.type).toBe("Point");
-    expect(snapshot.extendedData?.["webglobe:photoUrl"]).toBe("snap.jpg");
+    expect(snapshot.extendedData?.["terra-globe:photoUrl"]).toBe("snap.jpg");
   });
 });

@@ -19,4 +19,4 @@ COPY . .
 
 EXPOSE 5173 4173
 
-CMD ["pnpm", "--filter", "@webglobe/ui", "dev"]
+CMD ["pnpm", "--filter", "@terra-globe/ui", "dev"]

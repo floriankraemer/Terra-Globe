@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import type { Folder, Placemark } from "@webglobe/core";
+import type { Folder, Placemark } from "@terra-globe/core";
 import { FolderTree } from "./FolderTree.js";
 
 function folder(overrides: Partial<Folder>): Folder {

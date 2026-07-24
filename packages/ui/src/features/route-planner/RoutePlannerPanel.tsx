@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { formatDistance, formatDuration, type UnitSystem } from "@webglobe/core";
-import type { GeocodeResult, RouteLeg } from "@webglobe/core";
+import { formatDistance, formatDuration, type UnitSystem } from "@terra-globe/core";
+import type { GeocodeResult, RouteLeg } from "@terra-globe/core";
 import { AddressSearchBox } from "../geocoding/AddressSearchBox.js";
 import type { GeocodingStatus } from "../geocoding/useGeocoding.js";
 import type { RouteStop, TravelMode } from "./useRoutePlanner.js";

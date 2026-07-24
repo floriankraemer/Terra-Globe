@@ -3,8 +3,8 @@ import {
   type ProviderConfig,
   type SecretStore,
   type TileProviderConfig,
-} from "@webglobe/core";
-import { BUILTIN_TILE_SOURCES, type TileSource } from "@webglobe/map";
+} from "@terra-globe/core";
+import { BUILTIN_TILE_SOURCES, type TileSource } from "@terra-globe/map";
 
 /**
  * Composition root: merges the built-in tile sources with the user's enabled

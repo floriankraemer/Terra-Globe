@@ -5,7 +5,7 @@ import {
   type Placemark,
   type PlacemarkGeometry,
   type PlacesRepository,
-} from "@webglobe/core";
+} from "@terra-globe/core";
 import type { IEntityFactory } from "../entities/IEntityFactory.js";
 
 const FILL_OPACITY = 0.5;

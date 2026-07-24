@@ -20,9 +20,9 @@ test("searching an address and selecting a result flies the camera there", async
   const heightBefore = await page.evaluate(() => {
     const viewer = (
       window as unknown as {
-        __webglobeViewer: { camera: { positionCartographic: { height: number } } };
+        __terraGlobeViewer: { camera: { positionCartographic: { height: number } } };
       }
-    ).__webglobeViewer;
+    ).__terraGlobeViewer;
     return viewer.camera.positionCartographic.height;
   });
 
@@ -34,9 +34,9 @@ test("searching an address and selecting a result flies the camera there", async
   const heightAfter = await page.evaluate(() => {
     const viewer = (
       window as unknown as {
-        __webglobeViewer: { camera: { positionCartographic: { height: number } } };
+        __terraGlobeViewer: { camera: { positionCartographic: { height: number } } };
       }
-    ).__webglobeViewer;
+    ).__terraGlobeViewer;
     return viewer.camera.positionCartographic.height;
   });
 

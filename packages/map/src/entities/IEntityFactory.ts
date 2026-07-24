@@ -1,4 +1,4 @@
-import type { PlacemarkGeometry, Style } from "@webglobe/core";
+import type { PlacemarkGeometry, Style } from "@terra-globe/core";
 
 export interface EntityHandle {
   entityId: string;

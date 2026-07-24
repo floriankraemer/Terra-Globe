@@ -1,4 +1,4 @@
-import type { SecretStore } from "@webglobe/core";
+import type { SecretStore } from "@terra-globe/core";
 
 /**
  * Desktop adapter: stores secrets in the OS keychain (macOS Keychain, Windows

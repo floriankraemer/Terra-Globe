@@ -1,12 +1,12 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import type { ProviderConfig, SecretStore } from "@webglobe/core";
-import * as core from "@webglobe/core";
+import type { ProviderConfig, SecretStore } from "@terra-globe/core";
+import * as core from "@terra-globe/core";
 import { ProvidersTab } from "./ProvidersTab.js";
 
-vi.mock("@webglobe/core", async () => {
-  const actual = await vi.importActual<typeof core>("@webglobe/core");
+vi.mock("@terra-globe/core", async () => {
+  const actual = await vi.importActual<typeof core>("@terra-globe/core");
   return {
     ...actual,
     testTileProviderConfig: vi.fn(),

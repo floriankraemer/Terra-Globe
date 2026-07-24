@@ -8,8 +8,8 @@ import type {
   PlacesRepository,
   ScreenOverlay,
   Style,
-} from "@webglobe/core";
-import { CesiumEntityFactory, EntitySynchronizer, type PlacemarkStyleEdits } from "@webglobe/map";
+} from "@terra-globe/core";
+import { CesiumEntityFactory, EntitySynchronizer, type PlacemarkStyleEdits } from "@terra-globe/map";
 import { createRepository } from "../../platform/createRepository.js";
 
 export interface UseLibraryResult {

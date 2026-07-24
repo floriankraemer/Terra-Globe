@@ -1,4 +1,4 @@
-import { formatDistance, type UnitSystem } from "@webglobe/core";
+import { formatDistance, type UnitSystem } from "@terra-globe/core";
 import type { RulerSegment } from "./useRuler.js";
 
 export interface RulerPanelProps {

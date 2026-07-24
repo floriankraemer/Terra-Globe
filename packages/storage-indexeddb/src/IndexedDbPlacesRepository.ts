@@ -14,9 +14,9 @@ import {
   type PlacesRepository,
   type ScreenOverlay,
   type Style,
-} from "@webglobe/core";
+} from "@terra-globe/core";
 
-class WebGlobeDexie extends Dexie {
+class TerraGlobeDexie extends Dexie {
   folders!: Table<Folder, string>;
   placemarks!: Table<Placemark, string>;
   styles!: Table<Style, string>;
@@ -39,10 +39,10 @@ class WebGlobeDexie extends Dexie {
 }
 
 export class IndexedDbPlacesRepository implements PlacesRepository {
-  private readonly db: WebGlobeDexie;
+  private readonly db: TerraGlobeDexie;
 
-  constructor(dbName = "webglobe") {
-    this.db = new WebGlobeDexie(dbName);
+  constructor(dbName = "terra-globe") {
+    this.db = new TerraGlobeDexie(dbName);
   }
 
   async getFolder(id: string): Promise<Folder | null> {

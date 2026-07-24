@@ -74,11 +74,11 @@ export function domainGeometryToKml(geometry: ShapePlacemarkGeometry): KmlGeomet
         element: "Polygon",
         rings: [rectangleRing(geometry)],
         extendedData: [
-          { name: "webglobe:shape", value: "rectangle" },
-          { name: "webglobe:north", value: String(geometry.north) },
-          { name: "webglobe:south", value: String(geometry.south) },
-          { name: "webglobe:east", value: String(geometry.east) },
-          { name: "webglobe:west", value: String(geometry.west) },
+          { name: "terra-globe:shape", value: "rectangle" },
+          { name: "terra-globe:north", value: String(geometry.north) },
+          { name: "terra-globe:south", value: String(geometry.south) },
+          { name: "terra-globe:east", value: String(geometry.east) },
+          { name: "terra-globe:west", value: String(geometry.west) },
         ],
       };
     case "Circle":
@@ -86,10 +86,10 @@ export function domainGeometryToKml(geometry: ShapePlacemarkGeometry): KmlGeomet
         element: "Polygon",
         rings: [circleToPolygonRing(geometry.center, geometry.radiusMeters)],
         extendedData: [
-          { name: "webglobe:shape", value: "circle" },
-          { name: "webglobe:centerLon", value: String(geometry.center.lon) },
-          { name: "webglobe:centerLat", value: String(geometry.center.lat) },
-          { name: "webglobe:radiusMeters", value: String(geometry.radiusMeters) },
+          { name: "terra-globe:shape", value: "circle" },
+          { name: "terra-globe:centerLon", value: String(geometry.center.lon) },
+          { name: "terra-globe:centerLat", value: String(geometry.center.lat) },
+          { name: "terra-globe:radiusMeters", value: String(geometry.radiusMeters) },
         ],
       };
     case "LineString":
@@ -102,24 +102,24 @@ export function kmlToDomainGeometry(
   rings: GeoPoint[][],
   extendedData: Record<string, string>,
 ): ShapePlacemarkGeometry {
-  const shape = extendedData["webglobe:shape"];
+  const shape = extendedData["terra-globe:shape"];
 
   if (shape === "rectangle") {
     return createRectangleGeometry({
-      north: Number(extendedData["webglobe:north"]),
-      south: Number(extendedData["webglobe:south"]),
-      east: Number(extendedData["webglobe:east"]),
-      west: Number(extendedData["webglobe:west"]),
+      north: Number(extendedData["terra-globe:north"]),
+      south: Number(extendedData["terra-globe:south"]),
+      east: Number(extendedData["terra-globe:east"]),
+      west: Number(extendedData["terra-globe:west"]),
     });
   }
 
   if (shape === "circle") {
     return createCircleGeometry(
       {
-        lon: Number(extendedData["webglobe:centerLon"]),
-        lat: Number(extendedData["webglobe:centerLat"]),
+        lon: Number(extendedData["terra-globe:centerLon"]),
+        lat: Number(extendedData["terra-globe:centerLat"]),
       },
-      Number(extendedData["webglobe:radiusMeters"]),
+      Number(extendedData["terra-globe:radiusMeters"]),
     );
   }
 

@@ -1,18 +1,18 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "WebGlobe",
+  "productName": "Terra Globe",
   "version": "0.1.0",
-  "identifier": "com.webglobe.app",
+  "identifier": "com.terraglobe.app",
   "build": {
-    "beforeDevCommand": "pnpm --filter @webglobe/ui dev",
-    "beforeBuildCommand": "pnpm --filter @webglobe/ui build",
+    "beforeDevCommand": "pnpm --filter @terra-globe/ui dev",
+    "beforeBuildCommand": "pnpm --filter @terra-globe/ui build",
     "devUrl": "http://localhost:5173",
     "frontendDist": "../packages/ui/dist"
   },
   "app": {
     "windows": [
       {
-        "title": "WebGlobe",
+        "title": "Terra Globe",
         "width": 1280,
         "height": 800,
         "resizable": true

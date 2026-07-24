@@ -1,5 +1,5 @@
 {
-  "name": "@webglobe/ui",
+  "name": "@terra-globe/ui",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -15,10 +15,10 @@
   "dependencies": {
     "@tauri-apps/api": "^2.1.1",
     "@tauri-apps/plugin-sql": "^2.2.0",
-    "@webglobe/core": "workspace:*",
-    "@webglobe/map": "workspace:*",
-    "@webglobe/storage-indexeddb": "workspace:*",
-    "@webglobe/storage-sqlite": "workspace:*",
+    "@terra-globe/core": "workspace:*",
+    "@terra-globe/map": "workspace:*",
+    "@terra-globe/storage-indexeddb": "workspace:*",
+    "@terra-globe/storage-sqlite": "workspace:*",
     "cesium": "^1.121.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

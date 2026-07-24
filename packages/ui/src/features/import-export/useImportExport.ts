@@ -4,7 +4,7 @@ import {
   resolveNetworkLinks,
   serializeKml,
   serializeKmz,
-} from "@webglobe/core";
+} from "@terra-globe/core";
 import type { UseLibraryResult } from "../folders/useLibrary.js";
 
 export interface ImportSummary {
@@ -66,7 +66,7 @@ export function useImportExport(library: UseLibraryResult) {
       const data = await library.exportAll();
       downloadBlob(
         serializeKml(data),
-        "webglobe-export.kml",
+        "terra-globe-export.kml",
         "application/vnd.google-earth.kml+xml",
       );
     },
@@ -75,7 +75,7 @@ export function useImportExport(library: UseLibraryResult) {
       const bytes = await serializeKmz(data);
       downloadBlob(
         bytes as unknown as BlobPart,
-        "webglobe-export.kmz",
+        "terra-globe-export.kmz",
         "application/vnd.google-earth.kmz",
       );
     },

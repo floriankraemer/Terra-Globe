@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import type { Placemark } from "@webglobe/core";
+import type { Placemark } from "@terra-globe/core";
 import { PlacemarkEditor, type PlacemarkStyleEdits } from "./PlacemarkEditor.js";
 
 function placemark(overrides: Partial<Placemark> = {}): Placemark {

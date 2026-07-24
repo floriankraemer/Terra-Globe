@@ -103,8 +103,8 @@ function renderGroundOverlay(placemark: Placemark): string {
   const box = `<LatLonBox><north>${bounds.north}</north><south>${bounds.south}</south><east>${bounds.east}</east><west>${bounds.west}</west>${rotation !== undefined ? `<rotation>${rotation}</rotation>` : ""}</LatLonBox>`;
   const extendedData = [
     ...Object.entries(placemark.extendedData ?? {}).map(([name, value]) => ({ name, value })),
-    { name: "webglobe:createdAt", value: placemark.createdAt },
-    { name: "webglobe:updatedAt", value: placemark.updatedAt },
+    { name: "terra-globe:createdAt", value: placemark.createdAt },
+    { name: "terra-globe:updatedAt", value: placemark.updatedAt },
   ];
   return `<GroundOverlay id="${escapeXml(placemark.id)}"><name>${escapeXml(placemark.name)}</name>${description}${renderFeatureExtras(placemark)}<visibility>${placemark.visibility ? 1 : 0}</visibility><Icon><href>${escapeXml(imageUrl)}</href></Icon>${box}${renderExtendedData(extendedData)}</GroundOverlay>`;
 }
@@ -241,10 +241,10 @@ function renderPlacemark(placemark: Placemark): string {
   const allExtendedData = [
     ...extendedData,
     ...Object.entries(placemark.extendedData ?? {}).map(([name, value]) => ({ name, value })),
-    { name: "webglobe:createdAt", value: placemark.createdAt },
-    { name: "webglobe:updatedAt", value: placemark.updatedAt },
+    { name: "terra-globe:createdAt", value: placemark.createdAt },
+    { name: "terra-globe:updatedAt", value: placemark.updatedAt },
     ...(placemark.multiGeometryGroup
-      ? [{ name: "webglobe:multiGeometryGroup", value: placemark.multiGeometryGroup }]
+      ? [{ name: "terra-globe:multiGeometryGroup", value: placemark.multiGeometryGroup }]
       : []),
   ];
   const description = placemark.description
@@ -268,8 +268,8 @@ function renderMultiGeometryPlacemark(members: Placemark[]): string {
   const allExtendedData = [
     ...parts.flatMap((p) => p.extendedData),
     ...Object.entries(first.extendedData ?? {}).map(([name, value]) => ({ name, value })),
-    { name: "webglobe:createdAt", value: first.createdAt },
-    { name: "webglobe:updatedAt", value: first.updatedAt },
+    { name: "terra-globe:createdAt", value: first.createdAt },
+    { name: "terra-globe:updatedAt", value: first.updatedAt },
   ];
   const description = first.description
     ? `<description>${escapeXml(first.description)}</description>`
@@ -308,9 +308,9 @@ function renderFolder(
   const childPlacemarks = allPlacemarks.filter((p) => p.folderId === folder.id);
   const childScreenOverlays = allScreenOverlays.filter((o) => o.folderId === folder.id);
   const extendedData = renderExtendedData([
-    { name: "webglobe:order", value: String(folder.order) },
-    { name: "webglobe:createdAt", value: folder.createdAt },
-    { name: "webglobe:updatedAt", value: folder.updatedAt },
+    { name: "terra-globe:order", value: String(folder.order) },
+    { name: "terra-globe:createdAt", value: folder.createdAt },
+    { name: "terra-globe:updatedAt", value: folder.updatedAt },
   ]);
   const childrenXml = [
     ...childFolders.map((f) => renderFolder(f, allFolders, allPlacemarks, allScreenOverlays)),

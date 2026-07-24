@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { InMemoryPlacesRepository, createPointGeometry, createStyle } from "@webglobe/core";
+import { InMemoryPlacesRepository, createPointGeometry, createStyle } from "@terra-globe/core";
 import { FakeEntityFactory } from "../../src/entities/FakeEntityFactory.js";
 import { EntitySynchronizer } from "../../src/sync/EntitySynchronizer.js";
 

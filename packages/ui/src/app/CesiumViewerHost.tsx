@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { createViewer, type TileSource, type CesiumViewerHandle } from "@webglobe/map";
+import { createViewer, type TileSource, type CesiumViewerHandle } from "@terra-globe/map";
 
 export interface CesiumViewerHostProps {
   baseLayer: TileSource;

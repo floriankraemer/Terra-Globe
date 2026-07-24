@@ -13,7 +13,7 @@ import {
   type PlacesRepository,
   type ScreenOverlay,
   type Style,
-} from "@webglobe/core";
+} from "@terra-globe/core";
 import { migrate } from "./migrate.js";
 import type { SqlDriver } from "./SqlDriver.js";
 

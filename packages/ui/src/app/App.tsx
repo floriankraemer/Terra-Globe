@@ -10,13 +10,13 @@ import {
   type LineStringGeometry,
   type RoutingProvider,
   type RoutingProviderConfig,
-} from "@webglobe/core";
+} from "@terra-globe/core";
 import {
   flyToGeometry,
   BUILTIN_TILE_SOURCES,
   type TileSource,
   type PlacemarkStyleEdits,
-} from "@webglobe/map";
+} from "@terra-globe/map";
 import { CesiumViewerHost } from "./CesiumViewerHost.js";
 import { DrawingToolbar } from "../features/drawing-toolbar/DrawingToolbar.js";
 import { useDrawing } from "../features/drawing-toolbar/useDrawing.js";
@@ -64,7 +64,7 @@ export function App() {
   const [editorStyle, setEditorStyle] = useState<PlacemarkStyleEdits>(DEFAULT_STYLE);
   const [notice, setNotice] = useState<NoticeData | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const sidebar = useResizableWidth(260, 200, 600, "webglobe:sidebarWidth");
+  const sidebar = useResizableWidth(260, 200, 600, "terra-globe:sidebarWidth");
   const topbarRef = useRef<HTMLDivElement>(null);
   const [placesPanelTop, setPlacesPanelTop] = useState(76);
 
@@ -88,7 +88,7 @@ export function App() {
     minHeight: 200,
     maxWidth: 600,
     maxHeight: 800,
-    storageKey: "webglobe:placemarkEditorGeometry",
+    storageKey: "terra-globe:placemarkEditorGeometry",
   });
   const heightProfilePanel = useFloatingPanel({
     initial: { x: window.innerWidth - 260 - 12, y: 550, width: 420, height: 260 },
@@ -96,7 +96,7 @@ export function App() {
     minHeight: 180,
     maxWidth: 900,
     maxHeight: 600,
-    storageKey: "webglobe:heightProfilePanelGeometry",
+    storageKey: "terra-globe:heightProfilePanelGeometry",
   });
   const rulerPanel = useFloatingPanel({
     initial: { x: window.innerWidth - 260 - 12, y: 56, width: 240, height: 200 },
@@ -104,7 +104,7 @@ export function App() {
     minHeight: 120,
     maxWidth: 480,
     maxHeight: 600,
-    storageKey: "webglobe:rulerPanelGeometry",
+    storageKey: "terra-globe:rulerPanelGeometry",
   });
   const routePlannerPanel = useFloatingPanel({
     initial: { x: window.innerWidth - 300 - 12, y: 56, width: 300, height: 260 },
@@ -112,7 +112,7 @@ export function App() {
     minHeight: 160,
     maxWidth: 480,
     maxHeight: 600,
-    storageKey: "webglobe:routePlannerPanelGeometry",
+    storageKey: "terra-globe:routePlannerPanelGeometry",
   });
   const secretStore = useRef(createSecretStore()).current;
   const settings = useSettings(secretStore);
@@ -164,7 +164,7 @@ export function App() {
     setViewer(handle.viewer);
     // Exposed for E2E tests to inspect camera state (e.g. after a fly-to);
     // harmless in production, mirrors the common devtools-debugging pattern.
-    (window as unknown as { __webglobeViewer?: Cesium.Viewer }).__webglobeViewer = handle.viewer;
+    (window as unknown as { __terraGlobeViewer?: Cesium.Viewer }).__terraGlobeViewer = handle.viewer;
     // Repurpose Cesium's built-in "home" button: cancel its default
     // fly-to-home behavior and open the Settings modal instead.
     handle.viewer.homeButton.viewModel.command.beforeExecute.addEventListener((commandInfo) => {

@@ -7,7 +7,7 @@ export default defineConfig({
   // GPU/CPU contention flakiness (esp. under software rendering in CI/sandboxes).
   workers: 2,
   webServer: {
-    command: "pnpm --filter @webglobe/ui preview -- --port 4173 --strictPort",
+    command: "pnpm --filter @terra-globe/ui preview -- --port 4173 --strictPort",
     url: "http://localhost:4173",
     reuseExistingServer: !process.env.CI,
     cwd: "../..",

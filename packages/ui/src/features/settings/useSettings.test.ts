@@ -1,6 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import type { SecretStore } from "@webglobe/core";
+import type { SecretStore } from "@terra-globe/core";
 import { useSettings } from "./useSettings.js";
 
 function fakeSecretStore(): SecretStore & { removed: string[] } {
@@ -35,7 +35,7 @@ describe("useSettings", () => {
     act(() => result.current.setUnitSystem("imperial"));
 
     expect(result.current.unitSystem).toBe("imperial");
-    expect(JSON.parse(window.localStorage.getItem("webglobe:settings")!)).toMatchObject({
+    expect(JSON.parse(window.localStorage.getItem("terra-globe:settings")!)).toMatchObject({
       unitSystem: "imperial",
     });
   });
@@ -46,14 +46,14 @@ describe("useSettings", () => {
     act(() => result.current.setCoordinateFormat("dms"));
 
     expect(result.current.coordinateFormat).toBe("dms");
-    expect(JSON.parse(window.localStorage.getItem("webglobe:settings")!)).toMatchObject({
+    expect(JSON.parse(window.localStorage.getItem("terra-globe:settings")!)).toMatchObject({
       coordinateFormat: "dms",
     });
   });
 
   it("reads previously persisted settings on mount", () => {
     window.localStorage.setItem(
-      "webglobe:settings",
+      "terra-globe:settings",
       JSON.stringify({ unitSystem: "imperial", coordinateFormat: "dms" }),
     );
 
@@ -64,7 +64,7 @@ describe("useSettings", () => {
   });
 
   it("falls back to defaults for corrupt stored settings", () => {
-    window.localStorage.setItem("webglobe:settings", "not json");
+    window.localStorage.setItem("terra-globe:settings", "not json");
 
     const { result } = renderHook(() => useSettings(fakeSecretStore()));
 
@@ -74,7 +74,7 @@ describe("useSettings", () => {
   });
 
   it("falls back to [] when stored providers is not an array", () => {
-    window.localStorage.setItem("webglobe:settings", JSON.stringify({ providers: "nope" }));
+    window.localStorage.setItem("terra-globe:settings", JSON.stringify({ providers: "nope" }));
 
     const { result } = renderHook(() => useSettings(fakeSecretStore()));
 
@@ -96,7 +96,7 @@ describe("useSettings", () => {
     expect(result.current.providers).toEqual([
       { id, kind: "tile", preset: "mapbox-streets", name: "My Mapbox", enabled: false },
     ]);
-    expect(JSON.parse(window.localStorage.getItem("webglobe:settings")!).providers).toHaveLength(1);
+    expect(JSON.parse(window.localStorage.getItem("terra-globe:settings")!).providers).toHaveLength(1);
   });
 
   it("setProviderEnabled enables the target provider", () => {

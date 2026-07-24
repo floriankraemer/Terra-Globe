@@ -36,7 +36,7 @@ mod tests {
 
     fn write_temp_file(contents: &str) -> String {
         let path = std::env::temp_dir().join(format!(
-            "webglobe-test-{}.txt",
+            "terra-globe-test-{}.txt",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()

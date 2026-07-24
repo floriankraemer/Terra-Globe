@@ -4,7 +4,7 @@ import {
   pickGridStepMeters,
   type TrackProfilePoint,
   type UnitSystem,
-} from "@webglobe/core";
+} from "@terra-globe/core";
 
 export interface HeightProfileChartProps {
   profile: TrackProfilePoint[];

@@ -8,7 +8,7 @@ import {
   type RoutingProfile,
   type RoutingProvider,
   type Style,
-} from "@webglobe/core";
+} from "@terra-globe/core";
 import {
   CesiumEntityFactory,
   CesiumScreenPicker,
@@ -16,7 +16,7 @@ import {
   flyToGeometry,
   type EntityHandle,
   type IEntityFactory,
-} from "@webglobe/map";
+} from "@terra-globe/map";
 
 export type TravelMode = RoutingProfile | "train" | "plane";
 

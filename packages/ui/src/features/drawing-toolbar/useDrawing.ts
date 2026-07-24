@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import * as Cesium from "cesium";
-import type { PlacemarkGeometry } from "@webglobe/core";
+import type { PlacemarkGeometry } from "@terra-globe/core";
 import {
   CesiumEntityFactory,
   CesiumScreenPicker,
   DrawingController,
   type EntityHandle,
   type IEntityFactory,
-} from "@webglobe/map";
+} from "@terra-globe/map";
 import type { DrawingMode, DrawingTool } from "./DrawingToolbar.js";
 
 export interface UseDrawingResult {

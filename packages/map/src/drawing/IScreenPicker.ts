@@ -1,4 +1,4 @@
-import type { GeoPoint } from "@webglobe/core";
+import type { GeoPoint } from "@terra-globe/core";
 
 export interface ScreenPosition {
   x: number;

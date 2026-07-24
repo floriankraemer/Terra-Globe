@@ -24,11 +24,11 @@ build-linux:     ## Tauri Linux bundle (.AppImage/.deb) via container
 build-windows:   ## Windows NSIS installer + raw .exe via cargo-xwin cross-compile (unsigned)
 	docker compose run --rm tauri-linux-build cargo tauri build --target x86_64-pc-windows-msvc --runner cargo-xwin
 	@mkdir -p dist-windows
-	docker run --rm -v webglobe_tauri_target:/target -v "$$(pwd)/dist-windows:/out" alpine sh -c "\
-		cp /target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe /out/WebGlobe-Setup-x64.exe && \
-		cp /target/x86_64-pc-windows-msvc/release/webglobe.exe /out/WebGlobe-raw-x86_64.exe && \
+	docker run --rm -v terra-globe_tauri_target:/target -v "$$(pwd)/dist-windows:/out" alpine sh -c "\
+		cp /target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe /out/TerraGlobe-Setup-x64.exe && \
+		cp /target/x86_64-pc-windows-msvc/release/terra-globe.exe /out/TerraGlobe-raw-x86_64.exe && \
 		chown -R 1000:1000 /out"
-	@echo "Built dist-windows/WebGlobe-Setup-x64.exe (NSIS installer) and WebGlobe-raw-x86_64.exe (raw binary)"
+	@echo "Built dist-windows/TerraGlobe-Setup-x64.exe (NSIS installer) and TerraGlobe-raw-x86_64.exe (raw binary)"
 	@echo "NOTE: unsigned - Windows SmartScreen will warn on first run. Real code signing needs a cert + signtool."
 
 build-macos:     ## Tauri macOS bundle; MUST run on real macOS (CI or hardware), not this container

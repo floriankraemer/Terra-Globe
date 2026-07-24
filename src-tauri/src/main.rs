@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    webglobe_lib::run();
+    terra_globe_lib::run();
 }

@@ -1,5 +1,5 @@
 import * as Cesium from "cesium";
-import { geometryCenter, type PlacemarkGeometry, type PlacemarkView } from "@webglobe/core";
+import { geometryCenter, type PlacemarkGeometry, type PlacemarkView } from "@terra-globe/core";
 
 const MIN_ALTITUDE_METERS = 2000;
 const DEGREES_TO_METERS = 111_320;

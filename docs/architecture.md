@@ -1,6 +1,6 @@
 # Architecture
 
-WebGlobe is a pnpm-workspace monorepo built around one rule: **domain logic never imports a rendering engine, a browser API, or a database driver directly**.
+Terra Globe is a pnpm-workspace monorepo built around one rule: **domain logic never imports a rendering engine, a browser API, or a database driver directly**.
 Every cross-cutting concern (rendering, storage, platform) is expressed as a TypeScript interface ("port") in `packages/core` or `packages/map`, with concrete implementations ("adapters") swapped in at a single composition root.
 This is what lets the same `packages/ui` React app run unmodified in a browser tab and inside a Tauri desktop window, and what lets drawing logic and KML parsing be unit-tested without a WebGL context.
 

@@ -3769,7 +3769,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "webglobe"
+name = "terra-globe"
 version = "0.1.0"
 dependencies = [
  "keyring",

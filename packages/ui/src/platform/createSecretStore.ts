@@ -1,4 +1,4 @@
-import type { SecretStore } from "@webglobe/core";
+import type { SecretStore } from "@terra-globe/core";
 import { isTauri } from "./isTauri.js";
 import { LocalStorageSecretStore } from "./LocalStorageSecretStore.js";
 import { TauriKeyringSecretStore } from "./TauriKeyringSecretStore.js";

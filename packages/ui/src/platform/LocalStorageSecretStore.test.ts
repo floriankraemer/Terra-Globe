@@ -30,7 +30,7 @@ describe("LocalStorageSecretStore", () => {
   });
 
   it("falls back to empty when stored JSON is corrupt", async () => {
-    localStorage.setItem("webglobe:secrets", "not json");
+    localStorage.setItem("terra-globe:secrets", "not json");
     const store = new LocalStorageSecretStore();
     expect(await store.get("p1")).toBeUndefined();
   });

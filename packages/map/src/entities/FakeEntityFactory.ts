@@ -1,4 +1,4 @@
-import type { PlacemarkGeometry, Style } from "@webglobe/core";
+import type { PlacemarkGeometry, Style } from "@terra-globe/core";
 import type { EntityHandle, IEntityFactory } from "./IEntityFactory.js";
 
 export interface FakeEntity {

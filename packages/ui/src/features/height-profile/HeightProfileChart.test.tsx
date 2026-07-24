@@ -1,6 +1,6 @@
 import { fireEvent, render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import type { TrackProfilePoint } from "@webglobe/core";
+import type { TrackProfilePoint } from "@terra-globe/core";
 import { HeightProfileChart } from "./HeightProfileChart.js";
 
 describe("HeightProfileChart", () => {

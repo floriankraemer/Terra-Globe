@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import type { CoordinateFormat, ProviderConfig, SecretStore, UnitSystem } from "@webglobe/core";
+import type { CoordinateFormat, ProviderConfig, SecretStore, UnitSystem } from "@terra-globe/core";
 
 export interface Settings {
   unitSystem: UnitSystem;
@@ -15,7 +15,7 @@ export interface UseSettingsResult extends Settings {
   removeProvider: (id: string) => void;
 }
 
-const STORAGE_KEY = "webglobe:settings";
+const STORAGE_KEY = "terra-globe:settings";
 
 const DEFAULT_SETTINGS: Settings = {
   unitSystem: "metric",

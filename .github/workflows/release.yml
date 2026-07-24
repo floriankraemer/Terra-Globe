@@ -55,7 +55,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: "WebGlobe ${{ github.ref_name }}"
+          releaseName: "Terra Globe ${{ github.ref_name }}"
           releaseBody: |
             See the commit history for what changed since the last release.
           releaseDraft: false

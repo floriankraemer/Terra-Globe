@@ -1,5 +1,5 @@
 {
-  "name": "@webglobe/storage-sqlite",
+  "name": "@terra-globe/storage-sqlite",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -14,7 +14,7 @@
   },
   "dependencies": {
     "@tauri-apps/plugin-sql": "^2.2.0",
-    "@webglobe/core": "workspace:*"
+    "@terra-globe/core": "workspace:*"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.11",

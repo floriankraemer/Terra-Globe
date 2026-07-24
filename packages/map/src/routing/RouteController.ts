@@ -1,4 +1,4 @@
-import type { GeoPoint } from "@webglobe/core";
+import type { GeoPoint } from "@terra-globe/core";
 
 /**
  * Ordered waypoint list for the route planner - similar to RulerController,

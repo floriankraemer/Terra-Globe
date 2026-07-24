@@ -45,11 +45,11 @@ describe("domainGeometryToKml", () => {
       { lon: 0, lat: 0 },
     ]);
     expect(result.extendedData).toEqual([
-      { name: "webglobe:shape", value: "rectangle" },
-      { name: "webglobe:north", value: "10" },
-      { name: "webglobe:south", value: "0" },
-      { name: "webglobe:east", value: "10" },
-      { name: "webglobe:west", value: "0" },
+      { name: "terra-globe:shape", value: "rectangle" },
+      { name: "terra-globe:north", value: "10" },
+      { name: "terra-globe:south", value: "0" },
+      { name: "terra-globe:east", value: "10" },
+      { name: "terra-globe:west", value: "0" },
     ]);
   });
 
@@ -59,10 +59,10 @@ describe("domainGeometryToKml", () => {
     expect(result.element).toBe("Polygon");
     expect(result.rings[0]!.length).toBeGreaterThan(3);
     expect(result.extendedData).toEqual([
-      { name: "webglobe:shape", value: "circle" },
-      { name: "webglobe:centerLon", value: "1" },
-      { name: "webglobe:centerLat", value: "2" },
-      { name: "webglobe:radiusMeters", value: "500" },
+      { name: "terra-globe:shape", value: "circle" },
+      { name: "terra-globe:centerLon", value: "1" },
+      { name: "terra-globe:centerLat", value: "2" },
+      { name: "terra-globe:radiusMeters", value: "500" },
     ]);
   });
 });
@@ -73,7 +73,7 @@ describe("kmlToDomainGeometry", () => {
     expect(geometry).toEqual(createPointGeometry({ lon: 13.4, lat: 52.5 }));
   });
 
-  it("reconstructs a plain Polygon when there is no webglobe:shape extended data", () => {
+  it("reconstructs a plain Polygon when there is no terra-globe:shape extended data", () => {
     const outer = [
       { lon: 0, lat: 0 },
       { lon: 1, lat: 0 },
@@ -98,7 +98,7 @@ describe("kmlToDomainGeometry", () => {
     expect(geometry).toEqual(createPolygonGeometry(outer, [hole]));
   });
 
-  it("losslessly reconstructs a Rectangle from webglobe:shape extended data, ignoring the polygon approximation", () => {
+  it("losslessly reconstructs a Rectangle from terra-globe:shape extended data, ignoring the polygon approximation", () => {
     const geometry = kmlToDomainGeometry(
       "Polygon",
       [
@@ -110,17 +110,17 @@ describe("kmlToDomainGeometry", () => {
         ],
       ],
       {
-        "webglobe:shape": "rectangle",
-        "webglobe:north": "10",
-        "webglobe:south": "0",
-        "webglobe:east": "10",
-        "webglobe:west": "0",
+        "terra-globe:shape": "rectangle",
+        "terra-globe:north": "10",
+        "terra-globe:south": "0",
+        "terra-globe:east": "10",
+        "terra-globe:west": "0",
       },
     );
     expect(geometry).toEqual(createRectangleGeometry({ north: 10, south: 0, east: 10, west: 0 }));
   });
 
-  it("losslessly reconstructs a Circle from webglobe:shape extended data, ignoring the polygon approximation", () => {
+  it("losslessly reconstructs a Circle from terra-globe:shape extended data, ignoring the polygon approximation", () => {
     const geometry = kmlToDomainGeometry(
       "Polygon",
       [
@@ -131,10 +131,10 @@ describe("kmlToDomainGeometry", () => {
         ],
       ],
       {
-        "webglobe:shape": "circle",
-        "webglobe:centerLon": "1",
-        "webglobe:centerLat": "2",
-        "webglobe:radiusMeters": "500",
+        "terra-globe:shape": "circle",
+        "terra-globe:centerLon": "1",
+        "terra-globe:centerLat": "2",
+        "terra-globe:radiusMeters": "500",
       },
     );
     expect(geometry).toEqual(createCircleGeometry({ lon: 1, lat: 2 }, 500));

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { Folder, Placemark } from "@webglobe/core";
+import type { Folder, Placemark } from "@terra-globe/core";
 import {
   resolveDrop,
   resolveDropOnContainer,

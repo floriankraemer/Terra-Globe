@@ -8,7 +8,7 @@ describe("createRepository", () => {
 
   it("returns an IndexedDbPlacesRepository when not running inside Tauri", async () => {
     const { createRepository } = await import("./createRepository.js");
-    const { IndexedDbPlacesRepository } = await import("@webglobe/storage-indexeddb");
+    const { IndexedDbPlacesRepository } = await import("@terra-globe/storage-indexeddb");
 
     const repo = await createRepository();
 

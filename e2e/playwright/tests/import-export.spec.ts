@@ -39,7 +39,7 @@ test("exporting KML downloads a file containing the drawn placemark", async ({ p
   await page.getByRole("button", { name: "Export KML" }).click();
   const download = await downloadPromise;
 
-  expect(download.suggestedFilename()).toBe("webglobe-export.kml");
+  expect(download.suggestedFilename()).toBe("terra-globe-export.kml");
   const downloadPath = await download.path();
   const fs = await import("node:fs/promises");
   const contents = await fs.readFile(downloadPath!, "utf-8");
@@ -69,7 +69,7 @@ test("importing an exported KMZ round-trips a drawn placemark", async ({ page })
 
   // Simulate a fresh device/browser profile by wiping local storage, rather
   // than asserting on the already-covered persist-across-reload behavior.
-  await page.evaluate(() => indexedDB.deleteDatabase("webglobe"));
+  await page.evaluate(() => indexedDB.deleteDatabase("terra-globe"));
   await page.reload();
   await expect(canvas).toBeVisible();
   await waitForAppReady(page);
@@ -79,7 +79,7 @@ test("importing an exported KMZ round-trips a drawn placemark", async ({ page })
   await page.getByRole("button", { name: "Import KML/KMZ" }).click();
   const fileChooser = await fileChooserPromise;
   await fileChooser.setFiles({
-    name: "webglobe-export.kmz",
+    name: "terra-globe-export.kmz",
     mimeType: "application/vnd.google-earth.kmz",
     buffer: await (await import("node:fs/promises")).readFile(downloadedPath!),
   });

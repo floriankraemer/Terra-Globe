@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Folder, Placemark } from "@webglobe/core";
+import type { Folder, Placemark } from "@terra-globe/core";
 import { resolveDrop, resolveDropOnContainer, resolveDropPosition } from "./treeDragDrop.js";
 
 function folder(overrides: Partial<Folder>): Folder {

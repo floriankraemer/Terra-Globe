@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ProviderConfig, SecretStore } from "@webglobe/core";
+import type { ProviderConfig, SecretStore } from "@terra-globe/core";
 import { buildTileSources } from "./tileProviderRegistry.js";
 
 function fakeSecretStore(secrets: Record<string, string>): SecretStore {

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { GeocodeResult } from "@webglobe/core";
+import type { GeocodeResult } from "@terra-globe/core";
 import type { GeocodingStatus } from "./useGeocoding.js";
 
 export interface AddressSearchBoxProps {

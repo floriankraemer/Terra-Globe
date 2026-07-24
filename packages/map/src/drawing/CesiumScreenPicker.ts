@@ -1,5 +1,5 @@
 import * as Cesium from "cesium";
-import type { GeoPoint } from "@webglobe/core";
+import type { GeoPoint } from "@terra-globe/core";
 import type { IScreenPicker, ScreenPosition } from "./IScreenPicker.js";
 
 export class CesiumScreenPicker implements IScreenPicker {

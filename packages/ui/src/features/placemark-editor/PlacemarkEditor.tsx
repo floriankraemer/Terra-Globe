@@ -13,7 +13,7 @@ import {
   type CoordinateFormat,
   type Placemark,
   type UnitSystem,
-} from "@webglobe/core";
+} from "@terra-globe/core";
 
 export interface PlacemarkStyleEdits {
   outlineEnabled: boolean;

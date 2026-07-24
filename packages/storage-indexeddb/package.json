@@ -1,5 +1,5 @@
 {
-  "name": "@webglobe/storage-indexeddb",
+  "name": "@terra-globe/storage-indexeddb",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -13,7 +13,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@webglobe/core": "workspace:*",
+    "@terra-globe/core": "workspace:*",
     "dexie": "^4.0.10"
   },
   "devDependencies": {

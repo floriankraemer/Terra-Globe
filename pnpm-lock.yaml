@@ -54,7 +54,7 @@ importers:
 
   packages/map:
     dependencies:
-      '@webglobe/core':
+      '@terra-globe/core':
         specifier: workspace:*
         version: link:../core
       cesium:
@@ -73,7 +73,7 @@ importers:
 
   packages/storage-indexeddb:
     dependencies:
-      '@webglobe/core':
+      '@terra-globe/core':
         specifier: workspace:*
         version: link:../core
       dexie:
@@ -95,7 +95,7 @@ importers:
 
   packages/storage-remote:
     dependencies:
-      '@webglobe/core':
+      '@terra-globe/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -114,7 +114,7 @@ importers:
       '@tauri-apps/plugin-sql':
         specifier: ^2.2.0
         version: 2.4.0
-      '@webglobe/core':
+      '@terra-globe/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
@@ -142,16 +142,16 @@ importers:
       '@tauri-apps/plugin-sql':
         specifier: ^2.2.0
         version: 2.4.0
-      '@webglobe/core':
+      '@terra-globe/core':
         specifier: workspace:*
         version: link:../core
-      '@webglobe/map':
+      '@terra-globe/map':
         specifier: workspace:*
         version: link:../map
-      '@webglobe/storage-indexeddb':
+      '@terra-globe/storage-indexeddb':
         specifier: workspace:*
         version: link:../storage-indexeddb
-      '@webglobe/storage-sqlite':
+      '@terra-globe/storage-sqlite':
         specifier: workspace:*
         version: link:../storage-sqlite
       cesium:

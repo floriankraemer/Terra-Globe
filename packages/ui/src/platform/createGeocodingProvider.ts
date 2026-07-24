@@ -4,7 +4,7 @@ import {
   type GeocodingProvider,
   type GeocodingProviderConfig,
   type SecretStore,
-} from "@webglobe/core";
+} from "@terra-globe/core";
 
 /**
  * Composition root: the only place that picks the active geocoding backend.

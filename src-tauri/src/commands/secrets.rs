@@ -1,6 +1,6 @@
 use keyring::Entry;
 
-const SERVICE: &str = "webglobe-provider";
+const SERVICE: &str = "terra-globe-provider";
 
 #[derive(Debug, serde::Serialize)]
 pub enum SecretError {

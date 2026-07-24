@@ -9,7 +9,7 @@ import type {
   PlacesRepository,
   ScreenOverlay,
   Style,
-} from "@webglobe/core";
+} from "@terra-globe/core";
 
 /**
  * Future home of S3/WebDAV/self-hosted sync. For now this is an inert

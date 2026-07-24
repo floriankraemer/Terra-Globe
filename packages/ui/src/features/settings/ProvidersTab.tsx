@@ -11,7 +11,7 @@ import {
   type RoutingPresetId,
   type SecretStore,
   type TilePresetId,
-} from "@webglobe/core";
+} from "@terra-globe/core";
 import { isTauri } from "../../platform/isTauri.js";
 
 export interface ProvidersTabProps {

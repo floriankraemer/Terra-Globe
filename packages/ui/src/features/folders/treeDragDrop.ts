@@ -1,4 +1,4 @@
-import type { Folder, Placemark } from "@webglobe/core";
+import type { Folder, Placemark } from "@terra-globe/core";
 
 export type TreeItemKind = "folder" | "placemark";
 export type DropPosition = "before" | "after" | "inside";

@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import type { ScreenOverlay, ScreenOverlayAnchor } from "@webglobe/core";
+import type { ScreenOverlay, ScreenOverlayAnchor } from "@terra-globe/core";
 
 interface ScreenOverlayLayerProps {
   overlays: ScreenOverlay[];

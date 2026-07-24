@@ -1,4 +1,4 @@
-import { computeTrackProfile, type LineStringGeometry, type UnitSystem } from "@webglobe/core";
+import { computeTrackProfile, type LineStringGeometry, type UnitSystem } from "@terra-globe/core";
 import { HeightProfileChart } from "./HeightProfileChart.js";
 
 export interface HeightProfilePanelProps {

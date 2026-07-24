@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import * as Cesium from "cesium";
-import { computeTrackProfile, type LineStringGeometry, type Style } from "@webglobe/core";
+import { computeTrackProfile, type LineStringGeometry, type Style } from "@terra-globe/core";
 import {
   CesiumEntityFactory,
   CesiumScreenPicker,
   RulerController,
   type EntityHandle,
   type IEntityFactory,
-} from "@webglobe/map";
+} from "@terra-globe/map";
 
 export interface RulerSegment {
   distanceMeters: number;

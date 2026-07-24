@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createPointGeometry } from "@webglobe/core";
+import { createPointGeometry } from "@terra-globe/core";
 import { FakeEntityFactory } from "../../src/entities/FakeEntityFactory.js";
 
 describe("FakeEntityFactory", () => {

@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import type { ScreenOverlay } from "@webglobe/core";
+import type { ScreenOverlay } from "@terra-globe/core";
 import { ScreenOverlayLayer } from "./ScreenOverlayLayer.js";
 
 function overlay(overrides: Partial<ScreenOverlay> = {}): ScreenOverlay {

@@ -4,7 +4,7 @@ import {
   type RoutingProvider,
   type RoutingProviderConfig,
   type SecretStore,
-} from "@webglobe/core";
+} from "@terra-globe/core";
 
 /**
  * Composition root: the only place that picks the active routing backend.

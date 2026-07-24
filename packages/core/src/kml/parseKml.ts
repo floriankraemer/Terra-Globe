@@ -16,7 +16,7 @@ import type { Style } from "../domain/style.js";
 import { kmlToDomainGeometry, type KmlGeometryElement } from "./mapping/geometryKmlMapping.js";
 import { kmlDataToStyle } from "./mapping/styleKmlMapping.js";
 
-const RESERVED_EXTENDED_DATA_PREFIX = "webglobe:";
+const RESERVED_EXTENDED_DATA_PREFIX = "terra-globe:";
 
 /** An unresolved `<NetworkLink>` reference found during parsing - see resolveNetworkLinks in networkLink.ts. */
 export interface KmlNetworkLinkRef {
@@ -106,7 +106,7 @@ function parseExtendedData(node: Record<string, unknown>): Record<string, string
   return Object.fromEntries([...dataEntries, ...schemaEntries]);
 }
 
-/** Drops webglobe:* internal round-trip markers, keeping only genuine third-party ExtendedData. */
+/** Drops terra-globe:* internal round-trip markers, keeping only genuine third-party ExtendedData. */
 function nonReservedExtendedData(
   extendedData: Record<string, string>,
 ): Record<string, string> | undefined {
@@ -401,8 +401,8 @@ function parseGroundOverlay(
       {
         ...placemark,
         id: String(node["@_id"] ?? placemark.id),
-        createdAt: extendedData["webglobe:createdAt"] ?? placemark.createdAt,
-        updatedAt: extendedData["webglobe:updatedAt"] ?? placemark.updatedAt,
+        createdAt: extendedData["terra-globe:createdAt"] ?? placemark.createdAt,
+        updatedAt: extendedData["terra-globe:updatedAt"] ?? placemark.updatedAt,
       },
     ];
   } catch (err) {
@@ -446,7 +446,7 @@ function parsePhotoOverlay(
       folderId,
       geometry,
       visibility: node.visibility === undefined ? true : String(node.visibility) === "1",
-      extendedData: { ...nonReservedExtendedData(extendedData), "webglobe:photoUrl": icon.href },
+      extendedData: { ...nonReservedExtendedData(extendedData), "terra-globe:photoUrl": icon.href },
       ...withoutUndefined(parseFeatureExtras(node)),
     });
     return [{ ...placemark, id: String(node["@_id"] ?? placemark.id) }];
@@ -544,8 +544,8 @@ function parsePlacemarks(
       {
         ...placemark,
         id: String(node["@_id"] ?? placemark.id),
-        createdAt: extendedData["webglobe:createdAt"] ?? placemark.createdAt,
-        updatedAt: extendedData["webglobe:updatedAt"] ?? placemark.updatedAt,
+        createdAt: extendedData["terra-globe:createdAt"] ?? placemark.createdAt,
+        updatedAt: extendedData["terra-globe:updatedAt"] ?? placemark.updatedAt,
       },
     ];
   }
@@ -599,8 +599,8 @@ function parsePlacemarks(
           geometries.length > 1
             ? `${String(node["@_id"] ?? placemark.id)}-${index}`
             : String(node["@_id"] ?? placemark.id),
-        createdAt: extendedData["webglobe:createdAt"] ?? placemark.createdAt,
-        updatedAt: extendedData["webglobe:updatedAt"] ?? placemark.updatedAt,
+        createdAt: extendedData["terra-globe:createdAt"] ?? placemark.createdAt,
+        updatedAt: extendedData["terra-globe:updatedAt"] ?? placemark.updatedAt,
       });
     } catch (err) {
       warnings.push(
@@ -638,7 +638,7 @@ function parseFolder(
     name: String(node.name ?? ""),
     parentId,
     order:
-      extendedData["webglobe:order"] !== undefined ? Number(extendedData["webglobe:order"]) : 0,
+      extendedData["terra-globe:order"] !== undefined ? Number(extendedData["terra-globe:order"]) : 0,
     visibility: node.visibility === undefined ? true : String(node.visibility) === "1",
     description: node.description !== undefined ? String(node.description) : undefined,
     open: node.open !== undefined ? String(node.open) === "1" : undefined,
@@ -646,8 +646,8 @@ function parseFolder(
   const resolved: Folder = {
     ...folder,
     id: String(node["@_id"] ?? folder.id),
-    createdAt: extendedData["webglobe:createdAt"] ?? folder.createdAt,
-    updatedAt: extendedData["webglobe:updatedAt"] ?? folder.updatedAt,
+    createdAt: extendedData["terra-globe:createdAt"] ?? folder.createdAt,
+    updatedAt: extendedData["terra-globe:updatedAt"] ?? folder.updatedAt,
   };
   folders.push(resolved);
 

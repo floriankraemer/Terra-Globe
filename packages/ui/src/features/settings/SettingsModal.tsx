@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { CoordinateFormat, ProviderConfig, SecretStore, UnitSystem } from "@webglobe/core";
+import type { CoordinateFormat, ProviderConfig, SecretStore, UnitSystem } from "@terra-globe/core";
 import { ProvidersTab } from "./ProvidersTab.js";
 
 export interface SettingsModalProps {

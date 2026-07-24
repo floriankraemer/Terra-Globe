@@ -1,4 +1,4 @@
-import { createLineStringGeometry, type GeoPoint, type LineStringGeometry } from "@webglobe/core";
+import { createLineStringGeometry, type GeoPoint, type LineStringGeometry } from "@terra-globe/core";
 
 /**
  * Open-ended vertex accumulation for the ruler tool - similar to

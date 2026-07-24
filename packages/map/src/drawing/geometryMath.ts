@@ -1,5 +1,5 @@
-import type { GeoPoint } from "@webglobe/core";
-import type { RectangleBounds } from "@webglobe/core";
+import type { GeoPoint } from "@terra-globe/core";
+import type { RectangleBounds } from "@terra-globe/core";
 
 const EARTH_RADIUS_METERS = 6_371_000;
 

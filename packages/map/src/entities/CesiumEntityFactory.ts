@@ -11,7 +11,7 @@ import {
   type PolygonGeometry,
   type RectangleGeometry,
   type Style,
-} from "@webglobe/core";
+} from "@terra-globe/core";
 import type { EntityHandle, IEntityFactory } from "./IEntityFactory.js";
 
 const HEIGHT_REFERENCE = {

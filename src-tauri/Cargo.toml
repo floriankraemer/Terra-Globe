@@ -1,12 +1,12 @@
 [package]
-name = "webglobe"
+name = "terra-globe"
 version = "0.1.0"
-description = "WebGlobe desktop shell"
+description = "Terra Globe desktop shell"
 edition = "2021"
 rust-version = "1.77"
 
 [lib]
-name = "webglobe_lib"
+name = "terra_globe_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

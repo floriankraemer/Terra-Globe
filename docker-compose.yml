@@ -1,9 +1,11 @@
+name: terra-globe
+
 services:
   web-dev:
     build:
       context: .
       dockerfile: docker/Dockerfile.web
-    command: pnpm --filter @webglobe/ui dev -- --host 0.0.0.0
+    command: pnpm --filter @terra-globe/ui dev -- --host 0.0.0.0
     user: "${UID:-1000}:${GID:-1000}"
     ports:
       - "5173:5173"
@@ -18,7 +20,7 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.web
-    command: pnpm --filter @webglobe/ui build
+    command: pnpm --filter @terra-globe/ui build
     user: "${UID:-1000}:${GID:-1000}"
     volumes:
       - .:/workspace

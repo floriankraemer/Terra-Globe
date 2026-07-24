@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import type { SecretStore } from "@webglobe/core";
+import type { SecretStore } from "@terra-globe/core";
 import { SettingsModal } from "./SettingsModal.js";
 
 function fakeSecretStore(): SecretStore {
