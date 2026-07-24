@@ -1,5 +1,6 @@
 import * as Cesium from "cesium";
 import {
+  circleToPolygonRing,
   geometryCenter,
   type CircleGeometry,
   type GeoPoint,
@@ -69,6 +70,42 @@ function filled(style: Style | undefined): boolean {
   return style?.filled ?? false;
 }
 
+function closeRing(ring: GeoPoint[]): GeoPoint[] {
+  const first = ring[0]!;
+  const last = ring[ring.length - 1]!;
+  return first.lon === last.lon && first.lat === last.lat ? ring : [...ring, first];
+}
+
+// Ellipse/Rectangle/Polygon graphics render their native `outline` as raw
+// GL_LINES, whose width is capped to 1px on every browser except Firefox -
+// so `outlineWidth` silently has no visible effect there. Draping a real
+// PolylineGraphics around the boundary instead works everywhere, since
+// polylines are rendered as camera-facing ribbons, not GL line primitives.
+// Point/LineString aren't affected (point outlines aren't GL lines, and a
+// LineString's own polyline already has correct width) - no companion needed.
+function outlineBoundaryLoops(geometry: PlacemarkGeometry, style: Style | undefined): GeoPoint[][] {
+  if (!outlineEnabled(style)) return [];
+  switch (geometry.type) {
+    case "Circle":
+      return [circleToPolygonRing(geometry.center, geometry.radiusMeters)];
+    case "Rectangle": {
+      const { north, south, east, west } = geometry;
+      return [
+        closeRing([
+          { lon: west, lat: south },
+          { lon: east, lat: south },
+          { lon: east, lat: north },
+          { lon: west, lat: north },
+        ]),
+      ];
+    }
+    case "Polygon":
+      return [closeRing(geometry.outerRing), ...(geometry.innerRings ?? []).map(closeRing)];
+    default:
+      return [];
+  }
+}
+
 function toEntityOptions(
   geometry: PlacemarkGeometry,
   style?: Style,
@@ -112,9 +149,9 @@ function toGeometryOptions(
           semiMajorAxis: geometry.radiusMeters,
           fill: filled(style),
           material: fillColor(style),
-          outline: outlineEnabled(style),
-          outlineColor: outlineColor(style),
-          outlineWidth: outlineWidth(style),
+          // Outline is drawn by a companion PolylineGraphics (see
+          // outlineBoundaryLoops) - the native outline is always off here.
+          outline: false,
         },
       };
     case "Rectangle":
@@ -128,9 +165,7 @@ function toGeometryOptions(
           ),
           fill: filled(style),
           material: fillColor(style),
-          outline: outlineEnabled(style),
-          outlineColor: outlineColor(style),
-          outlineWidth: outlineWidth(style),
+          outline: false,
         },
       };
     case "Polygon":
@@ -147,9 +182,7 @@ function toGeometryOptions(
           ),
           fill: filled(style),
           material: fillColor(style),
-          outline: outlineEnabled(style),
-          outlineColor: outlineColor(style),
-          outlineWidth: outlineWidth(style),
+          outline: false,
         },
       };
     case "LineString":
@@ -269,6 +302,56 @@ function toDynamicGeometryOptions(
 export class CesiumEntityFactory implements IEntityFactory {
   constructor(private readonly entities: Cesium.EntityCollection) {}
 
+  // Companion outline-polyline entities per main entity id (see
+  // outlineBoundaryLoops). A placemark's geometry never changes after
+  // creation (only its style/name do), so the loop count per id is stable -
+  // only rebuilt here if it ever isn't.
+  private readonly outlineEntityIds = new Map<string, string[]>();
+
+  private syncOutlineEntities(mainId: string, geometry: PlacemarkGeometry, style?: Style): void {
+    const loops = outlineBoundaryLoops(geometry, style);
+    const existingIds = this.outlineEntityIds.get(mainId) ?? [];
+
+    if (existingIds.length !== loops.length) {
+      existingIds.forEach((id) => {
+        const entity = this.entities.getById(id);
+        if (entity) this.entities.remove(entity);
+      });
+      const createdIds = loops.map(
+        (loop) =>
+          this.entities.add({
+            polyline: {
+              positions: loop.map((p) => Cesium.Cartesian3.fromDegrees(p.lon, p.lat)),
+              width: outlineWidth(style),
+              material: outlineColor(style),
+            },
+          }).id,
+      );
+      this.outlineEntityIds.set(mainId, createdIds);
+      return;
+    }
+
+    loops.forEach((loop, i) => {
+      const entity = this.entities.getById(existingIds[i]!);
+      if (!entity) return;
+      entity.polyline = new Cesium.PolylineGraphics({
+        positions: loop.map((p) => Cesium.Cartesian3.fromDegrees(p.lon, p.lat)),
+        width: outlineWidth(style),
+        material: outlineColor(style),
+      });
+    });
+  }
+
+  private removeOutlineEntities(mainId: string): void {
+    const ids = this.outlineEntityIds.get(mainId);
+    if (!ids) return;
+    ids.forEach((id) => {
+      const entity = this.entities.getById(id);
+      if (entity) this.entities.remove(entity);
+    });
+    this.outlineEntityIds.delete(mainId);
+  }
+
   /**
    * Creates a preview entity whose shape is read from a CallbackProperty
    * instead of being rebuilt on every call. The entity/graphics objects are
@@ -303,6 +386,7 @@ export class CesiumEntityFactory implements IEntityFactory {
     name?: string,
   ): EntityHandle {
     const entity = this.entities.add({ id, ...toEntityOptions(geometry, style, name) });
+    this.syncOutlineEntities(entity.id, geometry, style);
     return { entityId: entity.id };
   }
 
@@ -340,10 +424,13 @@ export class CesiumEntityFactory implements IEntityFactory {
       ? new Cesium.PolylineGraphics(options.polyline as Cesium.PolylineGraphics.ConstructorOptions)
       : undefined;
     entity.label = options.label ? new Cesium.LabelGraphics(options.label) : undefined;
+
+    this.syncOutlineEntities(handle.entityId, geometry, style);
   }
 
   removeEntity(handle: EntityHandle): void {
     const entity = this.entities.getById(handle.entityId);
     if (entity) this.entities.remove(entity);
+    this.removeOutlineEntities(handle.entityId);
   }
 }
