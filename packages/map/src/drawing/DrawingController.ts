@@ -1,5 +1,6 @@
 import {
   createCircleGeometry,
+  createLineStringGeometry,
   createPointGeometry,
   createPolygonGeometry,
   createRectangleGeometry,
@@ -9,7 +10,7 @@ import {
 import type { IEntityFactory } from "../entities/IEntityFactory.js";
 import { circleRadiusMeters, rectangleFromCorners } from "./geometryMath.js";
 
-type Mode = "idle" | "point" | "rectangle" | "circle" | "polygon";
+type Mode = "idle" | "point" | "rectangle" | "circle" | "polygon" | "line";
 
 export class DrawingController {
   private mode: Mode = "idle";
@@ -35,6 +36,10 @@ export class DrawingController {
 
   startPolygon(): void {
     this.beginMode("polygon");
+  }
+
+  startLine(): void {
+    this.beginMode("line");
   }
 
   private beginMode(mode: Mode): void {
@@ -66,6 +71,7 @@ export class DrawingController {
         return this.commit(createCircleGeometry(center, circleRadiusMeters(center, edge)));
       }
       case "polygon":
+      case "line":
         this.vertices.push(point);
         return undefined;
     }
@@ -96,6 +102,10 @@ export class DrawingController {
           if (this.vertices.length < 2) return undefined;
           return createPolygonGeometry([...this.vertices, cursor]);
         }
+        case "line": {
+          if (this.vertices.length < 1) return undefined;
+          return createLineStringGeometry([...this.vertices, cursor]);
+        }
       }
     } catch {
       // Degenerate cursor position (e.g. same point as the anchor) - no preview yet.
@@ -104,8 +114,8 @@ export class DrawingController {
   }
 
   undoLastVertex(): void {
-    if (this.mode !== "polygon") {
-      throw new Error("undoLastVertex is only valid while drawing a polygon");
+    if (this.mode !== "polygon" && this.mode !== "line") {
+      throw new Error("undoLastVertex is only valid while drawing a polygon or line");
     }
     this.vertices.pop();
   }
@@ -115,6 +125,13 @@ export class DrawingController {
       throw new Error("finishPolygon called while not drawing a polygon");
     }
     return this.commit(createPolygonGeometry([...this.vertices]));
+  }
+
+  finishLine(): PlacemarkGeometry {
+    if (this.mode !== "line") {
+      throw new Error("finishLine called while not drawing a line");
+    }
+    return this.commit(createLineStringGeometry([...this.vertices]));
   }
 
   cancel(): void {

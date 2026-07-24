@@ -7,6 +7,7 @@ import {
   formatCoordinate,
   formatDistance,
   geometryCenter,
+  hasElevationData,
   polygonAreaSquareMeters,
   rectangleAreaSquareMeters,
   type CoordinateFormat,
@@ -33,6 +34,7 @@ export interface PlacemarkEditorProps {
   onDragStart?: (e: React.MouseEvent) => void;
   /** Called on every draft change (and once more, with the original values, on unsaved close/unmount) so the live map entity can preview edits before Save. */
   onPreview?: (patch: { name: string; style: PlacemarkStyleEdits }) => void;
+  onShowElevationProfile?: () => void;
 }
 
 function geometryMeasurements(
@@ -68,6 +70,7 @@ export function PlacemarkEditor({
   onDelete,
   onDragStart,
   onPreview,
+  onShowElevationProfile,
 }: PlacemarkEditorProps) {
   const geometryType = placemark.geometry.type;
   const isPoint = geometryType === "Point";
@@ -75,6 +78,7 @@ export function PlacemarkEditor({
   const isAreaShape = !isPoint && !isLine;
   const center = geometryCenter(placemark.geometry);
   const measurements = geometryMeasurements(placemark.geometry, unitSystem);
+  const showElevationButton = hasElevationData(placemark.geometry);
 
   const [name, setName] = useState(placemark.name);
   const [description, setDescription] = useState(placemark.description ?? "");
@@ -251,6 +255,16 @@ export function PlacemarkEditor({
             />
           </label>
         </>
+      )}
+
+      {showElevationButton && onShowElevationProfile && (
+        <button
+          type="button"
+          className="btn placemark-editor-elevation-button"
+          onClick={onShowElevationProfile}
+        >
+          Elevation Profile
+        </button>
       )}
 
       <div className="placemark-editor-actions">

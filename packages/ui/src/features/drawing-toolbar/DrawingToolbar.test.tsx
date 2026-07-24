@@ -6,12 +6,7 @@ import { DrawingToolbar } from "./DrawingToolbar.js";
 describe("DrawingToolbar", () => {
   it("renders Marker button unpressed and Geometry dropdown unset when idle", () => {
     render(
-      <DrawingToolbar
-        mode="idle"
-        onSelectTool={vi.fn()}
-        onFinishPolygon={vi.fn()}
-        onCancel={vi.fn()}
-      />,
+      <DrawingToolbar mode="idle" onSelectTool={vi.fn()} onFinish={vi.fn()} onCancel={vi.fn()} />,
     );
 
     expect(screen.getByRole("button", { name: "Marker" })).toHaveAttribute("aria-pressed", "false");
@@ -27,7 +22,7 @@ describe("DrawingToolbar", () => {
       <DrawingToolbar
         mode="idle"
         onSelectTool={onSelectTool}
-        onFinishPolygon={vi.fn()}
+        onFinish={vi.fn()}
         onCancel={vi.fn()}
       />,
     );
@@ -44,7 +39,7 @@ describe("DrawingToolbar", () => {
       <DrawingToolbar
         mode="idle"
         onSelectTool={onSelectTool}
-        onFinishPolygon={vi.fn()}
+        onFinish={vi.fn()}
         onCancel={vi.fn()}
       />,
     );
@@ -59,7 +54,7 @@ describe("DrawingToolbar", () => {
       <DrawingToolbar
         mode="rectangle"
         onSelectTool={vi.fn()}
-        onFinishPolygon={vi.fn()}
+        onFinish={vi.fn()}
         onCancel={vi.fn()}
       />,
     );
@@ -69,33 +64,57 @@ describe("DrawingToolbar", () => {
     expect(screen.queryByRole("button", { name: "Finish" })).not.toBeInTheDocument();
   });
 
-  it("shows Finish only while drawing a polygon, and calls onFinishPolygon", async () => {
-    const onFinishPolygon = vi.fn();
+  it("shows Finish only while drawing a polygon, and calls onFinish", async () => {
+    const onFinish = vi.fn();
     const user = userEvent.setup();
     render(
       <DrawingToolbar
         mode="polygon"
         onSelectTool={vi.fn()}
-        onFinishPolygon={onFinishPolygon}
+        onFinish={onFinish}
         onCancel={vi.fn()}
       />,
     );
 
     await user.click(screen.getByRole("button", { name: "Finish" }));
 
-    expect(onFinishPolygon).toHaveBeenCalled();
+    expect(onFinish).toHaveBeenCalled();
+  });
+
+  it("shows Finish while drawing a line, and calls onFinish", async () => {
+    const onFinish = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <DrawingToolbar mode="line" onSelectTool={vi.fn()} onFinish={onFinish} onCancel={vi.fn()} />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Finish" }));
+
+    expect(onFinish).toHaveBeenCalled();
+  });
+
+  it("calls onSelectTool with 'line' when Line is chosen in the Geometry dropdown", async () => {
+    const onSelectTool = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <DrawingToolbar
+        mode="idle"
+        onSelectTool={onSelectTool}
+        onFinish={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    await user.selectOptions(screen.getByRole("combobox", { name: "Geometry" }), "line");
+
+    expect(onSelectTool).toHaveBeenCalledWith("line");
   });
 
   it("calls onCancel when Cancel is clicked", async () => {
     const onCancel = vi.fn();
     const user = userEvent.setup();
     render(
-      <DrawingToolbar
-        mode="point"
-        onSelectTool={vi.fn()}
-        onFinishPolygon={vi.fn()}
-        onCancel={onCancel}
-      />,
+      <DrawingToolbar mode="point" onSelectTool={vi.fn()} onFinish={vi.fn()} onCancel={onCancel} />,
     );
 
     await user.click(screen.getByRole("button", { name: "Cancel" }));

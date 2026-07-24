@@ -142,7 +142,7 @@ export function App() {
 
   const library = useLibrary(viewer);
   const ruler = useRuler(viewer);
-  const { mode, selectTool, finishPolygon, cancel } = useDrawing(
+  const { mode, selectTool, finish, cancel } = useDrawing(
     viewer,
     (geometry) => {
       void library.addPlacemark(geometry).then((id) => {
@@ -156,10 +156,13 @@ export function App() {
   const importExport = useImportExport(library);
 
   const editingPlacemark = library.placemarks.find((p) => p.id === selectedPlacemarkId) ?? null;
-  const selectedTrack =
-    editingPlacemark && editingPlacemark.geometry.type === "LineString" ? editingPlacemark : null;
-  const [dismissedTrackId, setDismissedTrackId] = useState<string | null>(null);
-  const showHeightProfile = selectedTrack !== null && selectedTrack.id !== dismissedTrackId;
+  const [elevationProfilePlacemarkId, setElevationProfilePlacemarkId] = useState<string | null>(
+    null,
+  );
+  const showHeightProfile =
+    elevationProfilePlacemarkId !== null && elevationProfilePlacemarkId === selectedPlacemarkId;
+  const profileTrack =
+    showHeightProfile && editingPlacemark?.geometry.type === "LineString" ? editingPlacemark : null;
 
   useEffect(() => {
     if (!selectedPlacemarkId) return;
@@ -192,7 +195,7 @@ export function App() {
             ruler.cancel();
             selectTool(tool);
           }}
-          onFinishPolygon={finishPolygon}
+          onFinish={finish}
           onCancel={cancel}
         />
         <RulerToolbar
@@ -314,6 +317,7 @@ export function App() {
             coordinateFormat={settings.coordinateFormat}
             onDragStart={placemarkPanel.startDrag}
             onPreview={(patch) => library.previewPlacemarkEdits(editingPlacemark.id, patch)}
+            onShowElevationProfile={() => setElevationProfilePlacemarkId(editingPlacemark.id)}
             onClose={() => setSelectedPlacemarkId(null)}
             onDelete={() => {
               // Wait for the delete (including its internal refresh()) before
@@ -344,7 +348,7 @@ export function App() {
           />
         </div>
       )}
-      {showHeightProfile && selectedTrack && (
+      {profileTrack && (
         <div
           className="height-profile-panel"
           style={{
@@ -355,14 +359,14 @@ export function App() {
           }}
         >
           <HeightProfilePanel
-            key={selectedTrack.id}
-            trackName={selectedTrack.name}
-            geometry={selectedTrack.geometry as LineStringGeometry}
+            key={profileTrack.id}
+            trackName={profileTrack.name}
+            geometry={profileTrack.geometry as LineStringGeometry}
             unitSystem={settings.unitSystem}
             width={heightProfilePanel.geometry.width}
             height={heightProfilePanel.geometry.height}
             onDragStart={heightProfilePanel.startDrag}
-            onClose={() => setDismissedTrackId(selectedTrack.id)}
+            onClose={() => setElevationProfilePlacemarkId(null)}
           />
           <div
             className={

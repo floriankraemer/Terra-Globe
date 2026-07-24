@@ -81,6 +81,11 @@ test("Close discards the editor without saving changes", async ({ page }) => {
   await editor.getByLabel("Name").fill("Should not save");
   await editor.getByRole("button", { name: "Close" }).click();
 
+  // Name is now dirty - Close asks for confirmation instead of closing immediately.
+  const dialog = page.getByRole("alertdialog", { name: "Unsaved changes" });
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Discard" }).click();
+
   await expect(editor).not.toBeVisible();
   await expect(page.getByText("Point 1")).toBeVisible();
   await expect(page.getByText("Should not save")).not.toBeVisible();

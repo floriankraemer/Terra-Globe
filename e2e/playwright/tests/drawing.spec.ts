@@ -60,6 +60,45 @@ test("drawing a polygon accumulates vertices until Finish is clicked", async ({ 
   await expect(page.getByRole("button", { name: "Finish" })).not.toBeVisible();
 });
 
+test("drawing a line accumulates vertices until Finish is clicked, and persists as a placemark", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const canvas = page.locator("[data-testid=cesium-viewer] canvas").first();
+  await expect(canvas).toBeVisible();
+  await waitForAppReady(page);
+
+  await page
+    .getByRole("toolbar", { name: "Drawing tools" })
+    .getByRole("combobox", { name: "Geometry" })
+    .selectOption("line");
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error("canvas has no bounding box");
+
+  await page.mouse.click(box.x + box.width / 2 - 40, box.y + box.height / 2);
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.click(box.x + box.width / 2 + 40, box.y + box.height / 2);
+
+  // Still in line mode - only Finish commits it.
+  await expect(
+    page
+      .getByRole("toolbar", { name: "Drawing tools" })
+      .getByRole("combobox", { name: "Geometry" }),
+  ).toHaveValue("line");
+
+  await page.getByRole("button", { name: "Finish" }).click();
+
+  await expect(
+    page
+      .getByRole("toolbar", { name: "Drawing tools" })
+      .getByRole("combobox", { name: "Geometry" }),
+  ).toHaveValue("");
+  await expect(page.getByRole("button", { name: "Finish" })).not.toBeVisible();
+  await expect(page.locator(".places-panel").getByText("LineString 1")).toBeVisible({
+    timeout: 15_000,
+  });
+});
+
 test("Cancel discards an in-progress shape", async ({ page }) => {
   await page.goto("/");
   const canvas = page.locator("[data-testid=cesium-viewer] canvas").first();

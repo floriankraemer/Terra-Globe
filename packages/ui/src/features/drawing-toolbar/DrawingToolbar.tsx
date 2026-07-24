@@ -1,11 +1,11 @@
-export type DrawingTool = "point" | "rectangle" | "circle" | "polygon";
+export type DrawingTool = "point" | "rectangle" | "circle" | "polygon" | "line";
 export type DrawingMode = DrawingTool | "idle";
 
 export interface DrawingToolbarProps {
   mode: DrawingMode;
   disabled: boolean;
   onSelectTool: (tool: DrawingTool) => void;
-  onFinishPolygon: () => void;
+  onFinish: () => void;
   onCancel: () => void;
 }
 
@@ -13,13 +13,14 @@ const GEOMETRY_TOOLS: { tool: DrawingTool; label: string }[] = [
   { tool: "rectangle", label: "Rectangle" },
   { tool: "circle", label: "Circle" },
   { tool: "polygon", label: "Polygon" },
+  { tool: "line", label: "Line" },
 ];
 
 export function DrawingToolbar({
   mode,
   disabled,
   onSelectTool,
-  onFinishPolygon,
+  onFinish,
   onCancel,
 }: DrawingToolbarProps) {
   const geometryValue = GEOMETRY_TOOLS.some((t) => t.tool === mode) ? mode : "";
@@ -52,8 +53,8 @@ export function DrawingToolbar({
           ))}
         </select>
       </label>
-      {mode === "polygon" && (
-        <button type="button" className="btn" onClick={onFinishPolygon}>
+      {(mode === "polygon" || mode === "line") && (
+        <button type="button" className="btn" onClick={onFinish}>
           Finish
         </button>
       )}

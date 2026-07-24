@@ -505,6 +505,11 @@ button {
   justify-content: flex-end;
 }
 
+.placemark-editor-elevation-button {
+  border: 1px solid var(--color-border);
+  text-align: center;
+}
+
 .height-profile-panel {
   position: absolute;
   z-index: 2;

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { createLineStringGeometry } from "../../src/domain/geometry.js";
+import { createLineStringGeometry, createPointGeometry } from "../../src/domain/geometry.js";
 import {
   computeTrackProfile,
+  hasElevationData,
   haversineMeters,
   pickGridStepMeters,
 } from "../../src/domain/trackProfile.js";
@@ -51,6 +52,29 @@ describe("computeTrackProfile", () => {
     const profile = computeTrackProfile(geometry);
     expect(profile[0]!.distanceMeters).toBe(0);
     expect(profile[1]!.distanceMeters).toBe(0);
+  });
+});
+
+describe("hasElevationData", () => {
+  it("returns true for a LineString with at least one defined altitude", () => {
+    const geometry = createLineStringGeometry([
+      { lon: 0, lat: 0 },
+      { lon: 0, lat: 1, altitude: 50 },
+    ]);
+    expect(hasElevationData(geometry)).toBe(true);
+  });
+
+  it("returns false for a LineString with no altitude data", () => {
+    const geometry = createLineStringGeometry([
+      { lon: 0, lat: 0 },
+      { lon: 0, lat: 1 },
+    ]);
+    expect(hasElevationData(geometry)).toBe(false);
+  });
+
+  it("returns false for a non-LineString geometry", () => {
+    const geometry = createPointGeometry({ lon: 0, lat: 0, altitude: 50 });
+    expect(hasElevationData(geometry)).toBe(false);
   });
 });
 

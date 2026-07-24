@@ -476,6 +476,90 @@ describe("PlacemarkEditor - LineString", () => {
   });
 });
 
+describe("PlacemarkEditor - elevation profile button", () => {
+  const trackWithAltitude = placemark({
+    geometry: {
+      type: "LineString",
+      path: [
+        { lon: 0, lat: 0, altitude: 10 },
+        { lon: 2, lat: 0, altitude: 50 },
+      ],
+    },
+  });
+  const trackWithoutAltitude = placemark({
+    geometry: {
+      type: "LineString",
+      path: [
+        { lon: 0, lat: 0 },
+        { lon: 2, lat: 0 },
+      ],
+    },
+  });
+
+  it("shows the button for a LineString with altitude data and calls onShowElevationProfile", async () => {
+    const onShowElevationProfile = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <PlacemarkEditor
+        placemark={trackWithAltitude}
+        style={style()}
+        onSave={vi.fn()}
+        onClose={vi.fn()}
+        onDelete={vi.fn()}
+        onShowElevationProfile={onShowElevationProfile}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Elevation Profile" }));
+
+    expect(onShowElevationProfile).toHaveBeenCalledTimes(1);
+  });
+
+  it("hides the button for a LineString with no altitude data", () => {
+    render(
+      <PlacemarkEditor
+        placemark={trackWithoutAltitude}
+        style={style()}
+        onSave={vi.fn()}
+        onClose={vi.fn()}
+        onDelete={vi.fn()}
+        onShowElevationProfile={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Elevation Profile" })).not.toBeInTheDocument();
+  });
+
+  it("hides the button for a non-LineString geometry even with onShowElevationProfile provided", () => {
+    render(
+      <PlacemarkEditor
+        placemark={placemark()}
+        style={style()}
+        onSave={vi.fn()}
+        onClose={vi.fn()}
+        onDelete={vi.fn()}
+        onShowElevationProfile={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Elevation Profile" })).not.toBeInTheDocument();
+  });
+
+  it("hides the button when onShowElevationProfile is not provided, even with altitude data", () => {
+    render(
+      <PlacemarkEditor
+        placemark={trackWithAltitude}
+        style={style()}
+        onSave={vi.fn()}
+        onClose={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole("button", { name: "Elevation Profile" })).not.toBeInTheDocument();
+  });
+});
+
 describe("PlacemarkEditor - area shapes (circle/rectangle/polygon)", () => {
   const rectanglePlacemark = placemark({
     geometry: { type: "Rectangle", north: 10, south: 0, east: 10, west: 0 },

@@ -109,6 +109,68 @@ describe("DrawingController - polygon", () => {
   });
 });
 
+describe("DrawingController - line", () => {
+  it("accumulates vertices and commits only on finishLine", () => {
+    const factory = new FakeEntityFactory();
+    const controller = new DrawingController(factory);
+
+    controller.startLine();
+    controller.addPoint({ lon: 0, lat: 0 });
+    controller.addPoint({ lon: 1, lat: 0 });
+    expect(controller.isActive).toBe(true);
+    const geometry = controller.finishLine();
+
+    expect(geometry).toEqual({
+      type: "LineString",
+      path: [
+        { lon: 0, lat: 0 },
+        { lon: 1, lat: 0 },
+      ],
+    });
+    expect(controller.isActive).toBe(false);
+  });
+
+  it("supports undoing the last vertex", () => {
+    const factory = new FakeEntityFactory();
+    const controller = new DrawingController(factory);
+
+    controller.startLine();
+    controller.addPoint({ lon: 0, lat: 0 });
+    controller.addPoint({ lon: 5, lat: 5 });
+    controller.undoLastVertex();
+    controller.addPoint({ lon: 1, lat: 0 });
+    const geometry = controller.finishLine();
+
+    expect(geometry?.type).toBe("LineString");
+    expect((geometry as { path: unknown }).path).toEqual([
+      { lon: 0, lat: 0 },
+      { lon: 1, lat: 0 },
+    ]);
+  });
+
+  it("throws finishing a line with fewer than 2 vertices", () => {
+    const factory = new FakeEntityFactory();
+    const controller = new DrawingController(factory);
+
+    controller.startLine();
+    controller.addPoint({ lon: 0, lat: 0 });
+    expect(() => controller.finishLine()).toThrow(/at least 2/i);
+  });
+
+  it("cancel discards the in-progress line without creating an entity", () => {
+    const factory = new FakeEntityFactory();
+    const controller = new DrawingController(factory);
+
+    controller.startLine();
+    controller.addPoint({ lon: 0, lat: 0 });
+    controller.addPoint({ lon: 1, lat: 0 });
+    controller.cancel();
+
+    expect(controller.isActive).toBe(false);
+    expect(factory.entities.size).toBe(0);
+  });
+});
+
 describe("DrawingController - previewGeometry", () => {
   it("returns undefined when idle", () => {
     const controller = new DrawingController(new FakeEntityFactory());
@@ -198,6 +260,29 @@ describe("DrawingController - previewGeometry", () => {
         { lon: 0, lat: 1 },
       ],
       innerRings: undefined,
+    });
+  });
+
+  it("returns undefined for line preview before any vertex is clicked", () => {
+    const controller = new DrawingController(new FakeEntityFactory());
+    controller.startLine();
+
+    expect(controller.previewGeometry({ lon: 1, lat: 1 })).toBeUndefined();
+  });
+
+  it("previews a line as the accumulated vertices plus the cursor", () => {
+    const controller = new DrawingController(new FakeEntityFactory());
+    controller.startLine();
+    controller.addPoint({ lon: 0, lat: 0 });
+
+    const preview = controller.previewGeometry({ lon: 1, lat: 0 });
+
+    expect(preview).toEqual({
+      type: "LineString",
+      path: [
+        { lon: 0, lat: 0 },
+        { lon: 1, lat: 0 },
+      ],
     });
   });
 });

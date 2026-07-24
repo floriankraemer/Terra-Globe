@@ -1,4 +1,4 @@
-import type { GeoPoint, LineStringGeometry } from "./geometry.js";
+import type { GeoPoint, LineStringGeometry, PlacemarkGeometry } from "./geometry.js";
 
 const EARTH_RADIUS_METERS = 6_371_000;
 
@@ -28,6 +28,11 @@ export function computeTrackProfile(geometry: LineStringGeometry): TrackProfileP
     if (i > 0) distanceMeters += haversineMeters(geometry.path[i - 1]!, point);
     return { distanceMeters, altitudeMeters: point.altitude ?? 0 };
   });
+}
+
+/** Whether a geometry has an actual distance-vs-altitude profile to show. */
+export function hasElevationData(geometry: PlacemarkGeometry): boolean {
+  return geometry.type === "LineString" && geometry.path.some((p) => p.altitude !== undefined);
 }
 
 /** Adaptive gridline spacing: 0.5km under 5km total, 1km beyond. */

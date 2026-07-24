@@ -13,7 +13,7 @@ import type { DrawingMode, DrawingTool } from "./DrawingToolbar.js";
 export interface UseDrawingResult {
   mode: DrawingMode;
   selectTool: (tool: DrawingTool) => void;
-  finishPolygon: () => void;
+  finish: () => void;
   cancel: () => void;
 }
 
@@ -127,11 +127,18 @@ export function useDrawing(
     if (tool === "rectangle") controller.startRectangle();
     if (tool === "circle") controller.startCircle();
     if (tool === "polygon") controller.startPolygon();
+    if (tool === "line") controller.startLine();
     setMode(tool);
   }
 
-  function finishPolygon(): void {
-    const geometry = controllerRef.current?.finishPolygon();
+  function finish(): void {
+    const controller = controllerRef.current;
+    const geometry =
+      mode === "polygon"
+        ? controller?.finishPolygon()
+        : mode === "line"
+          ? controller?.finishLine()
+          : undefined;
     clearPreview();
     setMode("idle");
     if (geometry) onShapeCommittedRef.current?.(geometry);
@@ -143,5 +150,5 @@ export function useDrawing(
     setMode("idle");
   }
 
-  return { mode, selectTool, finishPolygon, cancel };
+  return { mode, selectTool, finish, cancel };
 }
