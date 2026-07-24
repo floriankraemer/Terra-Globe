@@ -19,7 +19,12 @@ describe("OpenRouteServiceRoutingProvider", () => {
       jsonResponse({
         features: [
           {
-            geometry: { coordinates: [[13.4, 52.5], [13.5, 52.6]] },
+            geometry: {
+              coordinates: [
+                [13.4, 52.5],
+                [13.5, 52.6],
+              ],
+            },
             properties: { summary: { distance: 800, duration: 90 } },
           },
         ],

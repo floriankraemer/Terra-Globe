@@ -40,7 +40,12 @@ export function ScreenOverlayLayer({ overlays }: ScreenOverlayLayerProps) {
       {overlays
         .filter((o) => o.visibility)
         .map((overlay) => (
-          <img key={overlay.id} src={overlay.imageUrl} alt={overlay.name} style={overlayStyle(overlay)} />
+          <img
+            key={overlay.id}
+            src={overlay.imageUrl}
+            alt={overlay.name}
+            style={overlayStyle(overlay)}
+          />
         ))}
     </div>
   );

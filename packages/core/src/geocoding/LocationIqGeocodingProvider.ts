@@ -38,7 +38,9 @@ export class LocationIqGeocodingProvider implements GeocodingProvider {
 
     const response = await this.fetchImpl(url, { headers: { Accept: "application/json" } });
     if (!response.ok) {
-      throw new Error(`LocationIQ reverse geocode failed: ${response.status} ${response.statusText}`);
+      throw new Error(
+        `LocationIQ reverse geocode failed: ${response.status} ${response.statusText}`,
+      );
     }
 
     const body: unknown = await response.json();

@@ -26,12 +26,23 @@ describe("OsrmRoutingProvider", () => {
       jsonResponse({
         routes: [
           {
-            geometry: { coordinates: [[13.4, 52.5], [13.5, 52.6]] },
+            geometry: {
+              coordinates: [
+                [13.4, 52.5],
+                [13.5, 52.6],
+              ],
+            },
             distance: 1000,
             duration: 120,
           },
           {
-            geometry: { coordinates: [[13.4, 52.5], [13.45, 52.55], [13.5, 52.6]] },
+            geometry: {
+              coordinates: [
+                [13.4, 52.5],
+                [13.45, 52.55],
+                [13.5, 52.6],
+              ],
+            },
             distance: 1200,
             duration: 150,
           },

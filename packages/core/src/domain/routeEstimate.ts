@@ -14,7 +14,10 @@ const AVERAGE_SPEED_METERS_PER_SECOND: Record<EstimatedTravelMode, number> = {
  * API (timetabled train, flight). Not a real route - a rough estimate drawn
  * as a straight line through the waypoints in order.
  */
-export function estimateStraightLineRoute(waypoints: GeoPoint[], mode: EstimatedTravelMode): RouteLeg {
+export function estimateStraightLineRoute(
+  waypoints: GeoPoint[],
+  mode: EstimatedTravelMode,
+): RouteLeg {
   let distanceMeters = 0;
   for (let i = 1; i < waypoints.length; i++) {
     distanceMeters += haversineMeters(waypoints[i - 1]!, waypoints[i]!);

@@ -21,11 +21,7 @@ import { circleToPolygonRing } from "./circleApproximation.js";
  * and never flow through this shape-family mapping.
  */
 export type ShapePlacemarkGeometry =
-  | PointGeometry
-  | CircleGeometry
-  | RectangleGeometry
-  | PolygonGeometry
-  | LineStringGeometry;
+  PointGeometry | CircleGeometry | RectangleGeometry | PolygonGeometry | LineStringGeometry;
 
 export type KmlGeometryElement = "Point" | "Polygon" | "LineString";
 

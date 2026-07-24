@@ -17,7 +17,18 @@ describe("GraphHopperRoutingProvider", () => {
   it("maps GraphHopper paths to RouteLeg[], converting time ms to seconds", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
       jsonResponse({
-        paths: [{ points: { coordinates: [[13.4, 52.5], [13.5, 52.6]] }, distance: 2000, time: 300000 }],
+        paths: [
+          {
+            points: {
+              coordinates: [
+                [13.4, 52.5],
+                [13.5, 52.6],
+              ],
+            },
+            distance: 2000,
+            time: 300000,
+          },
+        ],
       }),
     );
     const provider = new GraphHopperRoutingProvider("key", fetchImpl);
@@ -25,7 +36,11 @@ describe("GraphHopperRoutingProvider", () => {
     const legs = await provider.route([A, B], "bike");
 
     expect(legs).toEqual([
-      { geometry: { type: "LineString", path: [A, B] }, distanceMeters: 2000, durationSeconds: 300 },
+      {
+        geometry: { type: "LineString", path: [A, B] },
+        distanceMeters: 2000,
+        durationSeconds: 300,
+      },
     ]);
     const [url] = fetchImpl.mock.calls[0] as [URL];
     expect(url.searchParams.getAll("point")).toEqual(["52.5,13.4", "52.6,13.5"]);

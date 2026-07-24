@@ -17,7 +17,18 @@ describe("MapboxRoutingProvider", () => {
   it("maps Mapbox routes to RouteLeg[]", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(
       jsonResponse({
-        routes: [{ geometry: { coordinates: [[13.4, 52.5], [13.5, 52.6]] }, distance: 500, duration: 60 }],
+        routes: [
+          {
+            geometry: {
+              coordinates: [
+                [13.4, 52.5],
+                [13.5, 52.6],
+              ],
+            },
+            distance: 500,
+            duration: 60,
+          },
+        ],
       }),
     );
     const provider = new MapboxRoutingProvider("token", fetchImpl);

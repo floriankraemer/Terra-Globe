@@ -63,9 +63,10 @@ export function RoutePlannerPanel({
   onSelectAlternative,
 }: RoutePlannerPanelProps) {
   const [draggedFrom, setDraggedFrom] = useState<number | null>(null);
-  const [dropTarget, setDropTarget] = useState<{ index: number; position: "before" | "after" } | null>(
-    null,
-  );
+  const [dropTarget, setDropTarget] = useState<{
+    index: number;
+    position: "before" | "after";
+  } | null>(null);
 
   return (
     <div className="route-planner-panel" aria-label="Route planner">
@@ -116,7 +117,9 @@ export function RoutePlannerPanel({
                 const position = e.clientY - rect.top < rect.height / 2 ? "before" : "after";
                 setDropTarget({ index: i, position });
               }}
-              onDragLeave={() => setDropTarget((current) => (current?.index === i ? null : current))}
+              onDragLeave={() =>
+                setDropTarget((current) => (current?.index === i ? null : current))
+              }
               onDrop={(e) => {
                 e.preventDefault();
                 if (draggedFrom !== null) {

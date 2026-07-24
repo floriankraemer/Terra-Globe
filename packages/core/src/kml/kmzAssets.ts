@@ -9,7 +9,8 @@ export function bytesToBase64(bytes: Uint8Array): string {
     const b2 = bytes[i + 2];
     result += BASE64_CHARS[b0 >> 2];
     result += BASE64_CHARS[((b0 & 0x03) << 4) | (b1 === undefined ? 0 : b1 >> 4)];
-    result += b1 === undefined ? "=" : BASE64_CHARS[((b1 & 0x0f) << 2) | (b2 === undefined ? 0 : b2 >> 6)];
+    result +=
+      b1 === undefined ? "=" : BASE64_CHARS[((b1 & 0x0f) << 2) | (b2 === undefined ? 0 : b2 >> 6)];
     result += b2 === undefined ? "=" : BASE64_CHARS[b2 & 0x3f];
   }
   return result;

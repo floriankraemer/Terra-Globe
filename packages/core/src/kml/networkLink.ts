@@ -54,11 +54,15 @@ export async function resolveNetworkLinks(
 
         folders = [
           ...folders,
-          ...child.folders.map((f) => (f.parentId === null ? { ...f, parentId: link.folderId } : f)),
+          ...child.folders.map((f) =>
+            f.parentId === null ? { ...f, parentId: link.folderId } : f,
+          ),
         ];
         placemarks = [
           ...placemarks,
-          ...child.placemarks.map((p) => (p.folderId === null ? { ...p, folderId: link.folderId } : p)),
+          ...child.placemarks.map((p) =>
+            p.folderId === null ? { ...p, folderId: link.folderId } : p,
+          ),
         ];
         styles = [...styles, ...child.styles];
         screenOverlays = [
@@ -69,7 +73,9 @@ export async function resolveNetworkLinks(
         ];
         warnings.push(...child.warnings);
         nextPending.push(
-          ...child.networkLinks.map((nl) => (nl.folderId === null ? { ...nl, folderId: link.folderId } : nl)),
+          ...child.networkLinks.map((nl) =>
+            nl.folderId === null ? { ...nl, folderId: link.folderId } : nl,
+          ),
         );
       } catch (err) {
         warnings.push(

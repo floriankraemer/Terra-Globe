@@ -187,7 +187,11 @@ describe("serializeKml / parseKml round trip", () => {
       timeSpanEnd: "2021-01-01",
     });
 
-    const xml = serializeKml({ folders: [], placemarks: [withTimeStamp, withTimeSpan], styles: [] });
+    const xml = serializeKml({
+      folders: [],
+      placemarks: [withTimeStamp, withTimeSpan],
+      styles: [],
+    });
     const parsed = parseKml(xml);
 
     const event = parsed.placemarks.find((p) => p.name === "Event")!;
@@ -211,7 +215,9 @@ describe("serializeKml / parseKml round trip", () => {
         kind: "Camera",
         params: { longitude: 1, latitude: 2, altitude: 1000, heading: 90, tilt: 45, roll: 0 },
       },
-      region: { raw: { "LatLonAltBox.north": 1, "LatLonAltBox.south": 0, "Lod.minLodPixels": 128 } },
+      region: {
+        raw: { "LatLonAltBox.north": 1, "LatLonAltBox.south": 0, "Lod.minLodPixels": 128 },
+      },
     });
 
     const xml = serializeKml({ folders: [], placemarks: [placemark], styles: [] });

@@ -231,7 +231,12 @@ export function sharedRepositoryContractTests(
         updatedAt: "now",
       };
 
-      await repo.importBatch({ folders: [], placemarks: [], styles: [], screenOverlays: [overlay] });
+      await repo.importBatch({
+        folders: [],
+        placemarks: [],
+        styles: [],
+        screenOverlays: [overlay],
+      });
 
       expect(await repo.listScreenOverlays(null)).toEqual([overlay]);
     });

@@ -7,7 +7,10 @@ test("planning a route accumulates stops and shows total distance/time", async (
   await expect(canvas).toBeVisible();
   await waitForAppReady(page);
 
-  await page.getByRole("toolbar", { name: "Route planner" }).getByRole("button", { name: "Route" }).click();
+  await page
+    .getByRole("toolbar", { name: "Route planner" })
+    .getByRole("button", { name: "Route" })
+    .click();
   await expect(
     page.getByRole("toolbar", { name: "Route planner" }).getByRole("button", { name: "Route" }),
   ).toHaveAttribute("aria-pressed", "true");
@@ -31,7 +34,10 @@ test("planning a route accumulates stops and shows total distance/time", async (
   await expect(panel.getByText(/^Stop 3:/)).toBeVisible();
   await expect(panel.locator(".route-planner-panel-total")).toContainText("min");
 
-  await page.getByRole("toolbar", { name: "Route planner" }).getByRole("button", { name: "Cancel" }).click();
+  await page
+    .getByRole("toolbar", { name: "Route planner" })
+    .getByRole("button", { name: "Cancel" })
+    .click();
   await expect(panel).not.toBeVisible();
 });
 
@@ -43,13 +49,19 @@ test("adding a stop via the panel's search box shows its address, not coordinate
   await expect(canvas).toBeVisible();
   await waitForAppReady(page);
 
-  await page.getByRole("toolbar", { name: "Route planner" }).getByRole("button", { name: "Route" }).click();
+  await page
+    .getByRole("toolbar", { name: "Route planner" })
+    .getByRole("button", { name: "Route" })
+    .click();
   const panel = page.locator(".route-planner-panel");
   await expect(panel).toBeVisible();
 
   await panel.getByLabel("Address").fill("Berlin, Germany");
   await panel.getByRole("button", { name: "Search" }).click();
-  await panel.getByRole("button", { name: /Berlin/ }).first().click();
+  await panel
+    .getByRole("button", { name: /Berlin/ })
+    .first()
+    .click();
 
   const firstStop = panel.locator(".route-planner-panel-stops li").first();
   await expect(firstStop).toContainText("Berlin");
@@ -62,7 +74,10 @@ test("dragging a stop reorders the list", async ({ page }) => {
   await expect(canvas).toBeVisible();
   await waitForAppReady(page);
 
-  await page.getByRole("toolbar", { name: "Route planner" }).getByRole("button", { name: "Route" }).click();
+  await page
+    .getByRole("toolbar", { name: "Route planner" })
+    .getByRole("button", { name: "Route" })
+    .click();
   await page.getByLabel("Mode").selectOption("train");
 
   const box = await canvas.boundingBox();

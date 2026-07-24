@@ -27,7 +27,9 @@ function altitudeModeTag(mode: AltitudeMode | undefined): string {
 function renderView(view: PlacemarkView | undefined): string {
   if (!view) return "";
   const tags = Object.entries(view.params)
-    .map(([key, value]) => `<${key}>${typeof value === "number" ? value : escapeXml(value)}</${key}>`)
+    .map(
+      ([key, value]) => `<${key}>${typeof value === "number" ? value : escapeXml(value)}</${key}>`,
+    )
     .join("");
   return `<${view.kind}>${tags}</${view.kind}>`;
 }
@@ -41,7 +43,8 @@ function renderRegion(region: PlacemarkRegion | undefined): string {
   const west = box["LatLonAltBox.west"];
   const minLodPixels = box["Lod.minLodPixels"];
   const maxLodPixels = box["Lod.maxLodPixels"];
-  const hasBox = north !== undefined || south !== undefined || east !== undefined || west !== undefined;
+  const hasBox =
+    north !== undefined || south !== undefined || east !== undefined || west !== undefined;
   const hasLod = minLodPixels !== undefined || maxLodPixels !== undefined;
   const boxXml = hasBox
     ? `<LatLonAltBox>${north !== undefined ? `<north>${north}</north>` : ""}${south !== undefined ? `<south>${south}</south>` : ""}${east !== undefined ? `<east>${east}</east>` : ""}${west !== undefined ? `<west>${west}</west>` : ""}</LatLonAltBox>`
@@ -53,7 +56,8 @@ function renderRegion(region: PlacemarkRegion | undefined): string {
 }
 
 function renderTimePrimitive(placemark: Placemark): string {
-  if (placemark.timeStamp) return `<TimeStamp><when>${escapeXml(placemark.timeStamp)}</when></TimeStamp>`;
+  if (placemark.timeStamp)
+    return `<TimeStamp><when>${escapeXml(placemark.timeStamp)}</when></TimeStamp>`;
   if (placemark.timeSpanBegin || placemark.timeSpanEnd) {
     return `<TimeSpan>${placemark.timeSpanBegin ? `<begin>${escapeXml(placemark.timeSpanBegin)}</begin>` : ""}${placemark.timeSpanEnd ? `<end>${escapeXml(placemark.timeSpanEnd)}</end>` : ""}</TimeSpan>`;
   }
@@ -69,14 +73,22 @@ function renderFeatureExtras(placemark: Placemark): string {
   return `${snippet}${address}${phoneNumber}${renderTimePrimitive(placemark)}${renderView(placemark.view)}${renderRegion(placemark.region)}`;
 }
 
-function renderModel(geometry: { position: GeoPoint; modelUri: string; scale?: number; heading?: number; tilt?: number; roll?: number }): string {
+function renderModel(geometry: {
+  position: GeoPoint;
+  modelUri: string;
+  scale?: number;
+  heading?: number;
+  tilt?: number;
+  roll?: number;
+}): string {
   const { position, modelUri, scale, heading, tilt, roll } = geometry;
   const location = `<Location><longitude>${position.lon}</longitude><latitude>${position.lat}</latitude>${position.altitude !== undefined ? `<altitude>${position.altitude}</altitude>` : ""}</Location>`;
   const orientation =
     heading !== undefined || tilt !== undefined || roll !== undefined
       ? `<Orientation><heading>${heading ?? 0}</heading><tilt>${tilt ?? 0}</tilt><roll>${roll ?? 0}</roll></Orientation>`
       : "";
-  const scaleXml = scale !== undefined ? `<Scale><x>${scale}</x><y>${scale}</y><z>${scale}</z></Scale>` : "";
+  const scaleXml =
+    scale !== undefined ? `<Scale><x>${scale}</x><y>${scale}</y><z>${scale}</z></Scale>` : "";
   return `<Model>${location}${orientation}${scaleXml}<Link><href>${escapeXml(modelUri)}</href></Link></Model>`;
 }
 
@@ -126,12 +138,16 @@ function renderGeometry(placemark: Placemark): {
     return { xml: renderModel(placemark.geometry), extendedData: [] };
   }
   if (placemark.geometry.type === "GroundOverlay") {
-    throw new Error("GroundOverlay placemarks must be rendered via renderGroundOverlay, not renderGeometry");
+    throw new Error(
+      "GroundOverlay placemarks must be rendered via renderGroundOverlay, not renderGeometry",
+    );
   }
   const { element, rings, extendedData } = domainGeometryToKml(placemark.geometry);
   if (element === "Point") {
     const altitudeMode =
-      placemark.geometry.type === "Point" ? altitudeModeTag(placemark.geometry.coordinates.altitudeMode) : "";
+      placemark.geometry.type === "Point"
+        ? altitudeModeTag(placemark.geometry.coordinates.altitudeMode)
+        : "";
     return {
       xml: `<Point>${altitudeMode}<coordinates>${renderCoordinates(rings[0]!)}</coordinates></Point>`,
       extendedData,
@@ -156,7 +172,9 @@ function renderGeometry(placemark: Placemark): {
       ? "<extrude>1</extrude>"
       : "";
   const tessellate =
-    placemark.geometry.type === "Polygon" && placemark.geometry.tessellate ? "<tessellate>1</tessellate>" : "";
+    placemark.geometry.type === "Polygon" && placemark.geometry.tessellate
+      ? "<tessellate>1</tessellate>"
+      : "";
   const altitudeMode =
     placemark.geometry.type === "Polygon"
       ? altitudeModeTag(placemark.geometry.outerRing[0]?.altitudeMode)

@@ -28,7 +28,11 @@ function isGltfUri(uri: string): boolean {
 }
 
 function modelOrientation(geometry: ModelGeometry): Cesium.Property | undefined {
-  if (geometry.heading === undefined && geometry.tilt === undefined && geometry.roll === undefined) {
+  if (
+    geometry.heading === undefined &&
+    geometry.tilt === undefined &&
+    geometry.roll === undefined
+  ) {
     return undefined;
   }
   const position = Cesium.Cartesian3.fromDegrees(
@@ -245,7 +249,8 @@ function toGeometryOptions(
             geometry.bounds.north,
           ),
           material: new Cesium.ImageMaterialProperty({ image: geometry.imageUrl }),
-          rotation: geometry.rotation !== undefined ? Cesium.Math.toRadians(geometry.rotation) : undefined,
+          rotation:
+            geometry.rotation !== undefined ? Cesium.Math.toRadians(geometry.rotation) : undefined,
         },
       };
     case "Model": {
@@ -259,7 +264,12 @@ function toGeometryOptions(
         // marker rather than skip the placemark entirely.
         return {
           position,
-          point: { pixelSize: 10, color: Cesium.Color.RED, outlineColor: Cesium.Color.WHITE, outlineWidth: 1 },
+          point: {
+            pixelSize: 10,
+            color: Cesium.Color.RED,
+            outlineColor: Cesium.Color.WHITE,
+            outlineWidth: 1,
+          },
         };
       }
       return {

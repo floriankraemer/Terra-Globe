@@ -75,10 +75,8 @@ export function HeightProfileChart({
     .join(" ");
 
   const canHover = profile.length > 1 && totalDistance > 0;
-  const hoverDistance =
-    hoverX !== null && canHover ? (hoverX / plotWidth) * totalDistance : null;
-  const hoverAltitude =
-    hoverDistance !== null ? altitudeAt(profile, hoverDistance) : null;
+  const hoverDistance = hoverX !== null && canHover ? (hoverX / plotWidth) * totalDistance : null;
+  const hoverAltitude = hoverDistance !== null ? altitudeAt(profile, hoverDistance) : null;
 
   function handleHoverMove(e: React.MouseEvent<SVGRectElement>) {
     const bounds = e.currentTarget.getBoundingClientRect();

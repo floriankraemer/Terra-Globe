@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { formatArea, formatCoordinate, formatDistance, formatDuration } from "../../src/domain/units.js";
+import {
+  formatArea,
+  formatCoordinate,
+  formatDistance,
+  formatDuration,
+} from "../../src/domain/units.js";
 
 describe("formatDistance", () => {
   it("formats meters under 1km in metric", () => {

@@ -111,7 +111,11 @@ export function useRoutePlanner(
     stopHandlesRef.current.forEach((handle) => factory.removeEntity(handle));
     stopHandlesRef.current = points.map((point, i) => {
       const handle = stopHandle(i);
-      factory.createEntity({ type: "Point", coordinates: point }, handle.entityId, ROUTE_STOP_STYLE);
+      factory.createEntity(
+        { type: "Point", coordinates: point },
+        handle.entityId,
+        ROUTE_STOP_STYLE,
+      );
       return handle;
     });
   }
@@ -246,7 +250,9 @@ export function useRoutePlanner(
     if (label === undefined && geocodingProviderRef.current) {
       void geocodingProviderRef.current.reverse(point).then((resolved) => {
         if (resolved === null) return;
-        setStopMeta((prev) => prev.map((meta) => (meta.id === id ? { ...meta, label: resolved } : meta)));
+        setStopMeta((prev) =>
+          prev.map((meta) => (meta.id === id ? { ...meta, label: resolved } : meta)),
+        );
       });
     }
   }

@@ -69,7 +69,11 @@ export function flyToView(viewer: Cesium.Viewer, view: PlacemarkView): void {
 
   if (view.kind === "Camera") {
     viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(longitude, latitude, num(params, "altitude", 1000)),
+      destination: Cesium.Cartesian3.fromDegrees(
+        longitude,
+        latitude,
+        num(params, "altitude", 1000),
+      ),
       orientation: {
         heading: Cesium.Math.toRadians(num(params, "heading", 0)),
         pitch: Cesium.Math.toRadians(num(params, "tilt", 0) - 90),

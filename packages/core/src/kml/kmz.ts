@@ -87,7 +87,10 @@ function extractKmzAssets(input: SerializeKmlInput): {
   );
 
   const placemarks = input.placemarks.map((placemark) => {
-    if (placemark.geometry.type === "GroundOverlay" && placemark.geometry.imageUrl.startsWith("data:")) {
+    if (
+      placemark.geometry.type === "GroundOverlay" &&
+      placemark.geometry.imageUrl.startsWith("data:")
+    ) {
       return {
         ...placemark,
         geometry: { ...placemark.geometry, imageUrl: extract(placemark.geometry.imageUrl) },
@@ -103,7 +106,9 @@ function extractKmzAssets(input: SerializeKmlInput): {
   });
 
   const screenOverlays = (input.screenOverlays ?? []).map((overlay) =>
-    overlay.imageUrl.startsWith("data:") ? { ...overlay, imageUrl: extract(overlay.imageUrl) } : overlay,
+    overlay.imageUrl.startsWith("data:")
+      ? { ...overlay, imageUrl: extract(overlay.imageUrl) }
+      : overlay,
   );
 
   return { input: { ...input, styles, placemarks, screenOverlays }, assets };
@@ -117,7 +122,8 @@ export async function serializeKmz(input: SerializeKmlInput): Promise<Uint8Array
 
 export async function parseKmz(bytes: Uint8Array): Promise<ParseKmlResult> {
   const entries = unzipSync(bytes);
-  const docPath = DOC_KML_ENTRY in entries ? DOC_KML_ENTRY : Object.keys(entries).find((p) => /\.kml$/i.test(p));
+  const docPath =
+    DOC_KML_ENTRY in entries ? DOC_KML_ENTRY : Object.keys(entries).find((p) => /\.kml$/i.test(p));
   if (!docPath) {
     throw new Error(`KMZ archive is missing a ${DOC_KML_ENTRY} entry`);
   }

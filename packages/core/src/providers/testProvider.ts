@@ -8,7 +8,11 @@ import { OpenRouteServiceRoutingProvider } from "../routing/OpenRouteServiceRout
 import { MapboxRoutingProvider } from "../routing/MapboxRoutingProvider.js";
 import type { RoutingProvider } from "../routing/RoutingProvider.js";
 import { TILE_PRESETS } from "./catalog/tilePresets.js";
-import type { GeocodingProviderConfig, RoutingProviderConfig, TileProviderConfig } from "./ProviderConfig.js";
+import type {
+  GeocodingProviderConfig,
+  RoutingProviderConfig,
+  TileProviderConfig,
+} from "./ProviderConfig.js";
 
 export interface ProviderTestResult {
   ok: boolean;

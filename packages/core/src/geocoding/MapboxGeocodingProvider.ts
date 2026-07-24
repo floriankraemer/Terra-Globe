@@ -59,9 +59,7 @@ export class MapboxGeocodingProvider implements GeocodingProvider {
 
     const response = await this.fetchImpl(url, { headers: { Accept: "application/json" } });
     if (!response.ok) {
-      throw new Error(
-        `Mapbox reverse geocode failed: ${response.status} ${response.statusText}`,
-      );
+      throw new Error(`Mapbox reverse geocode failed: ${response.status} ${response.statusText}`);
     }
 
     return mapMapboxResults(await response.json())[0]?.label ?? null;

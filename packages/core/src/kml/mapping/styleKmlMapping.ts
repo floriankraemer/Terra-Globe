@@ -31,7 +31,9 @@ export interface KmlStyleData {
 
 function highlightToKmlData(highlight: StyleHighlight): KmlHighlightStyleData {
   return {
-    lineColorKml: highlight.outlineColor ? cssColorToKmlColor(highlight.outlineColor, 1) : undefined,
+    lineColorKml: highlight.outlineColor
+      ? cssColorToKmlColor(highlight.outlineColor, 1)
+      : undefined,
     lineWidth: highlight.outlineWidth,
     polyColorKml:
       highlight.fillColor !== undefined
@@ -70,7 +72,9 @@ export function styleToKmlData(style: Style): KmlStyleData {
     labelColorKml: style.labelColor ? cssColorToKmlColor(style.labelColor, 1) : undefined,
     highlight: style.highlight ? highlightToKmlData(style.highlight) : undefined,
     balloonText: style.balloonText,
-    balloonBgColorKml: style.balloonBgColor ? cssColorToKmlColor(style.balloonBgColor, 1) : undefined,
+    balloonBgColorKml: style.balloonBgColor
+      ? cssColorToKmlColor(style.balloonBgColor, 1)
+      : undefined,
     balloonTextColorKml: style.balloonTextColor
       ? cssColorToKmlColor(style.balloonTextColor, 1)
       : undefined,
@@ -96,7 +100,9 @@ export function kmlDataToStyle(data: KmlStyleData): Style {
     labelColor: data.labelColorKml ? kmlColorToCssColor(data.labelColorKml).hex : undefined,
     highlight: data.highlight ? kmlDataToHighlight(data.highlight) : undefined,
     balloonText: data.balloonText,
-    balloonBgColor: data.balloonBgColorKml ? kmlColorToCssColor(data.balloonBgColorKml).hex : undefined,
+    balloonBgColor: data.balloonBgColorKml
+      ? kmlColorToCssColor(data.balloonBgColorKml).hex
+      : undefined,
     balloonTextColor: data.balloonTextColorKml
       ? kmlColorToCssColor(data.balloonTextColorKml).hex
       : undefined,

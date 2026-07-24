@@ -29,7 +29,11 @@ const TILE_PRESET_OPTIONS = Object.values(TILE_PRESETS);
 const GEOCODING_PRESET_OPTIONS = Object.values(GEOCODING_PRESETS);
 const ROUTING_PRESET_OPTIONS = Object.values(ROUTING_PRESETS);
 
-const KIND_LABELS: Record<Kind, string> = { tile: "Tile", geocoding: "Geocoding", routing: "Routing" };
+const KIND_LABELS: Record<Kind, string> = {
+  tile: "Tile",
+  geocoding: "Geocoding",
+  routing: "Routing",
+};
 
 function presetOptionsFor(kind: Kind) {
   if (kind === "tile") return TILE_PRESET_OPTIONS;

@@ -58,9 +58,7 @@ export class OpenCageGeocodingProvider implements GeocodingProvider {
 
     const response = await this.fetchImpl(url, { headers: { Accept: "application/json" } });
     if (!response.ok) {
-      throw new Error(
-        `OpenCage reverse geocode failed: ${response.status} ${response.statusText}`,
-      );
+      throw new Error(`OpenCage reverse geocode failed: ${response.status} ${response.statusText}`);
     }
 
     return mapOpenCageResults(await response.json())[0]?.label ?? null;

@@ -88,14 +88,21 @@ function parseExtendedData(node: Record<string, unknown>): Record<string, string
     node.ExtendedData as { Data?: unknown; SchemaData?: unknown } | undefined,
   );
   const dataEntries = extNodes
-    .flatMap((ext) => asArray((ext as { Data?: unknown }).Data as Record<string, unknown>[] | undefined))
+    .flatMap((ext) =>
+      asArray((ext as { Data?: unknown }).Data as Record<string, unknown>[] | undefined),
+    )
     .map((d) => [String(d["@_name"]), String(d.value ?? "")] as const);
   const schemaEntries = extNodes
     .flatMap((ext) =>
-      asArray((ext as { SchemaData?: unknown }).SchemaData as Record<string, unknown>[] | undefined),
+      asArray(
+        (ext as { SchemaData?: unknown }).SchemaData as Record<string, unknown>[] | undefined,
+      ),
     )
     .flatMap((sd) => asArray(sd.SimpleData as Record<string, unknown>[] | undefined))
-    .map((sd) => [String(sd["@_name"]), String((sd as { "#text"?: unknown })["#text"] ?? sd ?? "")] as const);
+    .map(
+      (sd) =>
+        [String(sd["@_name"]), String((sd as { "#text"?: unknown })["#text"] ?? sd ?? "")] as const,
+    );
   return Object.fromEntries([...dataEntries, ...schemaEntries]);
 }
 
@@ -132,7 +139,11 @@ function parseView(node: Record<string, unknown>): PlacemarkView | undefined {
   return { kind: camera ? "Camera" : "LookAt", params };
 }
 
-function flattenToRecord(value: unknown, prefix: string, out: Record<string, number | string>): void {
+function flattenToRecord(
+  value: unknown,
+  prefix: string,
+  out: Record<string, number | string>,
+): void {
   if (value === null || value === undefined) return;
   if (typeof value === "object" && !Array.isArray(value)) {
     for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
@@ -169,7 +180,11 @@ function parseFeatureExtras(node: Record<string, unknown>): FeatureExtras {
   const snippet = node.Snippet as string | { "#text"?: string } | undefined;
   return {
     snippet:
-      typeof snippet === "string" ? snippet : snippet?.["#text"] !== undefined ? String(snippet["#text"]) : undefined,
+      typeof snippet === "string"
+        ? snippet
+        : snippet?.["#text"] !== undefined
+          ? String(snippet["#text"])
+          : undefined,
     address: node.address !== undefined ? String(node.address) : undefined,
     phoneNumber: node.phoneNumber !== undefined ? String(node.phoneNumber) : undefined,
     timeStamp: timeStamp?.when,
@@ -198,7 +213,10 @@ function stampAltitudeMode(rings: GeoPoint[][], mode: string | undefined): GeoPo
 }
 
 function maxAltitude(rings: GeoPoint[][]): number | undefined {
-  const altitudes = rings.flat().map((p) => p.altitude).filter((a): a is number => a !== undefined);
+  const altitudes = rings
+    .flat()
+    .map((p) => p.altitude)
+    .filter((a): a is number => a !== undefined);
   return altitudes.length > 0 ? Math.max(...altitudes) : undefined;
 }
 
@@ -218,7 +236,10 @@ function parsePolygonNode(polygon: {
     element: "Polygon",
     rings,
     tessellate: polygon.tessellate !== undefined && Number(polygon.tessellate) !== 0,
-    extrudeHeight: polygon.extrude !== undefined && Number(polygon.extrude) !== 0 ? maxAltitude(rings) ?? 0 : undefined,
+    extrudeHeight:
+      polygon.extrude !== undefined && Number(polygon.extrude) !== 0
+        ? (maxAltitude(rings) ?? 0)
+        : undefined,
   };
 }
 
@@ -259,8 +280,7 @@ function parseGeometries(node: Record<string, unknown>): ParsedGeometryEntry[] {
   }
   for (const lineString of asArray(
     node.LineString as
-      | { coordinates: string; tessellate?: number; altitudeMode?: string }[]
-      | undefined,
+      { coordinates: string; tessellate?: number; altitudeMode?: string }[] | undefined,
   )) {
     results.push({
       element: "LineString",
@@ -274,7 +294,9 @@ function parseGeometries(node: Record<string, unknown>): ParsedGeometryEntry[] {
   for (const track of asArray(node["gx:Track"] as KmlGxTrackNode[] | undefined)) {
     results.push(parseGxTrack(track));
   }
-  for (const multiTrack of asArray(node["gx:MultiTrack"] as Record<string, unknown>[] | undefined)) {
+  for (const multiTrack of asArray(
+    node["gx:MultiTrack"] as Record<string, unknown>[] | undefined,
+  )) {
     results.push(
       ...asArray(multiTrack["gx:Track"] as KmlGxTrackNode[] | undefined).map(parseGxTrack),
     );
@@ -320,12 +342,14 @@ function parseModelNode(model: KmlModelNode) {
     {
       lon: Number(model.Location?.longitude ?? 0),
       lat: Number(model.Location?.latitude ?? 0),
-      altitude: model.Location?.altitude !== undefined ? Number(model.Location.altitude) : undefined,
+      altitude:
+        model.Location?.altitude !== undefined ? Number(model.Location.altitude) : undefined,
     },
     modelUri,
     {
       scale: model.Scale?.x !== undefined ? Number(model.Scale.x) : undefined,
-      heading: model.Orientation?.heading !== undefined ? Number(model.Orientation.heading) : undefined,
+      heading:
+        model.Orientation?.heading !== undefined ? Number(model.Orientation.heading) : undefined,
       tilt: model.Orientation?.tilt !== undefined ? Number(model.Orientation.tilt) : undefined,
       roll: model.Orientation?.roll !== undefined ? Number(model.Orientation.roll) : undefined,
     },
@@ -355,7 +379,12 @@ function parseGroundOverlay(
   const extendedData = parseExtendedData(node);
   try {
     const geometry = createGroundOverlayGeometry(
-      { north: Number(box.north), south: Number(box.south), east: Number(box.east), west: Number(box.west) },
+      {
+        north: Number(box.north),
+        south: Number(box.south),
+        east: Number(box.east),
+        west: Number(box.west),
+      },
       icon.href,
       box.rotation !== undefined ? Number(box.rotation) : undefined,
     );
@@ -377,7 +406,9 @@ function parseGroundOverlay(
       },
     ];
   } catch (err) {
-    warnings.push(`Skipped GroundOverlay "${name}": ${err instanceof Error ? err.message : String(err)}`);
+    warnings.push(
+      `Skipped GroundOverlay "${name}": ${err instanceof Error ? err.message : String(err)}`,
+    );
     return [];
   }
 }
@@ -401,7 +432,9 @@ function parsePhotoOverlay(
   const icon = node.Icon as { href?: string } | undefined;
   const point = asArray(node.Point as { coordinates: string }[] | undefined)[0];
   if (!icon?.href || !point) {
-    warnings.push(`Skipped PhotoOverlay "${name}": no LatLonBox and no Point/Icon to fall back to.`);
+    warnings.push(
+      `Skipped PhotoOverlay "${name}": no LatLonBox and no Point/Icon to fall back to.`,
+    );
     return [];
   }
   const extendedData = parseExtendedData(node);
@@ -418,7 +451,9 @@ function parsePhotoOverlay(
     });
     return [{ ...placemark, id: String(node["@_id"] ?? placemark.id) }];
   } catch (err) {
-    warnings.push(`Skipped PhotoOverlay "${name}": ${err instanceof Error ? err.message : String(err)}`);
+    warnings.push(
+      `Skipped PhotoOverlay "${name}": ${err instanceof Error ? err.message : String(err)}`,
+    );
     return [];
   }
 }
@@ -432,8 +467,12 @@ interface KmlVec2Node {
 
 function parseAnchor(node: KmlVec2Node | undefined, defaults: { x: number; y: number }) {
   const validUnits = new Set(["fraction", "pixels", "insetPixels"]);
-  const xUnits = validUnits.has(String(node?.["@_xunits"])) ? (node!["@_xunits"] as "fraction") : "fraction";
-  const yUnits = validUnits.has(String(node?.["@_yunits"])) ? (node!["@_yunits"] as "fraction") : "fraction";
+  const xUnits = validUnits.has(String(node?.["@_xunits"]))
+    ? (node!["@_xunits"] as "fraction")
+    : "fraction";
+  const yUnits = validUnits.has(String(node?.["@_yunits"]))
+    ? (node!["@_yunits"] as "fraction")
+    : "fraction";
   return {
     x: node?.["@_x"] !== undefined ? Number(node["@_x"]) : defaults.x,
     y: node?.["@_y"] !== undefined ? Number(node["@_y"]) : defaults.y,
@@ -469,7 +508,9 @@ function parseScreenOverlay(
       }),
     ];
   } catch (err) {
-    warnings.push(`Skipped ScreenOverlay "${name}": ${err instanceof Error ? err.message : String(err)}`);
+    warnings.push(
+      `Skipped ScreenOverlay "${name}": ${err instanceof Error ? err.message : String(err)}`,
+    );
     return [];
   }
 }
@@ -626,7 +667,10 @@ function parseFolder(
     screenOverlays.push(...parseScreenOverlay(child, resolved.id, warnings));
   }
   networkLinks.push(
-    ...parseNetworkLinkRefs(asArray(node.NetworkLink as Record<string, unknown>[] | undefined), resolved.id),
+    ...parseNetworkLinkRefs(
+      asArray(node.NetworkLink as Record<string, unknown>[] | undefined),
+      resolved.id,
+    ),
   );
 }
 
@@ -715,9 +759,9 @@ export function parseKml(xml: string): ParseKmlResult {
   const networkLinks: KmlNetworkLinkRef[] = [];
   const warnings: string[] = [];
 
-  const baseStyles: Style[] = asArray(
-    container.Style as Record<string, unknown>[] | undefined,
-  ).map((styleNode) => parseStyleNode(styleNode, String(styleNode["@_id"])));
+  const baseStyles: Style[] = asArray(container.Style as Record<string, unknown>[] | undefined).map(
+    (styleNode) => parseStyleNode(styleNode, String(styleNode["@_id"])),
+  );
   const stylesById = new Map(baseStyles.map((s) => [s.id, s]));
   const styleMapStyles = parseStyleMaps(
     asArray(container.StyleMap as Record<string, unknown>[] | undefined),
@@ -749,7 +793,10 @@ export function parseKml(xml: string): ParseKmlResult {
     screenOverlays.push(...parseScreenOverlay(overlayNode, null, warnings));
   }
   networkLinks.push(
-    ...parseNetworkLinkRefs(asArray(container.NetworkLink as Record<string, unknown>[] | undefined), null),
+    ...parseNetworkLinkRefs(
+      asArray(container.NetworkLink as Record<string, unknown>[] | undefined),
+      null,
+    ),
   );
 
   return { folders, placemarks, styles, screenOverlays, networkLinks, warnings };
