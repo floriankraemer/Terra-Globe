@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type * as Cesium from "cesium";
 import {
   createPointGeometry,
@@ -23,6 +23,9 @@ import { FolderTree } from "../features/folders/FolderTree.js";
 import { useLibrary } from "../features/folders/useLibrary.js";
 import { HeightProfilePanel } from "../features/height-profile/HeightProfilePanel.js";
 import { ImportExportToolbar } from "../features/import-export/ImportExportToolbar.js";
+import { RulerToolbar } from "../features/ruler/RulerToolbar.js";
+import { RulerPanel } from "../features/ruler/RulerPanel.js";
+import { useRuler } from "../features/ruler/useRuler.js";
 import { useImportExport } from "../features/import-export/useImportExport.js";
 import { Notice, type NoticeData } from "../features/notice/Notice.js";
 import { PlacemarkEditor } from "../features/placemark-editor/PlacemarkEditor.js";
@@ -54,6 +57,23 @@ export function App() {
   const [notice, setNotice] = useState<NoticeData | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const sidebar = useResizableWidth(260, 200, 600, "webglobe:sidebarWidth");
+  const topbarRef = useRef<HTMLDivElement>(null);
+  const [placesPanelTop, setPlacesPanelTop] = useState(76);
+
+  useLayoutEffect(() => {
+    const topbar = topbarRef.current;
+    if (!topbar) return;
+    // The topbar wraps onto extra rows once its controls no longer fit one
+    // line (e.g. a narrower window, or another toolbar added later) - the
+    // places panel below it must follow that actual height instead of a
+    // fixed offset, or the two overlap and swallow clicks meant for the row
+    // that wrapped underneath it.
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry) setPlacesPanelTop(entry.target.getBoundingClientRect().bottom + 12);
+    });
+    observer.observe(topbar);
+    return () => observer.disconnect();
+  }, []);
   const placemarkPanel = useFloatingPanel({
     initial: { x: window.innerWidth - 260 - 12, y: 56, width: 260, height: 480 },
     minWidth: 240,
@@ -69,6 +89,14 @@ export function App() {
     maxWidth: 900,
     maxHeight: 600,
     storageKey: "webglobe:heightProfilePanelGeometry",
+  });
+  const rulerPanel = useFloatingPanel({
+    initial: { x: window.innerWidth - 260 - 12, y: 56, width: 240, height: 200 },
+    minWidth: 200,
+    minHeight: 120,
+    maxWidth: 480,
+    maxHeight: 600,
+    storageKey: "webglobe:rulerPanelGeometry",
   });
   const secretStore = useRef(createSecretStore()).current;
   const settings = useSettings(secretStore);
@@ -113,6 +141,7 @@ export function App() {
   });
 
   const library = useLibrary(viewer);
+  const ruler = useRuler(viewer);
   const { mode, selectTool, finishPolygon, cancel } = useDrawing(
     viewer,
     (geometry) => {
@@ -145,7 +174,7 @@ export function App() {
 
   return (
     <div className="app-shell" data-app-ready={library.ready}>
-      <div className="app-topbar">
+      <div className="app-topbar" ref={topbarRef}>
         <label className="base-layer-select">
           Basemap
           <select value={baseLayerId} onChange={(e) => setBaseLayerId(e.target.value)}>
@@ -159,9 +188,24 @@ export function App() {
         <DrawingToolbar
           mode={mode}
           disabled={!library.ready}
-          onSelectTool={selectTool}
+          onSelectTool={(tool) => {
+            ruler.cancel();
+            selectTool(tool);
+          }}
           onFinishPolygon={finishPolygon}
           onCancel={cancel}
+        />
+        <RulerToolbar
+          active={ruler.active}
+          disabled={!library.ready}
+          vertexCount={ruler.vertexCount}
+          onStart={() => {
+            cancel();
+            ruler.start();
+          }}
+          onUndo={ruler.undo}
+          onFinish={ruler.finish}
+          onCancel={ruler.cancel}
         />
         <AddressSearchBox
           disabled={!viewer}
@@ -206,7 +250,14 @@ export function App() {
           <Notice notice={notice} onDismiss={() => setNotice(null)} />
         </div>
       )}
-      <div className="places-panel" style={{ width: sidebar.width }}>
+      <div
+        className="places-panel"
+        style={{
+          top: placesPanelTop,
+          width: sidebar.width,
+          maxHeight: `calc(100vh - ${placesPanelTop}px - 16px)`,
+        }}
+      >
         <div className="places-panel-header">Places</div>
         <div className="places-panel-content">
           <FolderTree
@@ -319,6 +370,33 @@ export function App() {
                 : "placemark-editor-resize-handle"
             }
             onMouseDown={heightProfilePanel.startResize}
+          />
+        </div>
+      )}
+      {ruler.segments.length > 0 && (
+        <div
+          className="ruler-panel-panel"
+          style={{
+            left: rulerPanel.geometry.x,
+            top: rulerPanel.geometry.y,
+            width: rulerPanel.geometry.width,
+            height: rulerPanel.geometry.height,
+          }}
+        >
+          <RulerPanel
+            segments={ruler.segments}
+            totalMeters={ruler.totalMeters}
+            unitSystem={settings.unitSystem}
+            onDragStart={rulerPanel.startDrag}
+            onClose={ruler.cancel}
+          />
+          <div
+            className={
+              rulerPanel.isResizing
+                ? "placemark-editor-resize-handle resizing"
+                : "placemark-editor-resize-handle"
+            }
+            onMouseDown={rulerPanel.startResize}
           />
         </div>
       )}
