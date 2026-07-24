@@ -9,7 +9,6 @@ export * from "./domain/placemark.js";
 export * from "./domain/ids.js";
 export * from "./storage/PlacesRepository.js";
 export * from "./storage/InMemoryPlacesRepository.js";
-export * from "./storage/repositoryContractTests.js";
 export * from "./geocoding/GeocodingProvider.js";
 export * from "./geocoding/nominatimCompatible.js";
 export * from "./geocoding/NominatimGeocodingProvider.js";

@@ -1,4 +1,4 @@
-import { sharedRepositoryContractTests } from "@webglobe/core";
+import { sharedRepositoryContractTests } from "@webglobe/core/src/storage/repositoryContractTests.js";
 import { IndexedDbPlacesRepository } from "../src/IndexedDbPlacesRepository.js";
 
 let dbCounter = 0;

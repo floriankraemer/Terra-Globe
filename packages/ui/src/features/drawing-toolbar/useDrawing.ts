@@ -30,6 +30,9 @@ export function useDrawing(
   const entityFactoryRef = useRef<IEntityFactory | null>(null);
   const handlerRef = useRef<Cesium.ScreenSpaceEventHandler | null>(null);
   const previewVisibleRef = useRef(false);
+  const livePreviewRef = useRef<{ setGeometry: (geometry: PlacemarkGeometry) => void } | null>(
+    null,
+  );
   const onShapeCommittedRef = useRef(onShapeCommitted);
   onShapeCommittedRef.current = onShapeCommitted;
   const onEntityClickedRef = useRef(onEntityClicked);
@@ -39,6 +42,7 @@ export function useDrawing(
     if (previewVisibleRef.current) {
       entityFactoryRef.current?.removeEntity(PREVIEW_HANDLE);
       previewVisibleRef.current = false;
+      livePreviewRef.current = null;
     }
   }
 
@@ -69,25 +73,45 @@ export function useDrawing(
       if (geometry) onShapeCommittedRef.current?.(geometry);
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
-    handler.setInputAction((event: Cesium.ScreenSpaceEventHandler.MotionEvent) => {
-      if (!controller.isActive) return;
-      const point = picker.pickGround({ x: event.endPosition.x, y: event.endPosition.y });
+    // Raw canvas mousemove fires far more often than Cesium renders a frame,
+    // and rebuilding a whole ellipse/rectangle graphics object per event is
+    // expensive (re-tessellation + fresh listener wiring each time). Coalesce
+    // to one update per animation frame, and once the preview entity exists,
+    // stop touching the entity/graphics objects at all - createLivePreview's
+    // CallbackProperty reads the shape straight off a plain variable, so
+    // Cesium re-tessellates on its own render tick instead of us forcing it
+    // synchronously from the mousemove handler.
+    let rafId: number | null = null;
+    let pendingPosition: Cesium.Cartesian2 | null = null;
+
+    function applyPendingPreview(): void {
+      rafId = null;
+      if (!pendingPosition || !controller.isActive) return;
+      const point = picker.pickGround({ x: pendingPosition.x, y: pendingPosition.y });
       const geometry = point ? controller.previewGeometry(point) : undefined;
       if (geometry) {
-        if (previewVisibleRef.current) {
-          entityFactory.updateEntity(PREVIEW_HANDLE, geometry);
+        if (livePreviewRef.current) {
+          livePreviewRef.current.setGeometry(geometry);
         } else {
-          entityFactory.createEntity(geometry, PREVIEW_HANDLE.entityId);
+          const live = entityFactory.createLivePreview(geometry, PREVIEW_HANDLE.entityId);
+          livePreviewRef.current = live;
           previewVisibleRef.current = true;
         }
       } else {
         clearPreview();
       }
+    }
+
+    handler.setInputAction((event: Cesium.ScreenSpaceEventHandler.MotionEvent) => {
+      if (!controller.isActive) return;
+      pendingPosition = event.endPosition;
+      if (rafId === null) rafId = requestAnimationFrame(applyPendingPreview);
     }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
 
     handlerRef.current = handler;
 
     return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
       handler.destroy();
       controllerRef.current = null;
       entityFactoryRef.current = null;

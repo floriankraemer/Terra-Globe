@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import * as Cesium from "cesium";
-import { computeTrackProfile, type Style } from "@webglobe/core";
+import { computeTrackProfile, type LineStringGeometry, type Style } from "@webglobe/core";
 import {
   CesiumEntityFactory,
   CesiumScreenPicker,
@@ -65,6 +65,9 @@ export function useRuler(viewer: Cesium.Viewer | null): UseRulerResult {
   const vertexHandlesRef = useRef<EntityHandle[]>([]);
   const previewVisibleRef = useRef(false);
   const lineVisibleRef = useRef(false);
+  const livePreviewRef = useRef<{ setGeometry: (geometry: LineStringGeometry) => void } | null>(
+    null,
+  );
 
   function clearEntities(): void {
     const factory = entityFactoryRef.current;
@@ -72,6 +75,7 @@ export function useRuler(viewer: Cesium.Viewer | null): UseRulerResult {
     if (previewVisibleRef.current) {
       factory.removeEntity(PREVIEW_HANDLE);
       previewVisibleRef.current = false;
+      livePreviewRef.current = null;
     }
     if (lineVisibleRef.current) {
       factory.removeEntity(LINE_HANDLE);
@@ -113,6 +117,7 @@ export function useRuler(viewer: Cesium.Viewer | null): UseRulerResult {
     if (previewVisibleRef.current) {
       entityFactoryRef.current?.removeEntity(PREVIEW_HANDLE);
       previewVisibleRef.current = false;
+      livePreviewRef.current = null;
     }
   }
 
@@ -143,23 +148,46 @@ export function useRuler(viewer: Cesium.Viewer | null): UseRulerResult {
       refreshStats();
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
-    handler.setInputAction((event: Cesium.ScreenSpaceEventHandler.MotionEvent) => {
-      if (!controller.isActive) return;
-      const point = picker.pickGround({ x: event.endPosition.x, y: event.endPosition.y });
+    // Raw canvas mousemove fires far more often than Cesium renders a frame,
+    // and rebuilding a whole PolylineGraphics object per event is wasted
+    // work. Coalesce to one update per animation frame, and once the preview
+    // entity exists, stop touching the entity/graphics objects at all -
+    // createLivePreview's CallbackProperty reads the path straight off a
+    // plain variable, so Cesium re-tessellates on its own render tick
+    // instead of us forcing it synchronously from the mousemove handler.
+    let rafId: number | null = null;
+    let pendingPosition: Cesium.Cartesian2 | null = null;
+
+    function applyPendingPreview(): void {
+      rafId = null;
+      if (!pendingPosition || !controller.isActive) return;
+      const point = picker.pickGround({ x: pendingPosition.x, y: pendingPosition.y });
       const geometry = point ? controller.previewGeometry(point) : undefined;
       if (geometry) {
-        if (previewVisibleRef.current) {
-          entityFactory.updateEntity(PREVIEW_HANDLE, geometry, RULER_STYLE);
+        if (livePreviewRef.current) {
+          livePreviewRef.current.setGeometry(geometry);
         } else {
-          entityFactory.createEntity(geometry, PREVIEW_HANDLE.entityId, RULER_STYLE);
+          const live = entityFactory.createLivePreview(
+            geometry,
+            PREVIEW_HANDLE.entityId,
+            RULER_STYLE,
+          );
+          livePreviewRef.current = live;
           previewVisibleRef.current = true;
         }
       } else {
         clearPreview();
       }
+    }
+
+    handler.setInputAction((event: Cesium.ScreenSpaceEventHandler.MotionEvent) => {
+      if (!controller.isActive) return;
+      pendingPosition = event.endPosition;
+      if (rafId === null) rafId = requestAnimationFrame(applyPendingPreview);
     }, Cesium.ScreenSpaceEventType.MOUSE_MOVE);
 
     return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
       handler.destroy();
       clearEntities();
       controllerRef.current = null;

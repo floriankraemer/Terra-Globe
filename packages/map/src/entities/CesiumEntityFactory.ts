@@ -1,5 +1,15 @@
 import * as Cesium from "cesium";
-import { geometryCenter, type GeoPoint, type PlacemarkGeometry, type Style } from "@webglobe/core";
+import {
+  geometryCenter,
+  type CircleGeometry,
+  type GeoPoint,
+  type LineStringGeometry,
+  type PlacemarkGeometry,
+  type PointGeometry,
+  type PolygonGeometry,
+  type RectangleGeometry,
+  type Style,
+} from "@webglobe/core";
 import type { EntityHandle, IEntityFactory } from "./IEntityFactory.js";
 
 const DEFAULT_OUTLINE_COLOR = Cesium.Color.DODGERBLUE;
@@ -159,8 +169,132 @@ function toGeometryOptions(
   }
 }
 
+function toDynamicGeometryOptions(
+  getGeometry: () => PlacemarkGeometry,
+  style: Style | undefined,
+): Cesium.Entity.ConstructorOptions {
+  // Only the vertex/shape data changes every animation frame during a drag;
+  // colors and flags come from `style`, which stays fixed for a preview.
+  const shape = getGeometry();
+  switch (shape.type) {
+    case "Point":
+      return {
+        position: new Cesium.CallbackPositionProperty(() => {
+          const g = getGeometry() as PointGeometry;
+          return Cesium.Cartesian3.fromDegrees(g.coordinates.lon, g.coordinates.lat);
+        }, false),
+        point: {
+          pixelSize: 10,
+          color: style ? Cesium.Color.fromCssColorString(style.fillColor) : Cesium.Color.RED,
+          outlineColor: outlineColor(style),
+          outlineWidth: 1,
+        },
+      };
+    case "Circle":
+      return {
+        position: new Cesium.CallbackPositionProperty(() => {
+          const g = getGeometry() as CircleGeometry;
+          return Cesium.Cartesian3.fromDegrees(g.center.lon, g.center.lat);
+        }, false),
+        ellipse: {
+          semiMinorAxis: new Cesium.CallbackProperty(
+            () => (getGeometry() as CircleGeometry).radiusMeters,
+            false,
+          ),
+          semiMajorAxis: new Cesium.CallbackProperty(
+            () => (getGeometry() as CircleGeometry).radiusMeters,
+            false,
+          ),
+          fill: filled(style),
+          material: fillColor(style),
+          outline: outlineEnabled(style),
+          outlineColor: outlineColor(style),
+          outlineWidth: outlineWidth(style),
+        },
+      };
+    case "Rectangle":
+      return {
+        rectangle: {
+          coordinates: new Cesium.CallbackProperty(() => {
+            const g = getGeometry() as RectangleGeometry;
+            return Cesium.Rectangle.fromDegrees(g.west, g.south, g.east, g.north);
+          }, false),
+          fill: filled(style),
+          material: fillColor(style),
+          outline: outlineEnabled(style),
+          outlineColor: outlineColor(style),
+          outlineWidth: outlineWidth(style),
+        },
+      };
+    case "Polygon":
+      return {
+        polygon: {
+          hierarchy: new Cesium.CallbackProperty(() => {
+            const g = getGeometry() as PolygonGeometry;
+            return new Cesium.PolygonHierarchy(
+              g.outerRing.map((p) => Cesium.Cartesian3.fromDegrees(p.lon, p.lat)),
+              g.innerRings?.map(
+                (ring) =>
+                  new Cesium.PolygonHierarchy(
+                    ring.map((p) => Cesium.Cartesian3.fromDegrees(p.lon, p.lat)),
+                  ),
+              ),
+            );
+          }, false),
+          fill: filled(style),
+          material: fillColor(style),
+          outline: outlineEnabled(style),
+          outlineColor: outlineColor(style),
+          outlineWidth: outlineWidth(style),
+        },
+      };
+    case "LineString":
+      return {
+        polyline: {
+          positions: new Cesium.CallbackProperty(() => {
+            const g = getGeometry() as LineStringGeometry;
+            return g.path.map((p) => Cesium.Cartesian3.fromDegrees(p.lon, p.lat));
+          }, false),
+          width: outlineWidth(style),
+          material: outlineColor(style),
+        },
+      };
+    default: {
+      const exhaustiveCheck: never = shape;
+      throw new Error(`Unhandled geometry type: ${JSON.stringify(exhaustiveCheck)}`);
+    }
+  }
+}
+
 export class CesiumEntityFactory implements IEntityFactory {
   constructor(private readonly entities: Cesium.EntityCollection) {}
+
+  /**
+   * Creates a preview entity whose shape is read from a CallbackProperty
+   * instead of being rebuilt on every call. The entity/graphics objects are
+   * constructed exactly once; each animation frame only overwrites a plain
+   * `current` variable, and Cesium itself decides when to re-tessellate (once
+   * per its own render tick) rather than us forcing a full
+   * remove+recreate/graphics-replacement synchronously from the mousemove
+   * handler.
+   */
+  createLivePreview(
+    initialGeometry: PlacemarkGeometry,
+    id?: string,
+    style?: Style,
+  ): { handle: EntityHandle; setGeometry: (geometry: PlacemarkGeometry) => void } {
+    let current = initialGeometry;
+    const entity = this.entities.add({
+      id,
+      ...toDynamicGeometryOptions(() => current, style),
+    });
+    return {
+      handle: { entityId: entity.id },
+      setGeometry: (geometry: PlacemarkGeometry) => {
+        current = geometry;
+      },
+    };
+  }
 
   createEntity(
     geometry: PlacemarkGeometry,
