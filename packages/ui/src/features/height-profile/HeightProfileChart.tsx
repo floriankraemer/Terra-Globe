@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   formatDistance,
   pickGridStepMeters,
@@ -23,12 +24,26 @@ function range(start: number, stop: number, step: number): number[] {
   return values;
 }
 
+function altitudeAt(profile: TrackProfilePoint[], distanceMeters: number): number {
+  let prev = profile[0]!;
+  for (const point of profile) {
+    if (point.distanceMeters >= distanceMeters) {
+      const span = point.distanceMeters - prev.distanceMeters;
+      const t = span > 0 ? (distanceMeters - prev.distanceMeters) / span : 0;
+      return prev.altitudeMeters + (point.altitudeMeters - prev.altitudeMeters) * t;
+    }
+    prev = point;
+  }
+  return prev.altitudeMeters;
+}
+
 export function HeightProfileChart({
   profile,
   unitSystem,
   width,
   height,
 }: HeightProfileChartProps) {
+  const [hoverX, setHoverX] = useState<number | null>(null);
   const plotWidth = Math.max(1, width - PADDING_LEFT - PADDING_RIGHT);
   const plotHeight = Math.max(1, height - PADDING_TOP - PADDING_BOTTOM);
 
@@ -58,6 +73,18 @@ export function HeightProfileChart({
   const points = profile
     .map((p) => `${xFor(p.distanceMeters)},${yFor(p.altitudeMeters)}`)
     .join(" ");
+
+  const canHover = profile.length > 1 && totalDistance > 0;
+  const hoverDistance =
+    hoverX !== null && canHover ? (hoverX / plotWidth) * totalDistance : null;
+  const hoverAltitude =
+    hoverDistance !== null ? altitudeAt(profile, hoverDistance) : null;
+
+  function handleHoverMove(e: React.MouseEvent<SVGRectElement>) {
+    const bounds = e.currentTarget.getBoundingClientRect();
+    const x = Math.min(plotWidth, Math.max(0, e.clientX - bounds.left));
+    setHoverX(x);
+  }
 
   return (
     <svg
@@ -114,6 +141,43 @@ export function HeightProfileChart({
             cx={xFor(0)}
             cy={yFor(profile[0]!.altitudeMeters)}
             r={2}
+          />
+        )}
+        {hoverX !== null && hoverAltitude !== null && (
+          <g>
+            <line
+              className="height-profile-hover-line"
+              x1={hoverX}
+              x2={hoverX}
+              y1={0}
+              y2={plotHeight}
+            />
+            <circle
+              className="height-profile-hover-dot"
+              cx={hoverX}
+              cy={yFor(hoverAltitude)}
+              r={3}
+            />
+            <text
+              className="height-profile-hover-label"
+              x={Math.min(plotWidth - 4, Math.max(4, hoverX))}
+              y={Math.max(10, yFor(hoverAltitude) - 10)}
+              textAnchor={hoverX > plotWidth - 40 ? "end" : hoverX < 40 ? "start" : "middle"}
+            >
+              {Math.round(hoverAltitude)}m
+            </text>
+          </g>
+        )}
+        {canHover && (
+          <rect
+            className="height-profile-hover-target"
+            x={0}
+            y={0}
+            width={plotWidth}
+            height={plotHeight}
+            fill="transparent"
+            onMouseMove={handleHoverMove}
+            onMouseLeave={() => setHoverX(null)}
           />
         )}
       </g>

@@ -578,6 +578,31 @@ button {
   stroke-width: 2;
 }
 
+.height-profile-hover-line {
+  stroke: var(--color-text-muted);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  pointer-events: none;
+}
+
+.height-profile-hover-dot {
+  fill: var(--color-text);
+  stroke: var(--color-bg-panel);
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+
+.height-profile-hover-label {
+  font-size: 10px;
+  font-weight: 600;
+  fill: var(--color-text);
+  pointer-events: none;
+}
+
+.height-profile-hover-target {
+  cursor: crosshair;
+}
+
 .address-search {
   position: relative;
 }
