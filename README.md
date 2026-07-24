@@ -1,4 +1,4 @@
-# WebGlobe
+# Terra Globe
 
 A Google Earth-style 3D globe application.
 Runs in the browser and as a native desktop app (Windows, macOS, Linux), sharing a single frontend codebase.
