@@ -125,8 +125,8 @@ importers:
         specifier: ^2.1.4
         version: 2.1.9(vitest@2.1.9(@types/node@26.1.1)(jsdom@25.0.1))
       better-sqlite3:
-        specifier: ^11.5.0
-        version: 11.10.0
+        specifier: ^12.4.1
+        version: 12.11.1
       typescript:
         specifier: ^5.6.3
         version: 5.9.3
@@ -1017,8 +1017,9 @@ packages:
     engines: {node: '>=6.0.0'}
     hasBin: true
 
-  better-sqlite3@11.10.0:
-    resolution: {integrity: sha512-EwhOpyXiOEL/lKzHz9AW1msWFNzGc/z+LzeB3/jnFJpxu+th2yqvzsSWas1v9jgs9+xiXJcD5A8CJxAG2TaghQ==}
+  better-sqlite3@12.11.1:
+    resolution: {integrity: sha512-dq9AtApgg5PGFtBzPFSBl3HZQjHok5gaQCM6zh2Yk0aSmDCs1CbnVI8/HgASQkNKsWFpseIO9beg5xxpYhbIfA==}
+    engines: {node: 20.x || 22.x || 23.x || 24.x || 25.x || 26.x}
 
   bindings@1.5.0:
     resolution: {integrity: sha512-p2q/t/mhvuOj/UeLlV6566GD/guowlr0hHxClI0W9m7MWYkL1F0hLo+0Aexs9HSPCtR1SXQ0TD3MMKrXZajbiQ==}
@@ -3454,7 +3455,7 @@ snapshots:
 
   baseline-browser-mapping@2.11.1: {}
 
-  better-sqlite3@11.10.0:
+  better-sqlite3@12.11.1:
     dependencies:
       bindings: 1.5.0
       prebuild-install: 7.1.3
