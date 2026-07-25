@@ -216,4 +216,27 @@ describe("EntitySynchronizer", () => {
     expect(factory.entities.has(placemark.id)).toBe(false);
     expect(await repo.getPlacemark(placemark.id)).toBeNull();
   });
+
+  it("removeEntities removes live entities without touching the repository", async () => {
+    const repo = new InMemoryPlacesRepository();
+    const factory = new FakeEntityFactory();
+    const sync = new EntitySynchronizer(repo, factory);
+    const a = await sync.persistPlacemark({
+      name: "A",
+      folderId: null,
+      geometry: createPointGeometry({ lon: 0, lat: 0 }),
+    });
+    const b = await sync.persistPlacemark({
+      name: "B",
+      folderId: null,
+      geometry: createPointGeometry({ lon: 1, lat: 1 }),
+    });
+
+    sync.removeEntities([a.id, b.id]);
+
+    expect(factory.entities.has(a.id)).toBe(false);
+    expect(factory.entities.has(b.id)).toBe(false);
+    expect(await repo.getPlacemark(a.id)).toEqual(a);
+    expect(await repo.getPlacemark(b.id)).toEqual(b);
+  });
 });

@@ -25,7 +25,10 @@ function downloadBlob(bytes: BlobPart, filename: string, mimeType: string): void
 }
 
 /** File I/O glue: reads/writes via the browser File/Blob APIs (works in both the browser tab and the Tauri webview). */
-export function useImportExport(library: UseLibraryResult) {
+export function useImportExport(
+  library: UseLibraryResult,
+  wrap: <T>(action: () => Promise<T>) => Promise<T> = (action) => action(),
+) {
   const { t } = useTranslation();
   return {
     async importFile(file: File): Promise<ImportSummary> {
@@ -63,7 +66,7 @@ export function useImportExport(library: UseLibraryResult) {
         );
       }
 
-      await library.importPlaces(result);
+      await wrap(() => library.importPlaces(result));
       return {
         placemarksImported: result.placemarks.length,
         foldersImported: result.folders.length,

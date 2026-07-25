@@ -26,6 +26,8 @@ import { AddressSearchBox } from "../features/geocoding/AddressSearchBox.js";
 import { useGeocoding } from "../features/geocoding/useGeocoding.js";
 import { FolderTree } from "../features/folders/FolderTree.js";
 import { useLibrary } from "../features/folders/useLibrary.js";
+import { UndoRedoToolbar } from "../features/undo-redo/UndoRedoToolbar.js";
+import { useUndoRedo } from "../features/undo-redo/useUndoRedo.js";
 import { ScreenOverlayLayer } from "../features/screen-overlays/ScreenOverlayLayer.js";
 import { HeightProfilePanel } from "../features/height-profile/HeightProfilePanel.js";
 import { ImportExportToolbar } from "../features/import-export/ImportExportToolbar.js";
@@ -185,20 +187,61 @@ export function App() {
   });
 
   const library = useLibrary(viewer);
+  const undoRedo = useUndoRedo(library);
   const ruler = useRuler(viewer);
   const routePlanner = useRoutePlanner(viewer, routingProvider, geocodingProvider);
   const { mode, selectTool, finish, cancel } = useDrawing(
     viewer,
     (geometry) => {
-      void library.addPlacemark(geometry).then((id) => {
-        if (id) setSelectedPlacemarkId(id);
-      });
+      void undoRedo
+        .wrap(() => library.addPlacemark(geometry))
+        .then((id) => {
+          if (id) setSelectedPlacemarkId(id);
+        });
     },
     (entityId) => {
       if (library.placemarks.some((p) => p.id === entityId)) setSelectedPlacemarkId(entityId);
     },
   );
-  const importExport = useImportExport(library);
+  const importExport = useImportExport(library, undoRedo.wrap);
+
+  // The placemark editor keeps live-previewing the selected entity while
+  // open; a restore can remove or replace that entity out from under it
+  // (previewPlacemark() would then throw on the now-gone Cesium entity), so
+  // close it before time-travelling, same as a plain delete does.
+  function runUndo() {
+    setSelectedPlacemarkId(null);
+    void undoRedo.undo();
+  }
+  function runRedo() {
+    setSelectedPlacemarkId(null);
+    void undoRedo.redo();
+  }
+
+  useEffect(() => {
+    function isTextInput(target: EventTarget | null): boolean {
+      if (!(target instanceof HTMLElement)) return false;
+      return (
+        target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable
+      );
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (!(e.ctrlKey || e.metaKey) || isTextInput(e.target)) return;
+      const key = e.key.toLowerCase();
+      if (key === "z" && e.shiftKey) {
+        e.preventDefault();
+        runRedo();
+      } else if (key === "z") {
+        e.preventDefault();
+        runUndo();
+      } else if (key === "y") {
+        e.preventDefault();
+        runRedo();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [undoRedo]);
 
   const editingPlacemark = library.placemarks.find((p) => p.id === selectedPlacemarkId) ?? null;
   const [elevationProfilePlacemarkId, setElevationProfilePlacemarkId] = useState<string | null>(
@@ -233,6 +276,12 @@ export function App() {
             ))}
           </select>
         </label>
+        <UndoRedoToolbar
+          canUndo={undoRedo.canUndo}
+          canRedo={undoRedo.canRedo}
+          onUndo={runUndo}
+          onRedo={runRedo}
+        />
         <DrawingToolbar
           mode={mode}
           disabled={!library.ready}
@@ -337,18 +386,26 @@ export function App() {
               const placemark = library.placemarks.find((p) => p.id === id);
               if (placemark && viewer) flyToGeometry(viewer, placemark.geometry);
             }}
-            onCreateFolder={(parentId, name) => void library.createFolder(parentId, name)}
-            onRenameFolder={(id, name) => void library.renameFolder(id, name)}
-            onDeleteFolder={(id) => void library.deleteFolder(id)}
-            onToggleFolderVisibility={(id) => void library.toggleFolderVisibility(id)}
-            onMoveFolder={(id, parentId, index) => void library.moveFolder(id, parentId, index)}
+            onCreateFolder={(parentId, name) =>
+              void undoRedo.wrap(() => library.createFolder(parentId, name))
+            }
+            onRenameFolder={(id, name) => void undoRedo.wrap(() => library.renameFolder(id, name))}
+            onDeleteFolder={(id) => void undoRedo.wrap(() => library.deleteFolder(id))}
+            onToggleFolderVisibility={(id) =>
+              void undoRedo.wrap(() => library.toggleFolderVisibility(id))
+            }
+            onMoveFolder={(id, parentId, index) =>
+              void undoRedo.wrap(() => library.moveFolder(id, parentId, index))
+            }
             onDeletePlacemark={(id) => {
-              void library.deletePlacemark(id);
+              void undoRedo.wrap(() => library.deletePlacemark(id));
               if (id === selectedPlacemarkId) setSelectedPlacemarkId(null);
             }}
-            onTogglePlacemarkVisibility={(id) => void library.togglePlacemarkVisibility(id)}
+            onTogglePlacemarkVisibility={(id) =>
+              void undoRedo.wrap(() => library.togglePlacemarkVisibility(id))
+            }
             onMovePlacemark={(id, folderId, index) =>
-              void library.movePlacemark(id, folderId, index)
+              void undoRedo.wrap(() => library.movePlacemark(id, folderId, index))
             }
           />
         </div>
@@ -386,8 +443,8 @@ export function App() {
               // closing, same reasoning as onSave below - otherwise the tree
               // can still show the placemark for a moment after the editor
               // has already closed.
-              void library
-                .deletePlacemark(editingPlacemark.id)
+              void undoRedo
+                .wrap(() => library.deletePlacemark(editingPlacemark.id))
                 .then(() => setSelectedPlacemarkId(null));
             }}
             onSave={({ name, description, style }) => {
@@ -395,8 +452,10 @@ export function App() {
               // closing - closing immediately (fire-and-forget) let a user
               // re-open the same placemark mid-save and see stale pre-save
               // data, since `placemarks` state hadn't caught up yet.
-              void library
-                .savePlacemarkEdits(editingPlacemark.id, { name, description, style })
+              void undoRedo
+                .wrap(() =>
+                  library.savePlacemarkEdits(editingPlacemark.id, { name, description, style }),
+                )
                 .then(() => setSelectedPlacemarkId(null));
             }}
           />

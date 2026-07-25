@@ -9,7 +9,11 @@ import type {
   ScreenOverlay,
   Style,
 } from "@terra-globe/core";
-import { CesiumEntityFactory, EntitySynchronizer, type PlacemarkStyleEdits } from "@terra-globe/map";
+import {
+  CesiumEntityFactory,
+  EntitySynchronizer,
+  type PlacemarkStyleEdits,
+} from "@terra-globe/map";
 import { createRepository } from "../../platform/createRepository.js";
 
 export interface UseLibraryResult {
