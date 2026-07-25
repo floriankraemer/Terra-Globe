@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type * as Cesium from "cesium";
 import {
   createPointGeometry,
@@ -39,6 +40,7 @@ import { Notice, type NoticeData } from "../features/notice/Notice.js";
 import { PlacemarkEditor } from "../features/placemark-editor/PlacemarkEditor.js";
 import { SettingsModal } from "../features/settings/SettingsModal.js";
 import { useSettings } from "../features/settings/useSettings.js";
+import i18n from "../i18n/i18n.js";
 import { useFloatingPanel } from "./useFloatingPanel.js";
 import { useResizableWidth } from "./useResizableWidth.js";
 import { createGeocodingProvider } from "../platform/createGeocodingProvider.js";
@@ -56,6 +58,7 @@ const DEFAULT_STYLE: PlacemarkStyleEdits = {
 };
 
 export function App() {
+  const { t } = useTranslation();
   const defaultTileSource = BUILTIN_TILE_SOURCES[0]!;
   const [baseLayerId, setBaseLayerId] = useState<string>(defaultTileSource.id);
   const [tileSources, setTileSources] = useState<TileSource[]>(BUILTIN_TILE_SOURCES);
@@ -118,6 +121,11 @@ export function App() {
   });
   const secretStore = useRef(createSecretStore()).current;
   const settings = useSettings(secretStore);
+
+  useEffect(() => {
+    void i18n.changeLanguage(settings.language);
+  }, [settings.language]);
+
   const [geocodingProvider, setGeocodingProvider] = useState<GeocodingProvider>(
     () => new NominatimGeocodingProvider(),
   );
@@ -166,7 +174,8 @@ export function App() {
     setViewer(handle.viewer);
     // Exposed for E2E tests to inspect camera state (e.g. after a fly-to);
     // harmless in production, mirrors the common devtools-debugging pattern.
-    (window as unknown as { __terraGlobeViewer?: Cesium.Viewer }).__terraGlobeViewer = handle.viewer;
+    (window as unknown as { __terraGlobeViewer?: Cesium.Viewer }).__terraGlobeViewer =
+      handle.viewer;
     // Repurpose Cesium's built-in "home" button: cancel its default
     // fly-to-home behavior and open the Settings modal instead.
     handle.viewer.homeButton.viewModel.command.beforeExecute.addEventListener((commandInfo) => {
@@ -215,7 +224,7 @@ export function App() {
     <div className="app-shell" data-app-ready={library.ready}>
       <div className="app-topbar" ref={topbarRef}>
         <label className="base-layer-select">
-          Basemap
+          {t("app.basemap")}
           <select value={baseLayerId} onChange={(e) => setBaseLayerId(e.target.value)}>
             {tileSources.map((source) => (
               <option key={source.id} value={source.id}>
@@ -229,7 +238,7 @@ export function App() {
           disabled={!library.ready}
           onSelectTool={(tool) => {
             ruler.cancel();
-            routePlanner.cancel();
+            routePlanner.finish();
             selectTool(tool);
           }}
           onFinish={finish}
@@ -241,7 +250,7 @@ export function App() {
           vertexCount={ruler.vertexCount}
           onStart={() => {
             cancel();
-            routePlanner.cancel();
+            routePlanner.finish();
             ruler.start();
           }}
           onUndo={ruler.undo}
@@ -251,14 +260,15 @@ export function App() {
         <RoutePlannerToolbar
           active={routePlanner.active}
           disabled={!library.ready}
-          waypointCount={routePlanner.stops.length}
-          onStart={() => {
+          onToggle={() => {
+            if (routePlanner.active) {
+              routePlanner.finish();
+              return;
+            }
             cancel();
             ruler.cancel();
             routePlanner.start();
           }}
-          onFinish={routePlanner.finish}
-          onCancel={routePlanner.cancel}
         />
         <AddressSearchBox
           disabled={!viewer}
@@ -278,12 +288,14 @@ export function App() {
               .importFile(file)
               .then((summary) => {
                 const parts = [
-                  `Imported ${summary.placemarksImported} placemark(s)`,
-                  summary.foldersImported > 0 ? `${summary.foldersImported} folder(s)` : null,
+                  t("importExport.importedPlacemarks", { count: summary.placemarksImported }),
+                  summary.foldersImported > 0
+                    ? t("importExport.importedFolders", { count: summary.foldersImported })
+                    : null,
                 ].filter(Boolean);
                 const message =
                   summary.warnings.length > 0
-                    ? `${parts.join(", ")}. ${summary.warnings.length} item(s) skipped: ${summary.warnings.join(" ")}`
+                    ? `${parts.join(", ")}. ${t("importExport.skippedItems", { count: summary.warnings.length, warnings: summary.warnings.join(" ") })}`
                     : `${parts.join(", ")}.`;
                 setNotice({ level: "success", message });
               })
@@ -311,7 +323,7 @@ export function App() {
           maxHeight: `calc(100vh - ${placesPanelTop}px - 16px)`,
         }}
       >
-        <div className="places-panel-header">Places</div>
+        <div className="places-panel-header">{t("folders.placesHeader")}</div>
         <div className="places-panel-content">
           <FolderTree
             disabled={!library.ready}
@@ -455,57 +467,63 @@ export function App() {
           />
         </div>
       )}
-      {(routePlanner.active || routePlanner.stops.length > 0) && (
-        <div
-          className="route-planner-panel-panel"
-          style={{
-            left: routePlannerPanel.geometry.x,
-            top: routePlannerPanel.geometry.y,
-            width: routePlannerPanel.geometry.width,
-            height: routePlannerPanel.geometry.height,
+      <div
+        className="route-planner-panel-panel"
+        // aria-hidden (not just display:none) so the hidden panel's inputs -
+        // e.g. its own "Address" search box - don't collide with visible
+        // same-labeled controls elsewhere when the panel is closed.
+        aria-hidden={!routePlanner.active}
+        style={{
+          display: routePlanner.active ? undefined : "none",
+          left: routePlannerPanel.geometry.x,
+          top: routePlannerPanel.geometry.y,
+          width: routePlannerPanel.geometry.width,
+          height: routePlannerPanel.geometry.height,
+        }}
+      >
+        <RoutePlannerPanel
+          stops={routePlanner.stops}
+          mode={routePlanner.mode}
+          alternatives={routePlanner.alternatives}
+          selectedIndex={routePlanner.selectedIndex}
+          totalDistanceMeters={routePlanner.totalDistanceMeters}
+          totalDurationSeconds={routePlanner.totalDurationSeconds}
+          loading={routePlanner.loading}
+          error={routePlanner.error}
+          unitSystem={settings.unitSystem}
+          searchStatus={routeStopSearch.status}
+          searchResults={routeStopSearch.results}
+          searchError={routeStopSearch.error}
+          onDragStart={routePlannerPanel.startDrag}
+          onClose={routePlanner.finish}
+          onClear={routePlanner.clear}
+          onChangeMode={routePlanner.setMode}
+          onSearch={(query) => void routeStopSearch.search(query)}
+          onSelectSearchResult={(result: GeocodeResult) => {
+            routePlanner.addStop(result.point, result.label);
+            routeStopSearch.reset();
           }}
-        >
-          <RoutePlannerPanel
-            stops={routePlanner.stops}
-            mode={routePlanner.mode}
-            alternatives={routePlanner.alternatives}
-            selectedIndex={routePlanner.selectedIndex}
-            totalDistanceMeters={routePlanner.totalDistanceMeters}
-            totalDurationSeconds={routePlanner.totalDurationSeconds}
-            loading={routePlanner.loading}
-            error={routePlanner.error}
-            unitSystem={settings.unitSystem}
-            searchStatus={routeStopSearch.status}
-            searchResults={routeStopSearch.results}
-            searchError={routeStopSearch.error}
-            onDragStart={routePlannerPanel.startDrag}
-            onClose={routePlanner.cancel}
-            onChangeMode={routePlanner.setMode}
-            onSearch={(query) => void routeStopSearch.search(query)}
-            onSelectSearchResult={(result: GeocodeResult) => {
-              routePlanner.addStop(result.point, result.label);
-              routeStopSearch.reset();
-            }}
-            onRemoveStop={routePlanner.removeStop}
-            onMoveStop={routePlanner.reorderStop}
-            onSelectAlternative={routePlanner.selectAlternative}
-          />
-          <div
-            className={
-              routePlannerPanel.isResizing
-                ? "placemark-editor-resize-handle resizing"
-                : "placemark-editor-resize-handle"
-            }
-            onMouseDown={routePlannerPanel.startResize}
-          />
-        </div>
-      )}
+          onRemoveStop={routePlanner.removeStop}
+          onMoveStop={routePlanner.reorderStop}
+          onSelectAlternative={routePlanner.selectAlternative}
+        />
+        <div
+          className={
+            routePlannerPanel.isResizing
+              ? "placemark-editor-resize-handle resizing"
+              : "placemark-editor-resize-handle"
+          }
+          onMouseDown={routePlannerPanel.startResize}
+        />
+      </div>
       {settingsOpen && (
         <SettingsModal
           unitSystem={settings.unitSystem}
           coordinateFormat={settings.coordinateFormat}
+          language={settings.language}
           onChangeUnitSystem={settings.setUnitSystem}
           onChangeCoordinateFormat={settings.setCoordinateFormat}
+          onChangeLanguage={settings.setLanguage}
           providers={settings.providers}
           secretStore={secretStore}
           onAddProvider={settings.addProvider}

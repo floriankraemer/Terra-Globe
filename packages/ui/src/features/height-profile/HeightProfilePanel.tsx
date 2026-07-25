@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { computeTrackProfile, type LineStringGeometry, type UnitSystem } from "@terra-globe/core";
 import { HeightProfileChart } from "./HeightProfileChart.js";
 
@@ -23,15 +24,21 @@ export function HeightProfilePanel({
   onDragStart,
   onClose,
 }: HeightProfilePanelProps) {
+  const { t } = useTranslation();
   const profile = computeTrackProfile(geometry);
   const chartWidth = Math.max(1, width - CONTENT_PADDING * 2);
   const chartHeight = Math.max(1, height - HEADER_HEIGHT - CONTENT_PADDING * 2);
 
   return (
-    <div className="height-profile" aria-label="Elevation profile">
+    <div className="height-profile" aria-label={t("heightProfile.ariaLabel")}>
       <div className="height-profile-header" onMouseDown={onDragStart}>
-        <span>Elevation Profile — {trackName}</span>
-        <button type="button" className="height-profile-close" onClick={onClose} aria-label="Close">
+        <span>{t("heightProfile.title", { name: trackName })}</span>
+        <button
+          type="button"
+          className="height-profile-close"
+          onClick={onClose}
+          aria-label={t("heightProfile.close")}
+        >
           ×
         </button>
       </div>

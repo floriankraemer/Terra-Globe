@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   formatDistance,
   pickGridStepMeters,
@@ -43,6 +44,7 @@ export function HeightProfileChart({
   width,
   height,
 }: HeightProfileChartProps) {
+  const { t } = useTranslation();
   const [hoverX, setHoverX] = useState<number | null>(null);
   const plotWidth = Math.max(1, width - PADDING_LEFT - PADDING_RIGHT);
   const plotHeight = Math.max(1, height - PADDING_TOP - PADDING_BOTTOM);
@@ -90,7 +92,7 @@ export function HeightProfileChart({
       width={width}
       height={height}
       role="img"
-      aria-label="Elevation profile"
+      aria-label={t("heightProfile.ariaLabel")}
     >
       <g transform={`translate(${PADDING_LEFT}, ${PADDING_TOP})`}>
         {altitudeGridlines.map((altitude) => (

@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+
 export interface ConfirmModalProps {
   title: string;
   message: string;
@@ -13,13 +15,17 @@ export interface ConfirmModalProps {
 export function ConfirmModal({
   title,
   message,
-  confirmLabel = "Delete",
-  cancelLabel = "Cancel",
+  confirmLabel,
+  cancelLabel,
   onConfirm,
   onCancel,
   extraLabel,
   onExtra,
 }: ConfirmModalProps) {
+  const { t } = useTranslation();
+  const resolvedConfirmLabel = confirmLabel ?? t("common.delete");
+  const resolvedCancelLabel = cancelLabel ?? t("common.cancel");
+
   return (
     <div className="modal-overlay" onClick={onCancel}>
       <div
@@ -38,10 +44,10 @@ export function ConfirmModal({
             </button>
           )}
           <button type="button" className="btn btn-danger" onClick={onConfirm}>
-            {confirmLabel}
+            {resolvedConfirmLabel}
           </button>
           <button type="button" className="btn" onClick={onCancel}>
-            {cancelLabel}
+            {resolvedCancelLabel}
           </button>
         </div>
       </div>

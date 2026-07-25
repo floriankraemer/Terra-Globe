@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { ConfirmModal } from "../confirm/ConfirmModal.js";
 import { MARKER_ICON_OPTIONS } from "./markerIconOptions.js";
 import {
@@ -43,22 +44,33 @@ export interface PlacemarkEditorProps {
 function geometryMeasurements(
   geometry: Placemark["geometry"],
   unitSystem: UnitSystem,
+  t: (key: string) => string,
 ): { label: string; value: string }[] {
   if (geometry.type === "Circle") {
     return [
-      { label: "Radius", value: formatDistance(geometry.radiusMeters, unitSystem) },
+      { label: t("placemarkEditor.radius"), value: formatDistance(geometry.radiusMeters, unitSystem) },
       {
-        label: "Circumference",
+        label: t("placemarkEditor.circumference"),
         value: formatDistance(circleCircumferenceMeters(geometry), unitSystem),
       },
-      { label: "Area", value: formatArea(circleAreaSquareMeters(geometry), unitSystem) },
+      { label: t("placemarkEditor.area"), value: formatArea(circleAreaSquareMeters(geometry), unitSystem) },
     ];
   }
   if (geometry.type === "Rectangle") {
-    return [{ label: "Area", value: formatArea(rectangleAreaSquareMeters(geometry), unitSystem) }];
+    return [
+      {
+        label: t("placemarkEditor.area"),
+        value: formatArea(rectangleAreaSquareMeters(geometry), unitSystem),
+      },
+    ];
   }
   if (geometry.type === "Polygon") {
-    return [{ label: "Area", value: formatArea(polygonAreaSquareMeters(geometry), unitSystem) }];
+    return [
+      {
+        label: t("placemarkEditor.area"),
+        value: formatArea(polygonAreaSquareMeters(geometry), unitSystem),
+      },
+    ];
   }
   return [];
 }
@@ -75,12 +87,13 @@ export function PlacemarkEditor({
   onPreview,
   onShowElevationProfile,
 }: PlacemarkEditorProps) {
+  const { t } = useTranslation();
   const geometryType = placemark.geometry.type;
   const isPoint = geometryType === "Point";
   const isLine = geometryType === "LineString";
   const isAreaShape = !isPoint && !isLine;
   const center = geometryCenter(placemark.geometry);
-  const measurements = geometryMeasurements(placemark.geometry, unitSystem);
+  const measurements = geometryMeasurements(placemark.geometry, unitSystem, t);
   const showElevationButton = hasElevationData(placemark.geometry);
 
   const [name, setName] = useState(placemark.name);
@@ -147,7 +160,7 @@ export function PlacemarkEditor({
   return (
     <form
       className="placemark-editor"
-      aria-label="Edit placemark"
+      aria-label={t("placemarkEditor.ariaLabel")}
       onSubmit={(e) => {
         e.preventDefault();
         suppressRevertRef.current = true;
@@ -155,19 +168,19 @@ export function PlacemarkEditor({
       }}
     >
       <div className="placemark-editor-header" onMouseDown={onDragStart}>
-        Edit Placemark
+        {t("placemarkEditor.header")}
       </div>
-      <div className="placemark-editor-id">ID: {placemark.id}</div>
+      <div className="placemark-editor-id">{t("placemarkEditor.id", { id: placemark.id })}</div>
       <label className="placemark-editor-field">
-        Name
+        {t("placemarkEditor.name")}
         <input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
       </label>
       <label className="placemark-editor-field">
-        Description
+        {t("placemarkEditor.description")}
         <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
       </label>
       <div className="placemark-editor-field">
-        {isPoint ? "Location" : "Center"}
+        {isPoint ? t("placemarkEditor.location") : t("placemarkEditor.center")}
         <div className="placemark-editor-coordinates">
           {formatCoordinate(center, coordinateFormat)}
         </div>
@@ -175,7 +188,7 @@ export function PlacemarkEditor({
 
       {measurements.length > 0 && (
         <div className="placemark-editor-field">
-          Measurements
+          {t("placemarkEditor.measurements")}
           <div className="placemark-editor-measurements">
             {measurements.map(({ label, value }) => (
               <div key={label} className="placemark-editor-measurement-row">
@@ -190,7 +203,7 @@ export function PlacemarkEditor({
       {isPoint && (
         <>
           <label className="placemark-editor-field">
-            Color
+            {t("placemarkEditor.color")}
             <input
               type="color"
               value={draftStyle.fillColor}
@@ -206,11 +219,11 @@ export function PlacemarkEditor({
             />
           </label>
           <div className="placemark-editor-field">
-            Marker
+            {t("placemarkEditor.marker")}
             <div
               className="placemark-editor-marker-icons"
               role="radiogroup"
-              aria-label="Marker icon"
+              aria-label={t("placemarkEditor.markerIconAriaLabel")}
             >
               {MARKER_ICON_OPTIONS.map(({ id, Icon }) => (
                 <button
@@ -241,10 +254,10 @@ export function PlacemarkEditor({
               checked={draftStyle.outlineEnabled}
               onChange={(e) => patchStyle({ outlineEnabled: e.target.checked })}
             />
-            Outline
+            {t("placemarkEditor.outline")}
           </label>
           <label className="placemark-editor-field">
-            Outline Color
+            {t("placemarkEditor.outlineColor")}
             <input
               type="color"
               value={draftStyle.outlineColor}
@@ -253,7 +266,7 @@ export function PlacemarkEditor({
             />
           </label>
           <label className="placemark-editor-field">
-            Outline Width
+            {t("placemarkEditor.outlineWidth")}
             <input
               type="number"
               min={0}
@@ -274,10 +287,10 @@ export function PlacemarkEditor({
               checked={draftStyle.filled}
               onChange={(e) => patchStyle({ filled: e.target.checked })}
             />
-            Filled
+            {t("placemarkEditor.filled")}
           </label>
           <label className="placemark-editor-field">
-            Fill Color
+            {t("placemarkEditor.fillColor")}
             <input
               type="color"
               value={draftStyle.fillColor}
@@ -294,26 +307,26 @@ export function PlacemarkEditor({
           className="btn placemark-editor-elevation-button"
           onClick={onShowElevationProfile}
         >
-          Elevation Profile
+          {t("placemarkEditor.elevationProfile")}
         </button>
       )}
 
       <div className="placemark-editor-actions">
         <button type="submit" className="btn">
-          Save
+          {t("placemarkEditor.save")}
         </button>
         <button type="button" className="btn" onClick={requestClose}>
-          Close
+          {t("placemarkEditor.close")}
         </button>
         <button type="button" className="btn btn-danger" onClick={() => setConfirmingDelete(true)}>
-          Delete
+          {t("placemarkEditor.delete")}
         </button>
       </div>
 
       {confirmingDelete && (
         <ConfirmModal
-          title="Delete placemark?"
-          message={`Are you sure you want to delete "${name}"? This cannot be undone.`}
+          title={t("confirm.deletePlacemarkTitle")}
+          message={t("confirm.deletePlacemarkMessage", { name })}
           onConfirm={() => {
             suppressRevertRef.current = true;
             setConfirmingDelete(false);
@@ -325,11 +338,11 @@ export function PlacemarkEditor({
 
       {confirmingClose && (
         <ConfirmModal
-          title="Unsaved changes"
-          message={`Save changes to "${name}" before closing?`}
-          confirmLabel="Discard"
-          cancelLabel="Cancel"
-          extraLabel="Save"
+          title={t("confirm.unsavedChangesTitle")}
+          message={t("confirm.unsavedChangesMessage", { name })}
+          confirmLabel={t("confirm.discard")}
+          cancelLabel={t("common.cancel")}
+          extraLabel={t("confirm.save")}
           onExtra={() => {
             setConfirmingClose(false);
             suppressRevertRef.current = true;

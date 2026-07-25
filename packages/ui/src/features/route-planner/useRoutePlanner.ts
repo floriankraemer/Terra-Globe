@@ -45,7 +45,7 @@ export interface UseRoutePlannerResult {
   selectAlternative: (index: number) => void;
   start: () => void;
   finish: () => void;
-  cancel: () => void;
+  clear: () => void;
   addStop: (point: GeoPoint, label?: string) => void;
   removeStop: (index: number) => void;
   reorderStop: (from: number, to: number) => void;
@@ -230,13 +230,17 @@ export function useRoutePlanner(
     setActive(false);
   }
 
-  function cancel(): void {
+  function clear(): void {
+    requestIdRef.current++;
     controllerRef.current.clear();
-    activeRef.current = false;
-    setActive(false);
     setWaypoints([]);
     setStopMeta([]);
+    setAlternatives([]);
+    setSelectedIndex(0);
+    setError(null);
+    setLoading(false);
     syncStopEntities([]);
+    clearRouteEntities();
   }
 
   function addStop(point: GeoPoint, label?: string): void {
@@ -305,7 +309,7 @@ export function useRoutePlanner(
     selectAlternative,
     start,
     finish,
-    cancel,
+    clear,
     addStop,
     removeStop,
     reorderStop,

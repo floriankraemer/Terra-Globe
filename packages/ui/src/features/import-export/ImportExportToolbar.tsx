@@ -1,4 +1,5 @@
 import { useRef } from "react";
+import { useTranslation } from "react-i18next";
 
 export interface ImportExportToolbarProps {
   disabled: boolean;
@@ -13,6 +14,7 @@ export function ImportExportToolbar({
   onExportKml,
   onExportKmz,
 }: ImportExportToolbarProps) {
+  const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
 
   return (
@@ -36,13 +38,13 @@ export function ImportExportToolbar({
         disabled={disabled}
         onClick={() => inputRef.current?.click()}
       >
-        Import KML/KMZ
+        {t("importExport.importButton")}
       </button>
       <button type="button" className="btn" disabled={disabled} onClick={onExportKml}>
-        Export KML
+        {t("importExport.exportKml")}
       </button>
       <button type="button" className="btn" disabled={disabled} onClick={onExportKmz}>
-        Export KMZ
+        {t("importExport.exportKmz")}
       </button>
     </div>
   );

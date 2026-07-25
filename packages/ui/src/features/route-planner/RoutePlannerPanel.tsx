@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { formatDistance, formatDuration, type UnitSystem } from "@terra-globe/core";
 import type { GeocodeResult, RouteLeg } from "@terra-globe/core";
 import { AddressSearchBox } from "../geocoding/AddressSearchBox.js";
@@ -20,6 +21,7 @@ export interface RoutePlannerPanelProps {
   searchError: string | null;
   onDragStart?: (e: React.MouseEvent) => void;
   onClose: () => void;
+  onClear: () => void;
   onChangeMode: (mode: TravelMode) => void;
   onSearch: (query: string) => void;
   onSelectSearchResult: (result: GeocodeResult) => void;
@@ -27,14 +29,6 @@ export interface RoutePlannerPanelProps {
   onMoveStop: (from: number, to: number) => void;
   onSelectAlternative: (index: number) => void;
 }
-
-const MODE_OPTIONS: { value: TravelMode; label: string }[] = [
-  { value: "car", label: "Car" },
-  { value: "foot", label: "Foot" },
-  { value: "bike", label: "Bike" },
-  { value: "train", label: "Train" },
-  { value: "plane", label: "Plane" },
-];
 
 function stopLabel(stop: RouteStop): string {
   return stop.label ?? `${stop.point.lat.toFixed(2)}, ${stop.point.lon.toFixed(2)}`;
@@ -55,6 +49,7 @@ export function RoutePlannerPanel({
   searchError,
   onDragStart,
   onClose,
+  onClear,
   onChangeMode,
   onSearch,
   onSelectSearchResult,
@@ -62,30 +57,49 @@ export function RoutePlannerPanel({
   onMoveStop,
   onSelectAlternative,
 }: RoutePlannerPanelProps) {
+  const { t } = useTranslation();
   const [draggedFrom, setDraggedFrom] = useState<number | null>(null);
   const [dropTarget, setDropTarget] = useState<{
     index: number;
     position: "before" | "after";
   } | null>(null);
 
+  const modeOptions: { value: TravelMode; label: string }[] = [
+    { value: "car", label: t("routePlanner.modeCar") },
+    { value: "foot", label: t("routePlanner.modeFoot") },
+    { value: "bike", label: t("routePlanner.modeBike") },
+    { value: "train", label: t("routePlanner.modeTrain") },
+    { value: "plane", label: t("routePlanner.modePlane") },
+  ];
+
   return (
-    <div className="route-planner-panel" aria-label="Route planner">
+    <div className="route-planner-panel" aria-label={t("routePlanner.ariaLabel")}>
       <div className="route-planner-panel-header" onMouseDown={onDragStart}>
-        <span>Route</span>
-        <button
-          type="button"
-          className="route-planner-panel-close"
-          onClick={onClose}
-          aria-label="Close"
-        >
-          ×
-        </button>
+        <span>{t("routePlanner.panelTitle")}</span>
+        <div className="route-planner-panel-header-actions">
+          <button
+            type="button"
+            className="btn btn-danger"
+            onClick={onClear}
+            disabled={stops.length === 0}
+          >
+            {t("routePlanner.clear")}
+          </button>
+          <button
+            type="button"
+            className="route-planner-panel-close"
+            onClick={onClose}
+            aria-label={t("routePlanner.close")}
+          >
+            ×
+          </button>
+        </div>
       </div>
       <div className="route-planner-panel-content">
         <label className="route-planner-mode-select">
-          Mode
+          {t("routePlanner.mode")}
           <select value={mode} onChange={(e) => onChangeMode(e.target.value as TravelMode)}>
-            {MODE_OPTIONS.map((option) => (
+            {modeOptions.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
@@ -135,15 +149,13 @@ export function RoutePlannerPanel({
                 setDropTarget(null);
               }}
             >
-              <span>
-                Stop {i + 1}: {stopLabel(stop)}
-              </span>
+              <span>{t("routePlanner.stop", { n: i + 1, label: stopLabel(stop) })}</span>
               <button
                 type="button"
                 className="btn"
                 disabled={i === 0}
                 onClick={() => onMoveStop(i, i - 1)}
-                aria-label={`Move stop ${i + 1} up`}
+                aria-label={t("routePlanner.moveStopUp", { n: i + 1 })}
               >
                 ↑
               </button>
@@ -152,7 +164,7 @@ export function RoutePlannerPanel({
                 className="btn"
                 disabled={i === stops.length - 1}
                 onClick={() => onMoveStop(i, i + 1)}
-                aria-label={`Move stop ${i + 1} down`}
+                aria-label={t("routePlanner.moveStopDown", { n: i + 1 })}
               >
                 ↓
               </button>
@@ -160,14 +172,16 @@ export function RoutePlannerPanel({
                 type="button"
                 className="btn btn-danger"
                 onClick={() => onRemoveStop(i)}
-                aria-label={`Remove stop ${i + 1}`}
+                aria-label={t("routePlanner.removeStop", { n: i + 1 })}
               >
                 ×
               </button>
             </li>
           ))}
         </ol>
-        {loading && <div className="route-planner-panel-status">Calculating route...</div>}
+        {loading && (
+          <div className="route-planner-panel-status">{t("routePlanner.calculating")}</div>
+        )}
         {error && <div className="route-planner-panel-error">{error}</div>}
         {!loading && !error && alternatives.length > 0 && (
           <>
@@ -185,8 +199,11 @@ export function RoutePlannerPanel({
                       aria-pressed={i === selectedIndex}
                       onClick={() => onSelectAlternative(i)}
                     >
-                      Route {i + 1}: {formatDistance(alt.distanceMeters, unitSystem)} ·{" "}
-                      {formatDuration(alt.durationSeconds)}
+                      {t("routePlanner.routeAlternative", {
+                        n: i + 1,
+                        distance: formatDistance(alt.distanceMeters, unitSystem),
+                        duration: formatDuration(alt.durationSeconds),
+                      })}
                     </button>
                   </li>
                 ))}

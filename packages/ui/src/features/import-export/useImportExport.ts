@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import {
   parseKml,
   parseKmz,
@@ -25,12 +26,13 @@ function downloadBlob(bytes: BlobPart, filename: string, mimeType: string): void
 
 /** File I/O glue: reads/writes via the browser File/Blob APIs (works in both the browser tab and the Tauri webview). */
 export function useImportExport(library: UseLibraryResult) {
+  const { t } = useTranslation();
   return {
     async importFile(file: File): Promise<ImportSummary> {
       const isKmz = file.name.toLowerCase().endsWith(".kmz");
       const isKml = file.name.toLowerCase().endsWith(".kml");
       if (!isKmz && !isKml) {
-        throw new Error(`"${file.name}" is not a .kml or .kmz file.`);
+        throw new Error(t("importExport.notKmlOrKmz", { fileName: file.name }));
       }
 
       let result;
@@ -43,15 +45,21 @@ export function useImportExport(library: UseLibraryResult) {
         }
       } catch (err) {
         throw new Error(
-          `Could not read "${file.name}": ${err instanceof Error ? err.message : String(err)}`,
+          t("importExport.readError", {
+            fileName: file.name,
+            error: err instanceof Error ? err.message : String(err),
+          }),
         );
       }
 
       if (result.folders.length === 0 && result.placemarks.length === 0) {
         throw new Error(
           result.warnings.length > 0
-            ? `"${file.name}" had nothing importable. ${result.warnings.join(" ")}`
-            : `"${file.name}" contained no folders or placemarks.`,
+            ? t("importExport.nothingImportable", {
+                fileName: file.name,
+                warnings: result.warnings.join(" "),
+              })
+            : t("importExport.noFoldersOrPlacemarks", { fileName: file.name }),
         );
       }
 

@@ -20,9 +20,11 @@
     "@terra-globe/storage-indexeddb": "workspace:*",
     "@terra-globe/storage-sqlite": "workspace:*",
     "cesium": "^1.121.1",
+    "i18next": "^23.16.4",
     "lucide-react": "^1.26.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-i18next": "^15.1.0",
     "zustand": "^5.0.1"
   },
   "devDependencies": {

@@ -1,15 +1,18 @@
 import { useCallback, useState } from "react";
 import type { CoordinateFormat, ProviderConfig, SecretStore, UnitSystem } from "@terra-globe/core";
+import { SUPPORTED_LOCALES, type SupportedLocale } from "../../i18n/types.js";
 
 export interface Settings {
   unitSystem: UnitSystem;
   coordinateFormat: CoordinateFormat;
+  language: SupportedLocale;
   providers: ProviderConfig[];
 }
 
 export interface UseSettingsResult extends Settings {
   setUnitSystem: (unitSystem: UnitSystem) => void;
   setCoordinateFormat: (coordinateFormat: CoordinateFormat) => void;
+  setLanguage: (language: SupportedLocale) => void;
   addProvider: (input: Omit<ProviderConfig, "id" | "enabled">) => string;
   setProviderEnabled: (id: string, enabled: boolean) => void;
   removeProvider: (id: string) => void;
@@ -20,6 +23,7 @@ const STORAGE_KEY = "terra-globe:settings";
 const DEFAULT_SETTINGS: Settings = {
   unitSystem: "metric",
   coordinateFormat: "decimal",
+  language: "en",
   providers: [],
 };
 
@@ -29,6 +33,10 @@ function isUnitSystem(value: unknown): value is UnitSystem {
 
 function isCoordinateFormat(value: unknown): value is CoordinateFormat {
   return value === "decimal" || value === "dms";
+}
+
+function isSupportedLocale(value: unknown): value is SupportedLocale {
+  return SUPPORTED_LOCALES.some((locale) => locale.id === value);
 }
 
 function isProviderConfig(value: unknown): value is ProviderConfig {
@@ -61,6 +69,9 @@ function readStoredSettings(): Settings {
       coordinateFormat: isCoordinateFormat(candidate.coordinateFormat)
         ? candidate.coordinateFormat
         : DEFAULT_SETTINGS.coordinateFormat,
+      language: isSupportedLocale(candidate.language)
+        ? candidate.language
+        : DEFAULT_SETTINGS.language,
       providers: Array.isArray(candidate.providers)
         ? candidate.providers.filter(isProviderConfig)
         : DEFAULT_SETTINGS.providers,
@@ -84,6 +95,14 @@ export function useSettings(secretStore: SecretStore): UseSettingsResult {
   const setUnitSystem = useCallback((unitSystem: UnitSystem) => {
     setSettings((prev) => {
       const next = { ...prev, unitSystem };
+      persist(next);
+      return next;
+    });
+  }, []);
+
+  const setLanguage = useCallback((language: SupportedLocale) => {
+    setSettings((prev) => {
+      const next = { ...prev, language };
       persist(next);
       return next;
     });
@@ -140,6 +159,7 @@ export function useSettings(secretStore: SecretStore): UseSettingsResult {
     ...settings,
     setUnitSystem,
     setCoordinateFormat,
+    setLanguage,
     addProvider,
     setProviderEnabled,
     removeProvider,

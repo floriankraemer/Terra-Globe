@@ -20,7 +20,7 @@ test("importing KML with MultiGeometry and a LineString imports everything, incl
 
   const notice = page.getByRole("alert");
   await expect(notice).toBeVisible({ timeout: 15_000 });
-  await expect(notice).toContainText("Imported 4 placemark(s)");
+  await expect(notice).toContainText("Imported 4 placemarks");
   await expect(notice).not.toContainText("skipped");
 
   // MultiGeometry's two polygons become two placemarks; LineString and Point both import too.
@@ -63,7 +63,7 @@ test("importing KML with a Model geometry (e.g. COLLADA .dae, which Cesium can't
 
   const notice = page.getByRole("alert");
   await expect(notice).toBeVisible({ timeout: 15_000 });
-  await expect(notice).toContainText("Imported 2 placemark(s)");
+  await expect(notice).toContainText("Imported 2 placemarks");
   await expect(notice).not.toContainText("skipped");
   await expect(page.getByText("Camp")).toBeVisible();
   await expect(page.locator(".places-panel").getByText("3D Hut")).toBeVisible();

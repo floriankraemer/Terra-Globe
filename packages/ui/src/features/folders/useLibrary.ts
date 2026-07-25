@@ -35,12 +35,15 @@ export interface UseLibraryResult {
   previewPlacemarkEdits: (id: string, edits: { name: string; style: PlacemarkStyleEdits }) => void;
   getPlacemarkStyle: (id: string) => Promise<PlacemarkStyleEdits>;
   importPlaces: (payload: ImportBatchPayload) => Promise<void>;
-  exportAll: () => Promise<{
-    folders: Folder[];
-    placemarks: Placemark[];
-    styles: Style[];
-    screenOverlays: ScreenOverlay[];
-  }>;
+  exportAll: () => Promise<LibrarySnapshot>;
+  restoreSnapshot: (snapshot: LibrarySnapshot) => Promise<void>;
+}
+
+export interface LibrarySnapshot {
+  folders: Folder[];
+  placemarks: Placemark[];
+  styles: Style[];
+  screenOverlays: ScreenOverlay[];
 }
 
 const DEFAULT_STYLE: PlacemarkStyleEdits = {
@@ -301,6 +304,41 @@ export function useLibrary(viewer: Cesium.Viewer | null): UseLibraryResult {
         styles,
         screenOverlays: allScreenOverlays,
       };
+    },
+    async restoreSnapshot(snapshot) {
+      const repo = repoRef.current;
+      const sync = syncRef.current;
+      if (!repo || !sync) return;
+
+      const currentFolders = await collectAllFolders(repo);
+      const currentPlacemarks = await collectAllPlacemarks(repo, currentFolders);
+      const currentScreenOverlays = await collectAllScreenOverlays(repo, currentFolders);
+
+      const targetFolderIds = new Set(snapshot.folders.map((f) => f.id));
+      const targetPlacemarkIds = new Set(snapshot.placemarks.map((p) => p.id));
+      const targetOverlayIds = new Set(snapshot.screenOverlays.map((o) => o.id));
+
+      for (const p of currentPlacemarks) {
+        if (!targetPlacemarkIds.has(p.id)) await repo.deletePlacemark(p.id);
+      }
+      for (const o of currentScreenOverlays) {
+        if (!targetOverlayIds.has(o.id)) await repo.deleteScreenOverlay(o.id);
+      }
+      for (const f of currentFolders) {
+        if (targetFolderIds.has(f.id)) continue;
+        // A prior recursive delete in this loop may already have removed this
+        // folder as a descendant of an earlier one - snapshots are internally
+        // consistent (a folder's ancestors are always included whenever the
+        // folder is), so skipping already-gone folders is safe.
+        if (await repo.getFolder(f.id)) await repo.deleteFolder(f.id, { recursive: true });
+      }
+
+      await repo.importBatch(snapshot);
+
+      sync.removeEntities(currentPlacemarks.map((p) => p.id));
+      await sync.renderPlacemarks(snapshot.placemarks);
+
+      await refresh();
     },
   };
 }

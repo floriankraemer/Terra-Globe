@@ -26,7 +26,7 @@ test("searching an address and selecting a result flies the camera there", async
     return viewer.camera.positionCartographic.height;
   });
 
-  await page.getByLabel("Address").fill("Berlin");
+  await page.locator(".app-topbar").getByLabel("Address").fill("Berlin");
   await page.getByRole("button", { name: "Search" }).click();
   await page.getByRole("button", { name: "Berlin, Germany" }).click();
   await page.waitForTimeout(2500); // let the flyTo animation finish
@@ -51,7 +51,7 @@ test("shows an empty state when a search returns no results", async ({ page }) =
   await page.goto("/");
   await waitForAppReady(page);
 
-  await page.getByLabel("Address").fill("asdkjhasdkjhasd");
+  await page.locator(".app-topbar").getByLabel("Address").fill("asdkjhasdkjhasd");
   await page.getByRole("button", { name: "Search" }).click();
 
   await expect(page.getByText("No results")).toBeVisible();

@@ -46,6 +46,11 @@ export class EntitySynchronizer {
     }
   }
 
+  /** Removes live entities without touching the repository - used to clear stale entities before a full re-render (e.g. undo/redo restore). */
+  removeEntities(ids: string[]): void {
+    for (const id of ids) this.entityFactory.removeEntity({ entityId: id });
+  }
+
   private async collectPlacemarks(folderId: string | null): Promise<Placemark[]> {
     const [placemarks, folders] = await Promise.all([
       this.repository.listPlacemarks(folderId),

@@ -34,11 +34,44 @@ test("planning a route accumulates stops and shows total distance/time", async (
   await expect(panel.getByText(/^Stop 3:/)).toBeVisible();
   await expect(panel.locator(".route-planner-panel-total")).toContainText("min");
 
+  const routeToggle = page
+    .getByRole("toolbar", { name: "Route planner" })
+    .getByRole("button", { name: "Route" });
+
+  // Closing the panel (toggling "Route" off) hides it but keeps the stops.
+  await routeToggle.click();
+  await expect(panel).not.toBeVisible();
+
+  await routeToggle.click();
+  await expect(panel).toBeVisible();
+  await expect(panel.getByText(/^Stop 1:/)).toBeVisible();
+  await expect(panel.getByText(/^Stop 3:/)).toBeVisible();
+});
+
+test("Clear empties the stop list without closing the panel", async ({ page }) => {
+  await page.goto("/");
+  const canvas = page.locator("[data-testid=cesium-viewer] canvas").first();
+  await expect(canvas).toBeVisible();
+  await waitForAppReady(page);
+
   await page
     .getByRole("toolbar", { name: "Route planner" })
-    .getByRole("button", { name: "Cancel" })
+    .getByRole("button", { name: "Route" })
     .click();
-  await expect(panel).not.toBeVisible();
+  await page.getByLabel("Mode").selectOption("train");
+
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error("canvas has no bounding box");
+  await page.mouse.click(box.x + box.width / 2 - 60, box.y + box.height / 2);
+  await page.mouse.click(box.x + box.width / 2 + 60, box.y + box.height / 2);
+
+  const panel = page.locator(".route-planner-panel");
+  await expect(panel.getByText(/^Stop 1:/)).toBeVisible();
+
+  await panel.getByRole("button", { name: "Clear" }).click();
+
+  await expect(panel).toBeVisible();
+  await expect(panel.getByText(/^Stop 1:/)).not.toBeVisible();
 });
 
 test("adding a stop via the panel's search box shows its address, not coordinates", async ({

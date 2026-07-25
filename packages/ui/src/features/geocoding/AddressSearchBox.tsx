@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { GeocodeResult } from "@terra-globe/core";
 import type { GeocodingStatus } from "./useGeocoding.js";
 
@@ -22,6 +23,7 @@ export function AddressSearchBox({
   onSelectResult,
   hideLabel,
 }: AddressSearchBoxProps) {
+  const { t } = useTranslation();
   const [query, setQuery] = useState("");
 
   return (
@@ -34,23 +36,27 @@ export function AddressSearchBox({
         }}
       >
         <label className="address-search-label">
-          <span className={hideLabel ? "visually-hidden" : undefined}>Address</span>
+          <span className={hideLabel ? "visually-hidden" : undefined}>
+            {t("geocoding.addressLabel")}
+          </span>
           <input
             type="text"
             value={query}
             disabled={disabled}
-            placeholder="Search for an address..."
+            placeholder={t("geocoding.placeholder")}
             onChange={(e) => setQuery(e.target.value)}
           />
         </label>
         <button type="submit" className="btn" disabled={disabled || status === "loading"}>
-          {status === "loading" ? "Searching..." : "Search"}
+          {status === "loading" ? t("geocoding.searching") : t("geocoding.search")}
         </button>
       </form>
       {status === "error" && <div className="address-search-error">{error}</div>}
       {status === "ready" && (
         <ul className="address-search-results">
-          {results.length === 0 && <li className="address-search-empty">No results</li>}
+          {results.length === 0 && (
+            <li className="address-search-empty">{t("geocoding.noResults")}</li>
+          )}
           {results.map((result, index) => (
             <li key={`${result.label}-${index}`}>
               <button

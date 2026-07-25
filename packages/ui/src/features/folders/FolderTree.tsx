@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { Folder, Placemark } from "@terra-globe/core";
 import {
   resolveDrop,
@@ -130,6 +131,7 @@ function NewFolderForm({
   disabled: boolean;
   onCreate: (name: string) => void;
 }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
 
@@ -141,7 +143,7 @@ function NewFolderForm({
         disabled={disabled}
         onClick={() => setOpen(true)}
       >
-        New Folder
+        {t("folders.newFolder")}
       </button>
     );
   }
@@ -158,16 +160,16 @@ function NewFolderForm({
       }}
     >
       <input
-        placeholder="Folder name"
+        placeholder={t("folders.folderNamePlaceholder")}
         value={name}
         onChange={(e) => setName(e.target.value)}
         autoFocus
       />
       <button type="submit" className="btn">
-        Create
+        {t("folders.create")}
       </button>
       <button type="button" className="btn" onClick={() => setOpen(false)}>
-        Cancel
+        {t("folders.cancel")}
       </button>
     </form>
   );
@@ -196,6 +198,7 @@ function FolderRow({
   onDeleteFolder: (id: string) => void;
   onToggleFolderVisibility: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState(folder.name);
 
@@ -228,7 +231,11 @@ function FolderRow({
         type="button"
         className="tree-expand-toggle"
         onClick={onToggleExpand}
-        aria-label={expanded ? `Collapse ${folder.name}` : `Expand ${folder.name}`}
+        aria-label={
+          expanded
+            ? t("folders.collapse", { name: folder.name })
+            : t("folders.expand", { name: folder.name })
+        }
         aria-expanded={expanded}
       >
         <ChevronIcon expanded={expanded} />
@@ -237,7 +244,7 @@ function FolderRow({
         type="checkbox"
         checked={folder.visibility}
         onChange={() => onToggleFolderVisibility(folder.id)}
-        aria-label={`Toggle visibility of ${folder.name}`}
+        aria-label={t("folders.toggleFolderVisibility", { name: folder.name })}
       />
       <FolderIcon />
       {editing ? (
@@ -266,10 +273,10 @@ function FolderRow({
       )}
       <span className="tree-row-actions">
         <button type="button" className="btn" onClick={() => setEditing(true)}>
-          Rename
+          {t("folders.rename")}
         </button>
         <button type="button" className="btn btn-danger" onClick={() => onDeleteFolder(folder.id)}>
-          Delete
+          {t("folders.delete")}
         </button>
       </span>
     </span>
@@ -295,6 +302,7 @@ function PlacemarkRow({
   onDeletePlacemark: (id: string) => void;
   onTogglePlacemarkVisibility: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <span
       className={`tree-row${dropClassName(dnd, placemark.id)}`}
@@ -318,7 +326,7 @@ function PlacemarkRow({
         type="checkbox"
         checked={placemark.visibility}
         onChange={() => onTogglePlacemarkVisibility(placemark.id)}
-        aria-label={`Toggle visibility of ${placemark.name}`}
+        aria-label={t("folders.togglePlacemarkVisibility", { name: placemark.name })}
       />
       <button
         type="button"
@@ -334,7 +342,7 @@ function PlacemarkRow({
           className="btn btn-danger"
           onClick={() => onDeletePlacemark(placemark.id)}
         >
-          Delete
+          {t("folders.delete")}
         </button>
       </span>
     </span>

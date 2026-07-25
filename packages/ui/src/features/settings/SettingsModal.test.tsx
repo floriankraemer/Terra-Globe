@@ -18,8 +18,10 @@ function baseProps() {
   return {
     unitSystem: "metric" as const,
     coordinateFormat: "decimal" as const,
+    language: "en" as const,
     onChangeUnitSystem: vi.fn(),
     onChangeCoordinateFormat: vi.fn(),
+    onChangeLanguage: vi.fn(),
     providers: [],
     secretStore: fakeSecretStore(),
     onAddProvider: vi.fn(() => "id"),

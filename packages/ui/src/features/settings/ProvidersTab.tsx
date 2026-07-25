@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   GEOCODING_PRESETS,
   ROUTING_PRESETS,
@@ -29,12 +30,6 @@ const TILE_PRESET_OPTIONS = Object.values(TILE_PRESETS);
 const GEOCODING_PRESET_OPTIONS = Object.values(GEOCODING_PRESETS);
 const ROUTING_PRESET_OPTIONS = Object.values(ROUTING_PRESETS);
 
-const KIND_LABELS: Record<Kind, string> = {
-  tile: "Tile",
-  geocoding: "Geocoding",
-  routing: "Routing",
-};
-
 function presetOptionsFor(kind: Kind) {
   if (kind === "tile") return TILE_PRESET_OPTIONS;
   if (kind === "geocoding") return GEOCODING_PRESET_OPTIONS;
@@ -48,6 +43,18 @@ export function ProvidersTab({
   onSetEnabled,
   onRemove,
 }: ProvidersTabProps) {
+  const { t } = useTranslation();
+  const KIND_LABELS: Record<Kind, string> = {
+    tile: t("providers.kindTile"),
+    geocoding: t("providers.kindGeocoding"),
+    routing: t("providers.kindRouting"),
+  };
+  const STATUS_LABELS: Record<TestStatus, string> = {
+    idle: t("providers.statusIdle"),
+    testing: t("providers.statusTesting"),
+    success: t("providers.statusSuccess"),
+    failure: t("providers.statusFailure"),
+  };
   const [kind, setKind] = useState<Kind>("tile");
   const [presetId, setPresetId] = useState<string>(TILE_PRESET_OPTIONS[0]!.id);
   const [name, setName] = useState("");
@@ -108,12 +115,9 @@ export function ProvidersTab({
 
   return (
     <>
-      <div className="settings-modal-section-header">Providers</div>
+      <div className="settings-modal-section-header">{t("providers.header")}</div>
       {!isTauri() && (
-        <div className="provider-secret-warning">
-          Not running as desktop app — API keys are stored in browser local storage, which is less
-          secure than the OS keychain.
-        </div>
+        <div className="provider-secret-warning">{t("providers.desktopWarning")}</div>
       )}
 
       <ul className="providers-list">
@@ -124,33 +128,33 @@ export function ProvidersTab({
               <span className="provider-item-name">{config.name}</span>
               <span className="provider-item-kind">{KIND_LABELS[config.kind]}</span>
               <span className={`provider-status-badge ${state.status}`} title={state.error}>
-                {state.status}
+                {STATUS_LABELS[state.status]}
               </span>
               <button type="button" className="btn" onClick={() => void handleTest(config)}>
-                Test
+                {t("providers.test")}
               </button>
               <button type="button" className="btn" onClick={() => handleRemove(config.id)}>
-                Remove
+                {t("providers.remove")}
               </button>
             </li>
           );
         })}
         {providers.length === 0 && (
-          <li className="provider-item-empty">No providers configured yet.</li>
+          <li className="provider-item-empty">{t("providers.empty")}</li>
         )}
       </ul>
 
       <form className="provider-add-form" onSubmit={handleSubmit}>
         <label className="placemark-editor-field">
-          Type
+          {t("providers.type")}
           <select value={kind} onChange={(e) => handleKindChange(e.target.value as Kind)}>
-            <option value="tile">Tile (basemap)</option>
-            <option value="geocoding">Geocoding (address search)</option>
-            <option value="routing">Routing (route planner)</option>
+            <option value="tile">{t("providers.tileKind")}</option>
+            <option value="geocoding">{t("providers.geocodingKind")}</option>
+            <option value="routing">{t("providers.routingKind")}</option>
           </select>
         </label>
         <label className="placemark-editor-field">
-          Provider
+          {t("providers.provider")}
           <select value={presetId} onChange={(e) => setPresetId(e.target.value)}>
             {presetOptions.map((preset) => (
               <option key={preset.id} value={preset.id}>
@@ -160,7 +164,7 @@ export function ProvidersTab({
           </select>
         </label>
         <label className="placemark-editor-field">
-          Name
+          {t("providers.name")}
           <input
             type="text"
             value={name}
@@ -169,11 +173,11 @@ export function ProvidersTab({
           />
         </label>
         <label className="placemark-editor-field">
-          API Key
+          {t("providers.apiKey")}
           <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} />
         </label>
         <button type="submit" className="btn">
-          Add Provider
+          {t("providers.addProvider")}
         </button>
       </form>
     </>

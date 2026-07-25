@@ -74,7 +74,7 @@ test("adding and testing a geocoding provider makes it the active search backend
 
   await page.getByRole("button", { name: "Close" }).click();
 
-  await page.getByLabel("Address").fill("Berlin");
+  await page.locator(".app-topbar").getByLabel("Address").fill("Berlin");
   await page.getByRole("button", { name: "Search" }).click();
   await expect(page.getByRole("button", { name: "Berlin, Germany" })).toBeVisible();
 });

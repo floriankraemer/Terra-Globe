@@ -22,10 +22,11 @@ describe("useSettings", () => {
     window.localStorage.clear();
   });
 
-  it("defaults to metric units, decimal coordinates, and no providers", () => {
+  it("defaults to metric units, decimal coordinates, English, and no providers", () => {
     const { result } = renderHook(() => useSettings(fakeSecretStore()));
     expect(result.current.unitSystem).toBe("metric");
     expect(result.current.coordinateFormat).toBe("decimal");
+    expect(result.current.language).toBe("en");
     expect(result.current.providers).toEqual([]);
   });
 
@@ -49,6 +50,25 @@ describe("useSettings", () => {
     expect(JSON.parse(window.localStorage.getItem("terra-globe:settings")!)).toMatchObject({
       coordinateFormat: "dms",
     });
+  });
+
+  it("updates and persists the language", () => {
+    const { result } = renderHook(() => useSettings(fakeSecretStore()));
+
+    act(() => result.current.setLanguage("de"));
+
+    expect(result.current.language).toBe("de");
+    expect(JSON.parse(window.localStorage.getItem("terra-globe:settings")!)).toMatchObject({
+      language: "de",
+    });
+  });
+
+  it("falls back to English for an unsupported stored language", () => {
+    window.localStorage.setItem("terra-globe:settings", JSON.stringify({ language: "xx" }));
+
+    const { result } = renderHook(() => useSettings(fakeSecretStore()));
+
+    expect(result.current.language).toBe("en");
   });
 
   it("reads previously persisted settings on mount", () => {

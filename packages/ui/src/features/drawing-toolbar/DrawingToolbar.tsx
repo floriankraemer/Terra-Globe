@@ -1,3 +1,5 @@
+import { useTranslation } from "react-i18next";
+
 export type DrawingTool = "point" | "rectangle" | "circle" | "polygon" | "line";
 export type DrawingMode = DrawingTool | "idle";
 
@@ -9,13 +11,6 @@ export interface DrawingToolbarProps {
   onCancel: () => void;
 }
 
-const GEOMETRY_TOOLS: { tool: DrawingTool; label: string }[] = [
-  { tool: "rectangle", label: "Rectangle" },
-  { tool: "circle", label: "Circle" },
-  { tool: "polygon", label: "Polygon" },
-  { tool: "line", label: "Line" },
-];
-
 export function DrawingToolbar({
   mode,
   disabled,
@@ -23,10 +18,17 @@ export function DrawingToolbar({
   onFinish,
   onCancel,
 }: DrawingToolbarProps) {
-  const geometryValue = GEOMETRY_TOOLS.some((t) => t.tool === mode) ? mode : "";
+  const { t } = useTranslation();
+  const geometryTools: { tool: DrawingTool; label: string }[] = [
+    { tool: "rectangle", label: t("drawingToolbar.rectangle") },
+    { tool: "circle", label: t("drawingToolbar.circle") },
+    { tool: "polygon", label: t("drawingToolbar.polygon") },
+    { tool: "line", label: t("drawingToolbar.line") },
+  ];
+  const geometryValue = geometryTools.some((entry) => entry.tool === mode) ? mode : "";
 
   return (
-    <div role="toolbar" aria-label="Drawing tools" className="toolbar-group">
+    <div role="toolbar" aria-label={t("drawingToolbar.ariaLabel")} className="toolbar-group">
       <button
         type="button"
         className="btn"
@@ -34,19 +36,19 @@ export function DrawingToolbar({
         disabled={disabled}
         onClick={() => onSelectTool("point")}
       >
-        Marker
+        {t("drawingToolbar.marker")}
       </button>
       <label className="base-layer-select">
-        Geometry
+        {t("drawingToolbar.geometryLabel")}
         <select
           value={geometryValue}
           disabled={disabled}
           onChange={(e) => onSelectTool(e.target.value as DrawingTool)}
         >
           <option value="" disabled>
-            Select shape
+            {t("drawingToolbar.selectShape")}
           </option>
-          {GEOMETRY_TOOLS.map(({ tool, label }) => (
+          {geometryTools.map(({ tool, label }) => (
             <option key={tool} value={tool}>
               {label}
             </option>
@@ -55,12 +57,12 @@ export function DrawingToolbar({
       </label>
       {(mode === "polygon" || mode === "line") && (
         <button type="button" className="btn" onClick={onFinish}>
-          Finish
+          {t("drawingToolbar.finish")}
         </button>
       )}
       {mode !== "idle" && (
         <button type="button" className="btn btn-danger" onClick={onCancel}>
-          Cancel
+          {t("drawingToolbar.cancel")}
         </button>
       )}
     </div>
