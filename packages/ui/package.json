@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host",
+    "prebuild": "node scripts/clean-dist.mjs",
     "build": "tsc -b && vite build",
     "preview": "vite preview --host",
     "test": "vitest run",
