@@ -1,10 +1,14 @@
 FROM node:20-bookworm-slim
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN corepack enable && corepack prepare pnpm@9 --activate
 
 WORKDIR /workspace
 
-COPY package.json pnpm-workspace.yaml ./
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
 COPY packages/core/package.json packages/core/package.json
 COPY packages/map/package.json packages/map/package.json
 COPY packages/storage-indexeddb/package.json packages/storage-indexeddb/package.json
