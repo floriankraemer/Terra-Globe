@@ -1,5 +1,17 @@
 import { generateId } from "./ids.js";
 
+/** Built-in marker icon choices for Point placemarks (sourced from Lucide, see markerIcons.ts). */
+export const MARKER_ICON_IDS = [
+  "map-pin",
+  "pin",
+  "flag",
+  "star",
+  "landmark",
+  "navigation",
+] as const;
+export type MarkerIconId = (typeof MARKER_ICON_IDS)[number];
+export const DEFAULT_MARKER_ICON: MarkerIconId = "map-pin";
+
 export interface StyleHighlight {
   outlineColor?: string;
   outlineWidth?: number;
@@ -20,6 +32,8 @@ export interface Style {
   fillOpacity: number;
   iconUrl?: string;
   iconScale?: number;
+  /** Built-in marker icon for Point placemarks. Ignored when iconUrl (a KML custom icon) is set. */
+  markerIcon?: MarkerIconId;
   labelColor?: string;
   /** From a KML StyleMap's "highlight" pair. Rendering always uses the normal fields above. */
   highlight?: StyleHighlight;
@@ -40,6 +54,7 @@ export interface NewStyle {
   filled?: boolean;
   iconUrl?: string;
   iconScale?: number;
+  markerIcon?: MarkerIconId;
   labelColor?: string;
   highlight?: StyleHighlight;
   balloonText?: string;

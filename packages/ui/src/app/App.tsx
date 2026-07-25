@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type * as Cesium from "cesium";
 import {
   createPointGeometry,
+  DEFAULT_MARKER_ICON,
   NominatimGeocodingProvider,
   OsrmRoutingProvider,
   type GeocodeResult,
@@ -51,6 +52,7 @@ const DEFAULT_STYLE: PlacemarkStyleEdits = {
   outlineWidth: 2,
   filled: false,
   fillColor: "#ff0000",
+  markerIcon: DEFAULT_MARKER_ICON,
 };
 
 export function App() {

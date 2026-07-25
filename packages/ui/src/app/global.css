@@ -91,9 +91,22 @@ button {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-panel);
-  padding: var(--space-2) var(--space-3);
+  /* Matches .toolbar-group's effective height (its space-1 wrapper padding
+     plus a .btn's space-2 padding), since this has no inner button to
+     supply that extra layer of padding itself. Reused (as the "Geometry"
+     dropdown) inside a .toolbar-group too, which already supplies that
+     wrapper padding - there it must match a plain .btn's padding instead,
+     or it ends up taller than its sibling buttons. */
+  padding: var(--space-3);
   font-size: 13px;
   color: var(--color-text-muted);
+}
+
+.toolbar-group .base-layer-select {
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: var(--space-2) var(--space-3);
 }
 
 .base-layer-select select {
@@ -466,6 +479,36 @@ button {
   width: 100%;
 }
 
+.placemark-editor-marker-icons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.placemark-editor-marker-icon-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.placemark-editor-marker-icon-button:hover {
+  background: var(--color-bg-hover);
+}
+
+.placemark-editor-marker-icon-button.selected {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+  background: var(--color-bg-hover);
+}
+
 .placemark-editor-checkbox-field {
   display: flex;
   align-items: center;
@@ -724,6 +767,17 @@ button {
   color: var(--color-text-muted);
   cursor: move;
   user-select: none;
+}
+
+.route-planner-panel-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.route-planner-panel-header-actions .btn {
+  padding: 2px 6px;
+  font-size: 12px;
 }
 
 .route-planner-panel-close {

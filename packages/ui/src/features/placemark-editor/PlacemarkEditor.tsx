@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ConfirmModal } from "../confirm/ConfirmModal.js";
+import { MARKER_ICON_OPTIONS } from "./markerIconOptions.js";
 import {
   circleAreaSquareMeters,
   circleCircumferenceMeters,
@@ -11,6 +12,7 @@ import {
   polygonAreaSquareMeters,
   rectangleAreaSquareMeters,
   type CoordinateFormat,
+  type MarkerIconId,
   type Placemark,
   type UnitSystem,
 } from "@terra-globe/core";
@@ -21,6 +23,7 @@ export interface PlacemarkStyleEdits {
   outlineWidth: number;
   filled: boolean;
   fillColor: string;
+  markerIcon?: MarkerIconId;
 }
 
 export interface PlacemarkEditorProps {
@@ -130,7 +133,8 @@ export function PlacemarkEditor({
     draftStyle.outlineColor !== style.outlineColor ||
     draftStyle.outlineWidth !== style.outlineWidth ||
     draftStyle.filled !== style.filled ||
-    draftStyle.fillColor !== style.fillColor;
+    draftStyle.fillColor !== style.fillColor ||
+    draftStyle.markerIcon !== style.markerIcon;
 
   function requestClose(): void {
     if (isDirty) {
@@ -184,22 +188,49 @@ export function PlacemarkEditor({
       )}
 
       {isPoint && (
-        <label className="placemark-editor-field">
-          Color
-          <input
-            type="color"
-            value={draftStyle.fillColor}
-            onChange={(e) =>
-              setDraftStyle({
-                outlineEnabled: true,
-                outlineColor: e.target.value,
-                outlineWidth: 2,
-                filled: true,
-                fillColor: e.target.value,
-              })
-            }
-          />
-        </label>
+        <>
+          <label className="placemark-editor-field">
+            Color
+            <input
+              type="color"
+              value={draftStyle.fillColor}
+              onChange={(e) =>
+                patchStyle({
+                  outlineEnabled: true,
+                  outlineColor: e.target.value,
+                  outlineWidth: 2,
+                  filled: true,
+                  fillColor: e.target.value,
+                })
+              }
+            />
+          </label>
+          <div className="placemark-editor-field">
+            Marker
+            <div
+              className="placemark-editor-marker-icons"
+              role="radiogroup"
+              aria-label="Marker icon"
+            >
+              {MARKER_ICON_OPTIONS.map(({ id, Icon }) => (
+                <button
+                  key={id}
+                  type="button"
+                  role="radio"
+                  aria-checked={draftStyle.markerIcon === id}
+                  aria-label={id}
+                  className={
+                    "placemark-editor-marker-icon-button" +
+                    (draftStyle.markerIcon === id ? " selected" : "")
+                  }
+                  onClick={() => patchStyle({ markerIcon: id })}
+                >
+                  <Icon size={18} aria-hidden="true" />
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
       )}
 
       {(isLine || isAreaShape) && (

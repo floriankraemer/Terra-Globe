@@ -13,6 +13,7 @@ import {
   type Style,
 } from "@terra-globe/core";
 import type { EntityHandle, IEntityFactory } from "./IEntityFactory.js";
+import { markerIconCanvas } from "./markerIcons.js";
 
 const HEIGHT_REFERENCE = {
   clampToGround: Cesium.HeightReference.CLAMP_TO_GROUND,
@@ -105,6 +106,22 @@ function filled(style: Style | undefined): boolean {
   return style?.filled ?? false;
 }
 
+/** Renders a Point placemark as a colored marker icon rather than a plain dot. */
+function markerBillboard(
+  style: Style | undefined,
+  heightReference?: Cesium.HeightReference,
+): Cesium.BillboardGraphics.ConstructorOptions {
+  return {
+    image: markerIconCanvas(
+      style?.markerIcon,
+      style?.fillColor ?? "#FF0000",
+      style?.outlineColor ?? "#FFFFFF",
+    ),
+    verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+    heightReference,
+  };
+}
+
 function closeRing(ring: GeoPoint[]): GeoPoint[] {
   const first = ring[0]!;
   const last = ring[ring.length - 1]!;
@@ -173,15 +190,12 @@ function toGeometryOptions(
           geometry.coordinates.lat,
           geometry.coordinates.altitude,
         ),
-        point: {
-          pixelSize: 10,
-          color: style ? Cesium.Color.fromCssColorString(style.fillColor) : Cesium.Color.RED,
-          outlineColor: outlineColor(style),
-          outlineWidth: 1,
-          heightReference: geometry.coordinates.altitudeMode
+        billboard: markerBillboard(
+          style,
+          geometry.coordinates.altitudeMode
             ? HEIGHT_REFERENCE[geometry.coordinates.altitudeMode]
             : undefined,
-        },
+        ),
       };
     case "Circle":
       return {
@@ -264,12 +278,7 @@ function toGeometryOptions(
         // marker rather than skip the placemark entirely.
         return {
           position,
-          point: {
-            pixelSize: 10,
-            color: Cesium.Color.RED,
-            outlineColor: Cesium.Color.WHITE,
-            outlineWidth: 1,
-          },
+          billboard: markerBillboard(undefined),
         };
       }
       return {
@@ -299,12 +308,7 @@ function toDynamicGeometryOptions(
           const g = getGeometry() as PointGeometry;
           return Cesium.Cartesian3.fromDegrees(g.coordinates.lon, g.coordinates.lat);
         }, false),
-        point: {
-          pixelSize: 10,
-          color: style ? Cesium.Color.fromCssColorString(style.fillColor) : Cesium.Color.RED,
-          outlineColor: outlineColor(style),
-          outlineWidth: 1,
-        },
+        billboard: markerBillboard(style),
       };
     case "Circle":
       return {
@@ -496,7 +500,9 @@ export class CesiumEntityFactory implements IEntityFactory {
     entity.position = options.position
       ? new Cesium.ConstantPositionProperty(options.position as Cesium.Cartesian3)
       : undefined;
-    entity.point = options.point ? new Cesium.PointGraphics(options.point) : undefined;
+    entity.billboard = options.billboard
+      ? new Cesium.BillboardGraphics(options.billboard)
+      : undefined;
     entity.ellipse = options.ellipse
       ? new Cesium.EllipseGraphics(options.ellipse as Cesium.EllipseGraphics.ConstructorOptions)
       : undefined;

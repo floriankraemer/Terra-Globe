@@ -1,6 +1,7 @@
 import {
   createStyle,
   type Folder,
+  type MarkerIconId,
   type NewPlacemark,
   type Placemark,
   type PlacemarkGeometry,
@@ -16,6 +17,7 @@ export interface PlacemarkStyleEdits {
   outlineWidth: number;
   filled: boolean;
   fillColor: string;
+  markerIcon?: MarkerIconId;
 }
 
 /** Bridges PlacesRepository persistence with live entities in the map's IEntityFactory. */
@@ -141,6 +143,7 @@ export class EntitySynchronizer {
       outlineWidth: edits.outlineWidth,
       filled: edits.filled,
       fillColor: edits.fillColor,
+      markerIcon: edits.markerIcon,
       fillOpacity: FILL_OPACITY,
     });
     await this.repository.upsertStyle(style);
