@@ -56,7 +56,10 @@ button {
   top: var(--space-3);
   left: var(--space-3);
   right: var(--space-3);
-  z-index: 2;
+  /* Higher than .places-panel's z-index so File/View dropdown panels (which
+     extend below the topbar, over the places panel's screen area) aren't
+     painted under it despite coming earlier in the DOM. */
+  z-index: 3;
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -142,6 +145,55 @@ button {
 }
 
 .btn[aria-pressed="true"] {
+  background: var(--color-primary);
+  color: var(--color-primary-fg);
+}
+
+.menu-button {
+  position: relative;
+}
+
+.menu-panel {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  left: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 160px;
+  background: var(--color-bg-panel);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-panel);
+  padding: var(--space-1);
+}
+
+.menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 500;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.menu-item:hover {
+  background: var(--color-bg-hover);
+}
+
+.menu-item:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.menu-item[aria-checked="true"] {
   background: var(--color-primary);
   color: var(--color-primary-fg);
 }

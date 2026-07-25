@@ -13,6 +13,12 @@ export default {
     undo: "Скасувати",
     redo: "Повторити",
   },
+  fileMenu: {
+    trigger: "Файл",
+  },
+  viewMenu: {
+    trigger: "Перегляд",
+  },
   sceneMode: {
     ariaLabel: "Режим перегляду",
     scene3d: "3D",

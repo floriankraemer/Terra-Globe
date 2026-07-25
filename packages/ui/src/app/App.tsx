@@ -28,11 +28,11 @@ import { useGeocoding } from "../features/geocoding/useGeocoding.js";
 import { FolderTree } from "../features/folders/FolderTree.js";
 import { useLibrary } from "../features/folders/useLibrary.js";
 import { UndoRedoToolbar } from "../features/undo-redo/UndoRedoToolbar.js";
-import { SceneModeToolbar } from "../features/scene-mode/SceneModeToolbar.js";
+import { ViewMenu } from "../features/scene-mode/ViewMenu.js";
 import { useUndoRedo } from "../features/undo-redo/useUndoRedo.js";
 import { ScreenOverlayLayer } from "../features/screen-overlays/ScreenOverlayLayer.js";
 import { HeightProfilePanel } from "../features/height-profile/HeightProfilePanel.js";
-import { ImportExportToolbar } from "../features/import-export/ImportExportToolbar.js";
+import { FileMenu } from "../features/import-export/FileMenu.js";
 import { RulerToolbar } from "../features/ruler/RulerToolbar.js";
 import { RulerPanel } from "../features/ruler/RulerPanel.js";
 import { useRuler } from "../features/ruler/useRuler.js";
@@ -279,7 +279,7 @@ export function App() {
             ))}
           </select>
         </label>
-        <SceneModeToolbar mode={sceneMode} onChange={setSceneMode} />
+        <ViewMenu mode={sceneMode} onChange={setSceneMode} />
         <UndoRedoToolbar
           canUndo={undoRedo.canUndo}
           canRedo={undoRedo.canRedo}
@@ -334,7 +334,7 @@ export function App() {
             geocoding.reset();
           }}
         />
-        <ImportExportToolbar
+        <FileMenu
           disabled={!library.ready}
           onImportFile={(file) => {
             importExport

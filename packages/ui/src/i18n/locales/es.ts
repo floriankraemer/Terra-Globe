@@ -13,6 +13,12 @@ export default {
     undo: "Deshacer",
     redo: "Rehacer",
   },
+  fileMenu: {
+    trigger: "Archivo",
+  },
+  viewMenu: {
+    trigger: "Ver",
+  },
   sceneMode: {
     ariaLabel: "Modo de escena",
     scene3d: "3D",

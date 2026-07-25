@@ -13,6 +13,12 @@ export default {
     undo: "Undo",
     redo: "Redo",
   },
+  fileMenu: {
+    trigger: "File",
+  },
+  viewMenu: {
+    trigger: "View",
+  },
   sceneMode: {
     ariaLabel: "Scene mode",
     scene3d: "3D",

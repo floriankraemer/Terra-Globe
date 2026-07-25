@@ -13,6 +13,12 @@ export default {
     undo: "Annuler",
     redo: "Rétablir",
   },
+  fileMenu: {
+    trigger: "Fichier",
+  },
+  viewMenu: {
+    trigger: "Affichage",
+  },
   sceneMode: {
     ariaLabel: "Mode d'affichage",
     scene3d: "3D",
