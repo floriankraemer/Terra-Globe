@@ -13,6 +13,12 @@ export default {
     undo: "Deshacer",
     redo: "Rehacer",
   },
+  sceneMode: {
+    ariaLabel: "Modo de escena",
+    scene3d: "3D",
+    scene2d: "2D",
+    columbus: "Vista Columbus",
+  },
   drawingToolbar: {
     ariaLabel: "Herramientas de dibujo",
     marker: "Marcador",

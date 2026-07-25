@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type * as Cesium from "cesium";
+import { SceneMode } from "cesium";
 import {
   createPointGeometry,
   DEFAULT_MARKER_ICON,
@@ -27,6 +28,7 @@ import { useGeocoding } from "../features/geocoding/useGeocoding.js";
 import { FolderTree } from "../features/folders/FolderTree.js";
 import { useLibrary } from "../features/folders/useLibrary.js";
 import { UndoRedoToolbar } from "../features/undo-redo/UndoRedoToolbar.js";
+import { SceneModeToolbar } from "../features/scene-mode/SceneModeToolbar.js";
 import { useUndoRedo } from "../features/undo-redo/useUndoRedo.js";
 import { ScreenOverlayLayer } from "../features/screen-overlays/ScreenOverlayLayer.js";
 import { HeightProfilePanel } from "../features/height-profile/HeightProfilePanel.js";
@@ -64,6 +66,7 @@ export function App() {
   const defaultTileSource = BUILTIN_TILE_SOURCES[0]!;
   const [baseLayerId, setBaseLayerId] = useState<string>(defaultTileSource.id);
   const [tileSources, setTileSources] = useState<TileSource[]>(BUILTIN_TILE_SOURCES);
+  const [sceneMode, setSceneMode] = useState<Cesium.SceneMode>(SceneMode.SCENE3D);
   const baseLayer: TileSource =
     tileSources.find((source) => source.id === baseLayerId) ?? defaultTileSource;
   const [viewer, setViewer] = useState<Cesium.Viewer | null>(null);
@@ -276,6 +279,7 @@ export function App() {
             ))}
           </select>
         </label>
+        <SceneModeToolbar mode={sceneMode} onChange={setSceneMode} />
         <UndoRedoToolbar
           canUndo={undoRedo.canUndo}
           canRedo={undoRedo.canRedo}
@@ -591,7 +595,7 @@ export function App() {
           onClose={() => setSettingsOpen(false)}
         />
       )}
-      <CesiumViewerHost baseLayer={baseLayer} onReady={onReadyRef.current} />
+      <CesiumViewerHost baseLayer={baseLayer} sceneMode={sceneMode} onReady={onReadyRef.current} />
       <ScreenOverlayLayer overlays={library.screenOverlays} />
     </div>
   );

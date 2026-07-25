@@ -13,6 +13,12 @@ export default {
     undo: "Скасувати",
     redo: "Повторити",
   },
+  sceneMode: {
+    ariaLabel: "Режим перегляду",
+    scene3d: "3D",
+    scene2d: "2D",
+    columbus: "Вигляд Колумба",
+  },
   drawingToolbar: {
     ariaLabel: "Інструменти малювання",
     marker: "Маркер",

@@ -4,6 +4,7 @@ import { openStreetMapSource, type TileSource } from "./imageryProviders/index.j
 export interface CesiumViewerHandle {
   viewer: Cesium.Viewer;
   setBaseLayer(source: TileSource): void;
+  setSceneMode(mode: Cesium.SceneMode): void;
   destroy(): void;
 }
 
@@ -43,9 +44,24 @@ export function createViewer(
 
   setBaseLayer(initialSource);
 
+  function setSceneMode(mode: Cesium.SceneMode): void {
+    switch (mode) {
+      case Cesium.SceneMode.SCENE2D:
+        viewer.scene.morphTo2D(0);
+        break;
+      case Cesium.SceneMode.COLUMBUS_VIEW:
+        viewer.scene.morphToColumbusView(0);
+        break;
+      default:
+        viewer.scene.morphTo3D(0);
+        break;
+    }
+  }
+
   return {
     viewer,
     setBaseLayer,
+    setSceneMode,
     destroy: () => viewer.destroy(),
   };
 }

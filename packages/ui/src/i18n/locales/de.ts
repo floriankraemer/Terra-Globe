@@ -13,6 +13,12 @@ export default {
     undo: "Rückgängig",
     redo: "Wiederholen",
   },
+  sceneMode: {
+    ariaLabel: "Ansichtsmodus",
+    scene3d: "3D",
+    scene2d: "2D",
+    columbus: "Columbus-Ansicht",
+  },
   drawingToolbar: {
     ariaLabel: "Zeichenwerkzeuge",
     marker: "Marker",
