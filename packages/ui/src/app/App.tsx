@@ -78,6 +78,7 @@ export function App() {
   const sidebar = useResizableWidth(260, 200, 600, "terra-globe:sidebarWidth");
   const topbarRef = useRef<HTMLDivElement>(null);
   const [placesPanelTop, setPlacesPanelTop] = useState(76);
+  const [placesSearchQuery, setPlacesSearchQuery] = useState("");
 
   useLayoutEffect(() => {
     const topbar = topbarRef.current;
@@ -390,12 +391,22 @@ export function App() {
       >
         <div className="places-panel-header">{t("folders.placesHeader")}</div>
         <div className="places-panel-content">
+          <div className="places-panel-search">
+            <input
+              type="search"
+              value={placesSearchQuery}
+              disabled={!library.ready}
+              placeholder={t("folders.searchPlaceholder")}
+              onChange={(e) => setPlacesSearchQuery(e.target.value)}
+            />
+          </div>
           <FolderTree
             disabled={!library.ready}
             folders={library.folders}
             placemarks={library.placemarks}
             selectedFolderId={library.selectedFolderId}
             selectedPlacemarkId={selectedPlacemarkId}
+            searchQuery={placesSearchQuery}
             onSelectFolder={library.selectFolder}
             onSelectPlacemark={setSelectedPlacemarkId}
             onFlyToPlacemark={(id) => {

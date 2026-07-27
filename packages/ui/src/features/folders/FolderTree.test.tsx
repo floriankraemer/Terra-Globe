@@ -331,6 +331,103 @@ describe("FolderTree", () => {
     expect(screen.getByText("Berlin")).toBeVisible();
   });
 
+  describe("search filtering", () => {
+    it("hides folders and placemarks that don't match the query", () => {
+      const folders = [
+        folder({ id: "f1", name: "Berlin Trip", parentId: null }),
+        folder({ id: "f2", name: "Paris Trip", parentId: null }),
+      ];
+      render(
+        <FolderTree
+          disabled={false}
+          folders={folders}
+          placemarks={[]}
+          selectedFolderId={null}
+          selectedPlacemarkId={null}
+          searchQuery="berlin"
+          onSelectFolder={noop}
+          onSelectPlacemark={noop}
+          onFlyToPlacemark={noop}
+          onCreateFolder={noop}
+          onRenameFolder={noop}
+          onDeleteFolder={noop}
+          onToggleFolderVisibility={noop}
+          onMoveFolder={noop}
+          onDeletePlacemark={noop}
+          onTogglePlacemarkVisibility={noop}
+          onMovePlacemark={noop}
+        />,
+      );
+
+      expect(screen.getByText("Berlin Trip")).toBeInTheDocument();
+      expect(screen.queryByText("Paris Trip")).not.toBeInTheDocument();
+    });
+
+    it("shows a matched folder's children but starts it collapsed", () => {
+      const folders = [folder({ id: "f1", name: "Berlin Trip", parentId: null })];
+      const placemarks = [placemark({ id: "p1", name: "Brandenburg Gate", folderId: "f1" })];
+      render(
+        <FolderTree
+          disabled={false}
+          folders={folders}
+          placemarks={placemarks}
+          selectedFolderId={null}
+          selectedPlacemarkId={null}
+          searchQuery="berlin"
+          onSelectFolder={noop}
+          onSelectPlacemark={noop}
+          onFlyToPlacemark={noop}
+          onCreateFolder={noop}
+          onRenameFolder={noop}
+          onDeleteFolder={noop}
+          onToggleFolderVisibility={noop}
+          onMoveFolder={noop}
+          onDeletePlacemark={noop}
+          onTogglePlacemarkVisibility={noop}
+          onMovePlacemark={noop}
+        />,
+      );
+
+      expect(screen.getByText("Berlin Trip")).toBeInTheDocument();
+      expect(screen.queryByText("Brandenburg Gate")).not.toBeInTheDocument();
+
+      screen.getByRole("button", { name: "Expand Berlin Trip" });
+    });
+
+    it("keeps an ancestor folder expanded when a descendant placemark matches", () => {
+      const folders = [folder({ id: "f1", name: "Trips", parentId: null })];
+      const placemarks = [
+        placemark({ id: "p1", name: "Berlin", folderId: "f1" }),
+        placemark({ id: "p2", name: "Tokyo", folderId: "f1" }),
+      ];
+      render(
+        <FolderTree
+          disabled={false}
+          folders={folders}
+          placemarks={placemarks}
+          selectedFolderId={null}
+          selectedPlacemarkId={null}
+          searchQuery="berlin"
+          onSelectFolder={noop}
+          onSelectPlacemark={noop}
+          onFlyToPlacemark={noop}
+          onCreateFolder={noop}
+          onRenameFolder={noop}
+          onDeleteFolder={noop}
+          onToggleFolderVisibility={noop}
+          onMoveFolder={noop}
+          onDeletePlacemark={noop}
+          onTogglePlacemarkVisibility={noop}
+          onMovePlacemark={noop}
+        />,
+      );
+
+      expect(screen.getByText("Trips")).toBeInTheDocument();
+      expect(screen.getByText("Berlin")).toBeVisible();
+      expect(screen.queryByText("Tokyo")).not.toBeInTheDocument();
+    });
+  });
+
   // The row-level "before/after/inside" zone logic depends on real
   // getBoundingClientRect() + pointer coordinates, both of which jsdom's
   // DragEvent support fakes too poorly to simulate reliably - that logic is

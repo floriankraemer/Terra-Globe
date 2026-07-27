@@ -88,6 +88,7 @@ export default {
     expand: "Expand {{name}}",
     toggleFolderVisibility: "Toggle visibility of {{name}}",
     togglePlacemarkVisibility: "Toggle visibility of {{name}}",
+    searchPlaceholder: "Search places...",
   },
   heightProfile: {
     ariaLabel: "Elevation profile",

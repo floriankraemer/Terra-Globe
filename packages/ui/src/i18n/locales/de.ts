@@ -88,6 +88,7 @@ export default {
     expand: "{{name}} ausklappen",
     toggleFolderVisibility: "Sichtbarkeit von {{name}} umschalten",
     togglePlacemarkVisibility: "Sichtbarkeit von {{name}} umschalten",
+    searchPlaceholder: "Orte suchen...",
   },
   heightProfile: {
     ariaLabel: "Höhenprofil",

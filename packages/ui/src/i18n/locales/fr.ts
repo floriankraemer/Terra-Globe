@@ -88,6 +88,7 @@ export default {
     expand: "Développer {{name}}",
     toggleFolderVisibility: "Basculer la visibilité de {{name}}",
     togglePlacemarkVisibility: "Basculer la visibilité de {{name}}",
+    searchPlaceholder: "Rechercher des lieux...",
   },
   heightProfile: {
     ariaLabel: "Profil altimétrique",

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Folder, Placemark } from "@terra-globe/core";
 import {
@@ -15,6 +15,8 @@ export interface FolderTreeProps {
   placemarks: Placemark[];
   selectedFolderId: string | null;
   selectedPlacemarkId: string | null;
+  /** Filters visible folders/placemarks by name. Folders matched by name show their full subtree. */
+  searchQuery?: string;
   onSelectFolder: (id: string | null) => void;
   onSelectPlacemark: (id: string) => void;
   onFlyToPlacemark: (id: string) => void;
@@ -26,6 +28,55 @@ export interface FolderTreeProps {
   onDeletePlacemark: (id: string) => void;
   onTogglePlacemarkVisibility: (id: string) => void;
   onMovePlacemark: (id: string, folderId: string | null, index: number) => void;
+}
+
+interface TreeFilter {
+  visibleFolderIds: Set<string>;
+  visiblePlacemarkIds: Set<string>;
+  /** Folders whose own name matched the query - shown collapsed by default so their
+   *  (unfiltered) subtree doesn't dump onto the screen until the user opts in. */
+  collapsedFolderIds: Set<string>;
+}
+
+function nameMatches(name: string, query: string): boolean {
+  return name.toLowerCase().includes(query);
+}
+
+function buildTreeFilter(folders: Folder[], placemarks: Placemark[], query: string): TreeFilter {
+  const q = query.trim().toLowerCase();
+  const visibleFolderIds = new Set<string>();
+  const visiblePlacemarkIds = new Set<string>();
+  const collapsedFolderIds = new Set<string>();
+  const childFoldersOf = (id: string | null) => folders.filter((f) => f.parentId === id);
+  const childPlacemarksOf = (id: string | null) => placemarks.filter((p) => p.folderId === id);
+
+  function visit(folder: Folder, ancestorMatched: boolean): boolean {
+    const ownMatch = nameMatches(folder.name, q);
+    const inherited = ancestorMatched || ownMatch;
+    let hasVisibleDescendant = false;
+    for (const child of childFoldersOf(folder.id)) {
+      if (visit(child, inherited)) hasVisibleDescendant = true;
+    }
+    for (const placemark of childPlacemarksOf(folder.id)) {
+      if (inherited || nameMatches(placemark.name, q)) {
+        visiblePlacemarkIds.add(placemark.id);
+        hasVisibleDescendant = true;
+      }
+    }
+    const visible = inherited || hasVisibleDescendant;
+    if (visible) {
+      visibleFolderIds.add(folder.id);
+      if (ownMatch) collapsedFolderIds.add(folder.id);
+    }
+    return visible;
+  }
+
+  for (const folder of childFoldersOf(null)) visit(folder, false);
+  for (const placemark of childPlacemarksOf(null)) {
+    if (nameMatches(placemark.name, q)) visiblePlacemarkIds.add(placemark.id);
+  }
+
+  return { visibleFolderIds, visiblePlacemarkIds, collapsedFolderIds };
 }
 
 type DropTarget = { id: string; position: DropPosition };
@@ -349,8 +400,10 @@ function PlacemarkRow({
   );
 }
 
-function FolderNode(props: FolderTreeProps & { folder: Folder; dnd: DndContext }) {
-  const [expanded, setExpanded] = useState(true);
+function FolderNode(
+  props: FolderTreeProps & { folder: Folder; dnd: DndContext; filter: TreeFilter | null },
+) {
+  const [expanded, setExpanded] = useState(!props.filter?.collapsedFolderIds.has(props.folder.id));
   return (
     <li>
       <FolderRow
@@ -370,12 +423,16 @@ function FolderNode(props: FolderTreeProps & { folder: Folder; dnd: DndContext }
   );
 }
 
-function FolderChildren(props: FolderTreeProps & { parentId: string | null; dnd: DndContext }) {
+function FolderChildren(
+  props: FolderTreeProps & { parentId: string | null; dnd: DndContext; filter: TreeFilter | null },
+) {
   const childFolders = props.folders
     .filter((f) => f.parentId === props.parentId)
+    .filter((f) => !props.filter || props.filter.visibleFolderIds.has(f.id))
     .sort((a, b) => a.order - b.order);
   const childPlacemarks = props.placemarks
     .filter((p) => p.folderId === props.parentId)
+    .filter((p) => !props.filter || props.filter.visiblePlacemarkIds.has(p.id))
     .sort((a, b) => a.order - b.order);
 
   return (
@@ -419,9 +476,15 @@ function FolderChildren(props: FolderTreeProps & { parentId: string | null; dnd:
 
 export function FolderTree(props: FolderTreeProps) {
   const dnd = useDnd(props);
+  const query = props.searchQuery ?? "";
+  const filter = useMemo(
+    () => (query.trim() ? buildTreeFilter(props.folders, props.placemarks, query) : null),
+    [props.folders, props.placemarks, query],
+  );
   return (
     <div className="tree">
-      <FolderChildren {...props} parentId={null} dnd={dnd} />
+      {/* Remount on query change so each FolderNode re-derives its default expanded state. */}
+      <FolderChildren key={query} {...props} parentId={null} dnd={dnd} filter={filter} />
     </div>
   );
 }

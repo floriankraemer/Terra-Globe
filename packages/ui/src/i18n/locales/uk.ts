@@ -88,6 +88,7 @@ export default {
     expand: "Розгорнути {{name}}",
     toggleFolderVisibility: "Перемкнути видимість {{name}}",
     togglePlacemarkVisibility: "Перемкнути видимість {{name}}",
+    searchPlaceholder: "Пошук місць...",
   },
   heightProfile: {
     ariaLabel: "Профіль висот",
