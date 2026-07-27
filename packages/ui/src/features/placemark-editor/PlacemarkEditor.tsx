@@ -5,16 +5,21 @@ import { MARKER_ICON_OPTIONS } from "./markerIconOptions.js";
 import {
   circleAreaSquareMeters,
   circleCircumferenceMeters,
+  distanceUnitLabel,
   formatArea,
   formatCoordinate,
   formatDistance,
   geometryCenter,
   hasElevationData,
+  metersToUnit,
   polygonAreaSquareMeters,
   rectangleAreaSquareMeters,
+  unitToMeters,
+  type CircleGeometry,
   type CoordinateFormat,
   type MarkerIconId,
   type Placemark,
+  type PlacemarkGeometry,
   type UnitSystem,
 } from "@terra-globe/core";
 
@@ -32,12 +37,23 @@ export interface PlacemarkEditorProps {
   style: PlacemarkStyleEdits;
   unitSystem?: UnitSystem;
   coordinateFormat?: CoordinateFormat;
-  onSave: (patch: { name: string; description: string; style: PlacemarkStyleEdits }) => void;
+  onSave: (patch: {
+    name: string;
+    description: string;
+    style: PlacemarkStyleEdits;
+    visibility: boolean;
+    geometry: PlacemarkGeometry;
+  }) => void;
   onClose: () => void;
   onDelete: () => void;
   onDragStart?: (e: React.MouseEvent) => void;
   /** Called on every draft change (and once more, with the original values, on unsaved close/unmount) so the live map entity can preview edits before Save. */
-  onPreview?: (patch: { name: string; style: PlacemarkStyleEdits }) => void;
+  onPreview?: (patch: {
+    name: string;
+    style: PlacemarkStyleEdits;
+    visibility: boolean;
+    geometry: PlacemarkGeometry;
+  }) => void;
   onShowElevationProfile?: () => void;
 }
 
@@ -48,12 +64,14 @@ function geometryMeasurements(
 ): { label: string; value: string }[] {
   if (geometry.type === "Circle") {
     return [
-      { label: t("placemarkEditor.radius"), value: formatDistance(geometry.radiusMeters, unitSystem) },
       {
         label: t("placemarkEditor.circumference"),
         value: formatDistance(circleCircumferenceMeters(geometry), unitSystem),
       },
-      { label: t("placemarkEditor.area"), value: formatArea(circleAreaSquareMeters(geometry), unitSystem) },
+      {
+        label: t("placemarkEditor.area"),
+        value: formatArea(circleAreaSquareMeters(geometry), unitSystem),
+      },
     ];
   }
   if (geometry.type === "Rectangle") {
@@ -99,8 +117,24 @@ export function PlacemarkEditor({
   const [name, setName] = useState(placemark.name);
   const [description, setDescription] = useState(placemark.description ?? "");
   const [draftStyle, setDraftStyle] = useState(style);
+  const [visible, setVisible] = useState(placemark.visibility);
+  const [draftRadiusMeters, setDraftRadiusMeters] = useState(
+    geometryType === "Circle" ? (placemark.geometry as CircleGeometry).radiusMeters : 0,
+  );
+  // Decoupled from draftRadiusMeters so an in-progress edit (e.g. clearing
+  // the field to type a new value) isn't snapped back to the last valid
+  // number on every keystroke - only committed to draftRadiusMeters once it
+  // parses to a positive number.
+  const [radiusText, setRadiusText] = useState(() =>
+    String(metersToUnit(draftRadiusMeters, unitSystem)),
+  );
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [confirmingClose, setConfirmingClose] = useState(false);
+
+  const draftGeometry: PlacemarkGeometry =
+    geometryType === "Circle"
+      ? { ...(placemark.geometry as CircleGeometry), radiusMeters: draftRadiusMeters }
+      : placemark.geometry;
 
   // `style` is resolved via a separate async Style lookup, so it can arrive
   // after this component has already mounted with the caller's placeholder
@@ -118,8 +152,18 @@ export function PlacemarkEditor({
 
   // Last-persisted name/style, refreshed every render so it stays correct
   // even if the async `style` prop above resolves after mount.
-  const originalRef = useRef({ name: placemark.name, style });
-  originalRef.current = { name: placemark.name, style };
+  const originalRef = useRef({
+    name: placemark.name,
+    style,
+    visibility: placemark.visibility,
+    geometry: placemark.geometry,
+  });
+  originalRef.current = {
+    name: placemark.name,
+    style,
+    visibility: placemark.visibility,
+    geometry: placemark.geometry,
+  };
 
   // A successful Save/Delete already leaves the live entity in the correct
   // state (new persisted style, or removed) - skip the unmount revert then.
@@ -130,8 +174,13 @@ export function PlacemarkEditor({
   // its "revert on close" is already free since it's never pushed anywhere
   // until Save.
   useEffect(() => {
-    onPreviewRef.current?.({ name, style: draftStyle });
-  }, [name, draftStyle]);
+    onPreviewRef.current?.({
+      name,
+      style: draftStyle,
+      visibility: visible,
+      geometry: draftGeometry,
+    });
+  }, [name, draftStyle, visible, draftGeometry]);
 
   useEffect(() => {
     return () => {
@@ -147,7 +196,10 @@ export function PlacemarkEditor({
     draftStyle.outlineWidth !== style.outlineWidth ||
     draftStyle.filled !== style.filled ||
     draftStyle.fillColor !== style.fillColor ||
-    draftStyle.markerIcon !== style.markerIcon;
+    draftStyle.markerIcon !== style.markerIcon ||
+    visible !== placemark.visibility ||
+    (geometryType === "Circle" &&
+      draftRadiusMeters !== (placemark.geometry as CircleGeometry).radiusMeters);
 
   function requestClose(): void {
     if (isDirty) {
@@ -164,7 +216,13 @@ export function PlacemarkEditor({
       onSubmit={(e) => {
         e.preventDefault();
         suppressRevertRef.current = true;
-        onSave({ name, description, style: draftStyle });
+        onSave({
+          name,
+          description,
+          style: draftStyle,
+          visibility: visible,
+          geometry: draftGeometry,
+        });
       }}
     >
       <div className="placemark-editor-header" onMouseDown={onDragStart}>
@@ -179,12 +237,39 @@ export function PlacemarkEditor({
         {t("placemarkEditor.description")}
         <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
       </label>
+      <label className="placemark-editor-checkbox-field">
+        <input type="checkbox" checked={visible} onChange={(e) => setVisible(e.target.checked)} />
+        {t("placemarkEditor.visible")}
+      </label>
       <div className="placemark-editor-field">
         {isPoint ? t("placemarkEditor.location") : t("placemarkEditor.center")}
         <div className="placemark-editor-coordinates">
           {formatCoordinate(center, coordinateFormat)}
         </div>
       </div>
+
+      {geometryType === "Circle" && (
+        <div className="placemark-editor-field">
+          <label htmlFor="placemark-editor-radius">{t("placemarkEditor.radius")}</label>
+          <div className="placemark-editor-radius-input">
+            <input
+              id="placemark-editor-radius"
+              type="number"
+              min={0.01}
+              step="any"
+              value={radiusText}
+              onChange={(e) => {
+                setRadiusText(e.target.value);
+                const next = Number(e.target.value);
+                if (Number.isFinite(next) && next > 0) {
+                  setDraftRadiusMeters(unitToMeters(next, unitSystem));
+                }
+              }}
+            />
+            <span>{distanceUnitLabel(unitSystem)}</span>
+          </div>
+        </div>
+      )}
 
       {measurements.length > 0 && (
         <div className="placemark-editor-field">
@@ -346,7 +431,13 @@ export function PlacemarkEditor({
           onExtra={() => {
             setConfirmingClose(false);
             suppressRevertRef.current = true;
-            onSave({ name, description, style: draftStyle });
+            onSave({
+              name,
+              description,
+              style: draftStyle,
+              visibility: visible,
+              geometry: draftGeometry,
+            });
           }}
           onConfirm={() => {
             setConfirmingClose(false);

@@ -125,6 +125,7 @@ export default {
     id: "ID: {{id}}",
     name: "Назва",
     description: "Опис",
+    visible: "Видимий",
     location: "Розташування",
     center: "Центр",
     measurements: "Виміри",

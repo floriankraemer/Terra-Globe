@@ -7,6 +7,8 @@ export * from "./domain/units.js";
 export * from "./domain/style.js";
 export * from "./domain/folder.js";
 export * from "./domain/placemark.js";
+export * from "./domain/visibility.js";
+export * from "./domain/geometryTranslate.js";
 export * from "./domain/screenOverlay.js";
 export * from "./domain/ids.js";
 export * from "./storage/PlacesRepository.js";

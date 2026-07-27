@@ -126,6 +126,7 @@ export default {
     id: "ID: {{id}}",
     name: "Name",
     description: "Beschreibung",
+    visible: "Sichtbar",
     location: "Standort",
     center: "Mittelpunkt",
     measurements: "Messungen",

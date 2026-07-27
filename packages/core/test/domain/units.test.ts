@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  distanceUnitLabel,
   formatArea,
   formatCoordinate,
   formatDistance,
   formatDuration,
+  metersToUnit,
+  unitToMeters,
 } from "../../src/domain/units.js";
 
 describe("formatDistance", () => {
@@ -77,5 +80,31 @@ describe("formatCoordinate", () => {
     expect(formatCoordinate({ lat: -33.87, lon: -151.21 }, "dms")).toBe(
       `33°52'12.00"S, 151°12'36.00"W`,
     );
+  });
+});
+
+describe("metersToUnit / unitToMeters", () => {
+  it("passes meters through unchanged for metric", () => {
+    expect(metersToUnit(100, "metric")).toBe(100);
+    expect(unitToMeters(100, "metric")).toBe(100);
+  });
+
+  it("converts meters to feet and back for imperial", () => {
+    expect(metersToUnit(30.48, "imperial")).toBeCloseTo(100, 5);
+    expect(unitToMeters(100, "imperial")).toBeCloseTo(30.48, 5);
+  });
+
+  it("round-trips through both unit systems", () => {
+    for (const system of ["metric", "imperial"] as const) {
+      const meters = 42.5;
+      expect(unitToMeters(metersToUnit(meters, system), system)).toBeCloseTo(meters, 6);
+    }
+  });
+});
+
+describe("distanceUnitLabel", () => {
+  it("returns m for metric and ft for imperial", () => {
+    expect(distanceUnitLabel("metric")).toBe("m");
+    expect(distanceUnitLabel("imperial")).toBe("ft");
   });
 });

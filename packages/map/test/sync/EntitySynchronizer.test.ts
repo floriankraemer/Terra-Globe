@@ -217,6 +217,111 @@ describe("EntitySynchronizer", () => {
     expect(await repo.getPlacemark(placemark.id)).toBeNull();
   });
 
+  it("beginLiveGeometryEdit returns a setter that updates the live entity's geometry", async () => {
+    const repo = new InMemoryPlacesRepository();
+    const factory = new FakeEntityFactory();
+    const sync = new EntitySynchronizer(repo, factory);
+    const placemark = await sync.persistPlacemark({
+      name: "Spot",
+      folderId: null,
+      geometry: createPointGeometry({ lon: 0, lat: 0 }),
+    });
+    const nextGeometry = createPointGeometry({ lon: 1, lat: 1 });
+
+    const setGeometry = sync.beginLiveGeometryEdit(placemark.id, placemark.geometry, {
+      outlineEnabled: true,
+      outlineColor: "#ff0000",
+      outlineWidth: 2,
+      filled: false,
+      fillColor: "#ff0000",
+    });
+    setGeometry(nextGeometry);
+
+    expect(factory.entities.get(placemark.id)?.geometry).toEqual(nextGeometry);
+  });
+
+  it("setVisible toggles the live entity's visibility", async () => {
+    const repo = new InMemoryPlacesRepository();
+    const factory = new FakeEntityFactory();
+    const sync = new EntitySynchronizer(repo, factory);
+    const placemark = await sync.persistPlacemark({
+      name: "Spot",
+      folderId: null,
+      geometry: createPointGeometry({ lon: 0, lat: 0 }),
+    });
+
+    sync.setVisible(placemark.id, false);
+    expect(factory.entities.get(placemark.id)?.visible).toBe(false);
+
+    sync.setVisible(placemark.id, true);
+    expect(factory.entities.get(placemark.id)?.visible).toBe(true);
+  });
+
+  it("previewPlacemark also applies visibility to the live entity when given", async () => {
+    const repo = new InMemoryPlacesRepository();
+    const factory = new FakeEntityFactory();
+    const sync = new EntitySynchronizer(repo, factory);
+    const placemark = await sync.persistPlacemark({
+      name: "Old",
+      folderId: null,
+      geometry: createPointGeometry({ lon: 0, lat: 0 }),
+    });
+
+    sync.previewPlacemark(
+      placemark.id,
+      placemark.geometry,
+      "Draft name",
+      {
+        outlineEnabled: true,
+        outlineColor: "#00ff00",
+        outlineWidth: 3,
+        filled: true,
+        fillColor: "#00ff00",
+      },
+      false,
+    );
+
+    expect(factory.entities.get(placemark.id)?.visible).toBe(false);
+  });
+
+  it("savePlacemarkEdits persists visibility and geometry changes", async () => {
+    const repo = new InMemoryPlacesRepository();
+    const factory = new FakeEntityFactory();
+    const sync = new EntitySynchronizer(repo, factory);
+    const placemark = await sync.persistPlacemark({
+      name: "Old",
+      folderId: null,
+      geometry: createPointGeometry({ lon: 0, lat: 0 }),
+    });
+    const newGeometry = createPointGeometry({ lon: 1, lat: 1 });
+
+    const updated = await sync.savePlacemarkEdits(placemark.id, {
+      name: "New",
+      visibility: false,
+      geometry: newGeometry,
+    });
+
+    expect(updated.visibility).toBe(false);
+    expect(updated.geometry).toEqual(newGeometry);
+    expect(await repo.getPlacemark(placemark.id)).toEqual(updated);
+  });
+
+  it("savePlacemarkEdits with visibility=false does not get clobbered by an undefined edit", async () => {
+    const repo = new InMemoryPlacesRepository();
+    const factory = new FakeEntityFactory();
+    const sync = new EntitySynchronizer(repo, factory);
+    const placemark = await sync.persistPlacemark({
+      name: "Old",
+      folderId: null,
+      geometry: createPointGeometry({ lon: 0, lat: 0 }),
+    });
+    await sync.savePlacemarkEdits(placemark.id, { name: "Old", visibility: false });
+
+    const updated = await sync.savePlacemarkEdits(placemark.id, { name: "New" });
+
+    expect(updated.visibility).toBe(false);
+  });
+
   it("removeEntities removes live entities without touching the repository", async () => {
     const repo = new InMemoryPlacesRepository();
     const factory = new FakeEntityFactory();

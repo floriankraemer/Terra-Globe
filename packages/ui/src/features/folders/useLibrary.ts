@@ -9,6 +9,7 @@ import type {
   ScreenOverlay,
   Style,
 } from "@terra-globe/core";
+import { isPlacemarkVisible } from "@terra-globe/core";
 import {
   CesiumEntityFactory,
   EntitySynchronizer,
@@ -34,11 +35,30 @@ export interface UseLibraryResult {
   addPlacemark: (geometry: PlacemarkGeometry) => Promise<string | undefined>;
   savePlacemarkEdits: (
     id: string,
-    edits: { name: string; description: string; style: PlacemarkStyleEdits },
+    edits: {
+      name: string;
+      description: string;
+      style: PlacemarkStyleEdits;
+      visibility: boolean;
+      geometry: PlacemarkGeometry;
+    },
   ) => Promise<void>;
-  previewPlacemarkEdits: (id: string, edits: { name: string; style: PlacemarkStyleEdits }) => void;
+  previewPlacemarkEdits: (
+    id: string,
+    edits: {
+      name: string;
+      style: PlacemarkStyleEdits;
+      visibility: boolean;
+      geometry: PlacemarkGeometry;
+    },
+  ) => void;
   getPlacemarkStyle: (id: string) => Promise<PlacemarkStyleEdits>;
   importPlaces: (payload: ImportBatchPayload) => Promise<void>;
+  updatePlacemarkGeometry: (id: string, geometry: PlacemarkGeometry) => Promise<void>;
+  beginPlacemarkDrag: (
+    id: string,
+    style: PlacemarkStyleEdits,
+  ) => ((geometry: PlacemarkGeometry) => void) | undefined;
   exportAll: () => Promise<LibrarySnapshot>;
   restoreSnapshot: (snapshot: LibrarySnapshot) => Promise<void>;
 }
@@ -116,6 +136,14 @@ export function useLibrary(viewer: Cesium.Viewer | null): UseLibraryResult {
   // started refresh's result.
   const refreshSeqRef = useRef(0);
 
+  function applyVisibility(allFolders: Folder[], allPlacemarks: Placemark[]): void {
+    const sync = syncRef.current;
+    if (!sync) return;
+    for (const placemark of allPlacemarks) {
+      sync.setVisible(placemark.id, isPlacemarkVisible(allFolders, placemark));
+    }
+  }
+
   async function refresh(): Promise<void> {
     const repo = repoRef.current;
     if (!repo) return;
@@ -127,6 +155,7 @@ export function useLibrary(viewer: Cesium.Viewer | null): UseLibraryResult {
     setFolders(allFolders);
     setPlacemarks(allPlacemarks);
     setScreenOverlays(allScreenOverlays);
+    applyVisibility(allFolders, allPlacemarks);
   }
 
   useEffect(() => {
@@ -259,6 +288,8 @@ export function useLibrary(viewer: Cesium.Viewer | null): UseLibraryResult {
         name: edits.name,
         description: edits.description.trim().length > 0 ? edits.description : undefined,
         style: edits.style,
+        visibility: edits.visibility,
+        geometry: edits.geometry,
       });
       await refresh();
     },
@@ -266,7 +297,7 @@ export function useLibrary(viewer: Cesium.Viewer | null): UseLibraryResult {
       const sync = syncRef.current;
       const placemark = placemarks.find((p) => p.id === id);
       if (!sync || !placemark) return;
-      sync.previewPlacemark(id, placemark.geometry, edits.name, edits.style);
+      sync.previewPlacemark(id, edits.geometry, edits.name, edits.style, edits.visibility);
     },
     async getPlacemarkStyle(id) {
       const repo = repoRef.current;
@@ -289,6 +320,18 @@ export function useLibrary(viewer: Cesium.Viewer | null): UseLibraryResult {
       await repo.importBatch(payload);
       await sync.renderPlacemarks(payload.placemarks);
       await refresh();
+    },
+    async updatePlacemarkGeometry(id, geometry) {
+      const sync = syncRef.current;
+      if (!sync) return;
+      await sync.updatePlacemark(id, { geometry });
+      await refresh();
+    },
+    beginPlacemarkDrag(id, style) {
+      const sync = syncRef.current;
+      const placemark = placemarks.find((p) => p.id === id);
+      if (!sync || !placemark) return undefined;
+      return sync.beginLiveGeometryEdit(id, placemark.geometry, style);
     },
     async exportAll() {
       const repo = repoRef.current;

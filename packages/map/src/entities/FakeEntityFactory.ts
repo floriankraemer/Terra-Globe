@@ -5,6 +5,7 @@ export interface FakeEntity {
   geometry: PlacemarkGeometry;
   style?: Style;
   name?: string;
+  visible: boolean;
 }
 
 /** In-memory test double for IEntityFactory used by unit tests. */
@@ -20,7 +21,7 @@ export class FakeEntityFactory implements IEntityFactory {
     name?: string,
   ): EntityHandle {
     const entityId = id ?? `fake-entity-${this.nextId++}`;
-    this.entities.set(entityId, { geometry, style, name });
+    this.entities.set(entityId, { geometry, style, name, visible: true });
     return { entityId };
   }
 
@@ -30,14 +31,29 @@ export class FakeEntityFactory implements IEntityFactory {
     style?: Style,
     name?: string,
   ): void {
-    if (!this.entities.has(handle.entityId)) {
+    const existing = this.entities.get(handle.entityId);
+    if (!existing) {
       throw new Error(`Unknown entity: ${handle.entityId}`);
     }
-    this.entities.set(handle.entityId, { geometry, style, name });
+    this.entities.set(handle.entityId, { geometry, style, name, visible: existing.visible });
   }
 
   removeEntity(handle: EntityHandle): void {
     this.entities.delete(handle.entityId);
     this.removed.add(handle.entityId);
+  }
+
+  setVisible(handle: EntityHandle, visible: boolean): void {
+    const existing = this.entities.get(handle.entityId);
+    if (existing) existing.visible = visible;
+  }
+
+  beginLiveGeometryEdit(
+    handle: EntityHandle,
+    initialGeometry: PlacemarkGeometry,
+    style?: Style,
+  ): (geometry: PlacemarkGeometry) => void {
+    this.updateEntity(handle, initialGeometry, style);
+    return (geometry: PlacemarkGeometry) => this.updateEntity(handle, geometry, style);
   }
 }

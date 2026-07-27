@@ -85,6 +85,8 @@ describe("PlacemarkEditor - Point (marker)", () => {
         filled: true,
         fillColor: "#00ff00",
       },
+      visibility: true,
+      geometry: placemark().geometry,
     });
   });
 
@@ -224,6 +226,68 @@ describe("PlacemarkEditor - Point (marker)", () => {
   });
 });
 
+describe("PlacemarkEditor - visibility", () => {
+  it("reflects the placemark's visibility in the checkbox", () => {
+    render(
+      <PlacemarkEditor
+        placemark={placemark({ visibility: false })}
+        style={style()}
+        onSave={vi.fn()}
+        onClose={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByLabelText("Visible")).not.toBeChecked();
+  });
+
+  it("toggling the checkbox previews and saves the new visibility", async () => {
+    const onSave = vi.fn();
+    const onPreview = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <PlacemarkEditor
+        placemark={placemark()}
+        style={style()}
+        onSave={onSave}
+        onClose={vi.fn()}
+        onDelete={vi.fn()}
+        onPreview={onPreview}
+      />,
+    );
+
+    await user.click(screen.getByLabelText("Visible"));
+
+    expect(onPreview).toHaveBeenLastCalledWith(expect.objectContaining({ visibility: false }));
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ visibility: false }));
+  });
+
+  it("reverts the visibility preview on unsaved unmount", async () => {
+    const onPreview = vi.fn();
+    const user = userEvent.setup();
+    const { unmount } = render(
+      <PlacemarkEditor
+        placemark={placemark()}
+        style={style()}
+        onSave={vi.fn()}
+        onClose={vi.fn()}
+        onDelete={vi.fn()}
+        onPreview={onPreview}
+      />,
+    );
+
+    await user.click(screen.getByLabelText("Visible"));
+    onPreview.mockClear();
+
+    unmount();
+
+    expect(onPreview).toHaveBeenLastCalledWith(expect.objectContaining({ visibility: true }));
+  });
+});
+
 describe("PlacemarkEditor - live preview", () => {
   it("previews a color change on mount and again on every change", () => {
     const onPreview = vi.fn();
@@ -244,6 +308,8 @@ describe("PlacemarkEditor - live preview", () => {
     expect(onPreview).toHaveBeenCalledWith({
       name: "Berlin",
       style: expect.objectContaining({ fillColor: "#00ff00", outlineColor: "#00ff00" }),
+      visibility: true,
+      geometry: placemark().geometry,
     });
   });
 
@@ -268,7 +334,12 @@ describe("PlacemarkEditor - live preview", () => {
 
     unmount();
 
-    expect(onPreview).toHaveBeenCalledWith({ name: "Berlin", style: style() });
+    expect(onPreview).toHaveBeenCalledWith({
+      name: "Berlin",
+      style: style(),
+      visibility: true,
+      geometry: placemark().geometry,
+    });
   });
 
   it("does not revert the preview after a successful Save", async () => {
@@ -678,7 +749,7 @@ describe("PlacemarkEditor - area shapes (circle/rectangle/polygon)", () => {
 });
 
 describe("PlacemarkEditor - measurements", () => {
-  it("shows radius, circumference and area in meters for a circle", () => {
+  it("shows an editable radius input plus circumference and area for a circle", () => {
     render(
       <PlacemarkEditor
         placemark={placemark({
@@ -692,11 +763,44 @@ describe("PlacemarkEditor - measurements", () => {
     );
 
     expect(screen.getByText("Radius")).toBeInTheDocument();
-    expect(screen.getByText("1.00 km")).toBeInTheDocument();
+    expect(screen.getByRole("spinbutton", { name: "Radius" })).toHaveValue(1000);
     expect(screen.getByText("Circumference")).toBeInTheDocument();
     expect(screen.getByText("6.28 km")).toBeInTheDocument();
     expect(screen.getByText("Area")).toBeInTheDocument();
     expect(screen.getByText("3.14 km²")).toBeInTheDocument();
+  });
+
+  it("editing the radius input previews and saves the updated geometry", async () => {
+    const onSave = vi.fn();
+    const onPreview = vi.fn();
+    const user = userEvent.setup();
+    const circlePlacemark = placemark({
+      geometry: { type: "Circle", center: { lon: 0, lat: 0 }, radiusMeters: 1000 },
+    });
+    render(
+      <PlacemarkEditor
+        placemark={circlePlacemark}
+        style={style()}
+        onSave={onSave}
+        onClose={vi.fn()}
+        onDelete={vi.fn()}
+        onPreview={onPreview}
+      />,
+    );
+
+    const radiusInput = screen.getByRole("spinbutton", { name: "Radius" });
+    await user.clear(radiusInput);
+    await user.type(radiusInput, "2000");
+
+    expect(onPreview).toHaveBeenLastCalledWith(
+      expect.objectContaining({ geometry: { ...circlePlacemark.geometry, radiusMeters: 2000 } }),
+    );
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSave).toHaveBeenCalledWith(
+      expect.objectContaining({ geometry: { ...circlePlacemark.geometry, radiusMeters: 2000 } }),
+    );
   });
 
   it("shows area in square meters for a rectangle", () => {

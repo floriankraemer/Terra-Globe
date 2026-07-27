@@ -51,6 +51,20 @@ export class EntitySynchronizer {
     for (const id of ids) this.entityFactory.removeEntity({ entityId: id });
   }
 
+  setVisible(id: string, visible: boolean): void {
+    this.entityFactory.setVisible({ entityId: id }, visible);
+  }
+
+  /** See IEntityFactory.beginLiveGeometryEdit - used for the drag-to-move preview. */
+  beginLiveGeometryEdit(
+    id: string,
+    initialGeometry: PlacemarkGeometry,
+    styleEdits: PlacemarkStyleEdits,
+  ): (geometry: PlacemarkGeometry) => void {
+    const style = createStyle({ ...styleEdits, fillOpacity: FILL_OPACITY });
+    return this.entityFactory.beginLiveGeometryEdit({ entityId: id }, initialGeometry, style);
+  }
+
   private async collectPlacemarks(folderId: string | null): Promise<Placemark[]> {
     const [placemarks, folders] = await Promise.all([
       this.repository.listPlacemarks(folderId),
@@ -98,9 +112,11 @@ export class EntitySynchronizer {
     geometry: PlacemarkGeometry,
     name: string,
     styleEdits: PlacemarkStyleEdits,
+    visible?: boolean,
   ): void {
     const style = createStyle({ ...styleEdits, fillOpacity: FILL_OPACITY });
     this.entityFactory.updateEntity({ entityId: id }, geometry, style, name);
+    if (visible !== undefined) this.entityFactory.setVisible({ entityId: id }, visible);
   }
 
   /** Creates a solid-colored (outlined + filled) style for a placemark - used by markers. */
@@ -125,13 +141,21 @@ export class EntitySynchronizer {
    */
   async savePlacemarkEdits(
     id: string,
-    edits: { name: string; description?: string; style?: PlacemarkStyleEdits },
+    edits: {
+      name: string;
+      description?: string;
+      style?: PlacemarkStyleEdits;
+      visibility?: boolean;
+      geometry?: PlacemarkGeometry;
+    },
   ): Promise<Placemark> {
     const styleId = edits.style ? (await this.createStyleFromEdits(edits.style)).id : undefined;
     return this.updatePlacemark(id, {
       name: edits.name,
       description: edits.description,
       ...(styleId ? { styleId } : {}),
+      ...(edits.visibility !== undefined ? { visibility: edits.visibility } : {}),
+      ...(edits.geometry ? { geometry: edits.geometry } : {}),
     });
   }
 

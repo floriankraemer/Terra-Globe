@@ -23,6 +23,7 @@ import {
 import { CesiumViewerHost } from "./CesiumViewerHost.js";
 import { DrawingToolbar } from "../features/drawing-toolbar/DrawingToolbar.js";
 import { useDrawing } from "../features/drawing-toolbar/useDrawing.js";
+import { useDragToMove } from "../features/drag-to-move/useDragToMove.js";
 import { AddressSearchBox } from "../features/geocoding/AddressSearchBox.js";
 import { useGeocoding } from "../features/geocoding/useGeocoding.js";
 import { FolderTree } from "../features/folders/FolderTree.js";
@@ -266,6 +267,16 @@ export function App() {
     };
   }, [selectedPlacemarkId]);
 
+  useDragToMove(
+    viewer,
+    editingPlacemark,
+    mode !== "idle" || ruler.active || routePlanner.active,
+    (id) => library.beginPlacemarkDrag(id, editorStyle),
+    (id, geometry) => {
+      void undoRedo.wrap(() => library.updatePlacemarkGeometry(id, geometry));
+    },
+  );
+
   return (
     <div className="app-shell" data-app-ready={library.ready}>
       <div className="app-topbar" ref={topbarRef}>
@@ -451,14 +462,20 @@ export function App() {
                 .wrap(() => library.deletePlacemark(editingPlacemark.id))
                 .then(() => setSelectedPlacemarkId(null));
             }}
-            onSave={({ name, description, style }) => {
+            onSave={({ name, description, style, visibility, geometry }) => {
               // Wait for the save (including its internal refresh()) before
               // closing - closing immediately (fire-and-forget) let a user
               // re-open the same placemark mid-save and see stale pre-save
               // data, since `placemarks` state hadn't caught up yet.
               void undoRedo
                 .wrap(() =>
-                  library.savePlacemarkEdits(editingPlacemark.id, { name, description, style }),
+                  library.savePlacemarkEdits(editingPlacemark.id, {
+                    name,
+                    description,
+                    style,
+                    visibility,
+                    geometry,
+                  }),
                 )
                 .then(() => setSelectedPlacemarkId(null));
             }}

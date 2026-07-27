@@ -1,59 +1,51 @@
 import * as Cesium from "cesium";
-import { geometryCenter, type PlacemarkGeometry, type PlacemarkView } from "@terra-globe/core";
+import {
+  circleToPolygonRing,
+  type GeoPoint,
+  type PlacemarkGeometry,
+  type PlacemarkView,
+} from "@terra-globe/core";
 
-const MIN_ALTITUDE_METERS = 2000;
-const DEGREES_TO_METERS = 111_320;
+// A single point (Point/Model) has zero extent - without a floor, the
+// bounding sphere would have radius 0 and fly the camera down to ground
+// level instead of a sane overview height.
+const MIN_BOUNDING_RADIUS_METERS = 500;
 
-function altitudeForGeometry(geometry: PlacemarkGeometry): number {
+function toCartesian(point: GeoPoint): Cesium.Cartesian3 {
+  return Cesium.Cartesian3.fromDegrees(point.lon, point.lat, point.altitude ?? 0);
+}
+
+function geometryPoints(geometry: PlacemarkGeometry): GeoPoint[] {
   switch (geometry.type) {
     case "Point":
-      return 10_000;
-    case "Circle":
-      return Math.max(geometry.radiusMeters * 4, MIN_ALTITUDE_METERS);
-    case "Rectangle": {
-      const spanDegrees = Math.max(geometry.north - geometry.south, geometry.east - geometry.west);
-      return Math.max(spanDegrees * DEGREES_TO_METERS * 2, MIN_ALTITUDE_METERS);
-    }
-    case "Polygon": {
-      const lons = geometry.outerRing.map((p) => p.lon);
-      const lats = geometry.outerRing.map((p) => p.lat);
-      const spanDegrees = Math.max(
-        Math.max(...lons) - Math.min(...lons),
-        Math.max(...lats) - Math.min(...lats),
-      );
-      return Math.max(spanDegrees * DEGREES_TO_METERS * 2, MIN_ALTITUDE_METERS);
-    }
-    case "LineString": {
-      const lons = geometry.path.map((p) => p.lon);
-      const lats = geometry.path.map((p) => p.lat);
-      const spanDegrees = Math.max(
-        Math.max(...lons) - Math.min(...lons),
-        Math.max(...lats) - Math.min(...lats),
-      );
-      return Math.max(spanDegrees * DEGREES_TO_METERS * 2, MIN_ALTITUDE_METERS);
-    }
-    case "GroundOverlay": {
-      const spanDegrees = Math.max(
-        geometry.bounds.north - geometry.bounds.south,
-        geometry.bounds.east - geometry.bounds.west,
-      );
-      return Math.max(spanDegrees * DEGREES_TO_METERS * 2, MIN_ALTITUDE_METERS);
-    }
+      return [geometry.coordinates];
     case "Model":
-      return 10_000;
+      return [geometry.position];
+    case "Circle":
+      return circleToPolygonRing(geometry.center, geometry.radiusMeters);
+    case "Rectangle":
+      return [
+        { lon: geometry.west, lat: geometry.south },
+        { lon: geometry.east, lat: geometry.north },
+      ];
+    case "GroundOverlay":
+      return [
+        { lon: geometry.bounds.west, lat: geometry.bounds.south },
+        { lon: geometry.bounds.east, lat: geometry.bounds.north },
+      ];
+    case "Polygon":
+      return geometry.outerRing;
+    case "LineString":
+      return geometry.path;
   }
 }
 
-/** Flies the camera to hover directly above a geometry's center, at a height scaled to its size. */
+/** Flies the camera to frame a geometry's full extent (not just its center point). */
 export function flyToGeometry(viewer: Cesium.Viewer, geometry: PlacemarkGeometry): void {
-  const center = geometryCenter(geometry);
-  viewer.camera.flyTo({
-    destination: Cesium.Cartesian3.fromDegrees(
-      center.lon,
-      center.lat,
-      altitudeForGeometry(geometry),
-    ),
-  });
+  const positions = geometryPoints(geometry).map(toCartesian);
+  const sphere = Cesium.BoundingSphere.fromPoints(positions);
+  sphere.radius = Math.max(sphere.radius, MIN_BOUNDING_RADIUS_METERS);
+  viewer.camera.flyToBoundingSphere(sphere);
 }
 
 function num(params: Record<string, number | string>, key: string, fallback: number): number {

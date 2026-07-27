@@ -44,6 +44,18 @@ export function formatArea(squareMeters: number, system: UnitSystem): string {
   return `${(squareMeters / SQUARE_METERS_PER_SQUARE_KM).toFixed(2)} km²`;
 }
 
+export function metersToUnit(meters: number, system: UnitSystem): number {
+  return system === "imperial" ? meters / METERS_PER_FOOT : meters;
+}
+
+export function unitToMeters(value: number, system: UnitSystem): number {
+  return system === "imperial" ? value * METERS_PER_FOOT : value;
+}
+
+export function distanceUnitLabel(system: UnitSystem): string {
+  return system === "imperial" ? "ft" : "m";
+}
+
 function toDms(value: number, positiveLetter: string, negativeLetter: string): string {
   const hemisphere = value >= 0 ? positiveLetter : negativeLetter;
   const abs = Math.abs(value);

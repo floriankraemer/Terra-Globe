@@ -4,6 +4,7 @@ import {
   geometryCenter,
   type CircleGeometry,
   type GeoPoint,
+  type GroundOverlayGeometry,
   type LineStringGeometry,
   type ModelGeometry,
   type PlacemarkGeometry,
@@ -306,9 +307,18 @@ function toDynamicGeometryOptions(
       return {
         position: new Cesium.CallbackPositionProperty(() => {
           const g = getGeometry() as PointGeometry;
-          return Cesium.Cartesian3.fromDegrees(g.coordinates.lon, g.coordinates.lat);
+          return Cesium.Cartesian3.fromDegrees(
+            g.coordinates.lon,
+            g.coordinates.lat,
+            g.coordinates.altitude,
+          );
         }, false),
-        billboard: markerBillboard(style),
+        billboard: markerBillboard(
+          style,
+          shape.type === "Point" && shape.coordinates.altitudeMode
+            ? HEIGHT_REFERENCE[shape.coordinates.altitudeMode]
+            : undefined,
+        ),
       };
     case "Circle":
       return {
@@ -377,13 +387,38 @@ function toDynamicGeometryOptions(
           }, false),
           width: outlineWidth(style),
           material: outlineColor(style),
+          clampToGround: shape.type === "LineString" ? shape.tessellate : undefined,
         },
       };
-    // GroundOverlay/Model aren't created via the interactive drawing tools,
-    // so no live-drag preview is needed - fall back to the static options.
     case "GroundOverlay":
+      return {
+        rectangle: {
+          coordinates: new Cesium.CallbackProperty(() => {
+            const g = getGeometry() as GroundOverlayGeometry;
+            return Cesium.Rectangle.fromDegrees(
+              g.bounds.west,
+              g.bounds.south,
+              g.bounds.east,
+              g.bounds.north,
+            );
+          }, false),
+          material: new Cesium.ImageMaterialProperty({ image: shape.imageUrl }),
+          rotation:
+            shape.rotation !== undefined ? Cesium.Math.toRadians(shape.rotation) : undefined,
+        },
+      };
     case "Model":
-      return toGeometryOptions(shape, style);
+      return {
+        ...toGeometryOptions(shape, style),
+        position: new Cesium.CallbackPositionProperty(() => {
+          const g = getGeometry() as ModelGeometry;
+          return Cesium.Cartesian3.fromDegrees(
+            g.position.lon,
+            g.position.lat,
+            g.position.altitude ?? 0,
+          );
+        }, false),
+      };
     default: {
       const exhaustiveCheck: never = shape;
       throw new Error(`Unhandled geometry type: ${JSON.stringify(exhaustiveCheck)}`);
@@ -530,5 +565,78 @@ export class CesiumEntityFactory implements IEntityFactory {
     const entity = this.entities.getById(handle.entityId);
     if (entity) this.entities.remove(entity);
     this.removeOutlineEntities(handle.entityId);
+  }
+
+  setVisible(handle: EntityHandle, visible: boolean): void {
+    const entity = this.entities.getById(handle.entityId);
+    if (entity) entity.show = visible;
+    const outlineIds = this.outlineEntityIds.get(handle.entityId) ?? [];
+    outlineIds.forEach((id) => {
+      const outline = this.entities.getById(id);
+      if (outline) outline.show = visible;
+    });
+  }
+
+  beginLiveGeometryEdit(
+    handle: EntityHandle,
+    initialGeometry: PlacemarkGeometry,
+    style?: Style,
+  ): (geometry: PlacemarkGeometry) => void {
+    const entity = this.entities.getById(handle.entityId);
+    if (!entity) throw new Error(`Unknown entity: ${handle.entityId}`);
+
+    let current = initialGeometry;
+    const options = toDynamicGeometryOptions(() => current, style);
+
+    // Rectangle/Polygon/LineString have no entity.position of their own in
+    // toDynamicGeometryOptions (same as the static path) - give them a
+    // callback-driven center so the label and Cesium's own selection
+    // indicator both track the shape as it moves, instead of staying pinned
+    // to the pre-drag center.
+    entity.position =
+      (options.position as Cesium.PositionProperty | undefined) ??
+      new Cesium.CallbackPositionProperty(() => {
+        const center = geometryCenter(current);
+        return Cesium.Cartesian3.fromDegrees(center.lon, center.lat);
+      }, false);
+    entity.billboard = options.billboard
+      ? new Cesium.BillboardGraphics(options.billboard)
+      : undefined;
+    entity.ellipse = options.ellipse
+      ? new Cesium.EllipseGraphics(options.ellipse as Cesium.EllipseGraphics.ConstructorOptions)
+      : undefined;
+    entity.rectangle = options.rectangle
+      ? new Cesium.RectangleGraphics(
+          options.rectangle as Cesium.RectangleGraphics.ConstructorOptions,
+        )
+      : undefined;
+    entity.polygon = options.polygon
+      ? new Cesium.PolygonGraphics(options.polygon as Cesium.PolygonGraphics.ConstructorOptions)
+      : undefined;
+    entity.polyline = options.polyline
+      ? new Cesium.PolylineGraphics(options.polyline as Cesium.PolylineGraphics.ConstructorOptions)
+      : undefined;
+
+    // Companion outline loops (Circle/Rectangle/Polygon) would otherwise be
+    // rebuilt with a brand-new PolylineGraphics every frame via
+    // syncOutlineEntities - swap them to a single CallbackProperty-driven
+    // polyline instead, for the same reason as the main shape above.
+    const outlineIds = this.outlineEntityIds.get(handle.entityId) ?? [];
+    outlineIds.forEach((id, i) => {
+      const outline = this.entities.getById(id);
+      if (!outline) return;
+      outline.polyline = new Cesium.PolylineGraphics({
+        positions: new Cesium.CallbackProperty(() => {
+          const loop = outlineBoundaryLoops(current, style)[i] ?? [];
+          return loop.map((p) => Cesium.Cartesian3.fromDegrees(p.lon, p.lat));
+        }, false),
+        width: outlineWidth(style),
+        material: outlineColor(style),
+      });
+    });
+
+    return (geometry: PlacemarkGeometry) => {
+      current = geometry;
+    };
   }
 }
