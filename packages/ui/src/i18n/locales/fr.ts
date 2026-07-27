@@ -7,6 +7,16 @@ export default {
   },
   app: {
     basemap: "Fond de carte",
+    settings: "Paramètres",
+    about: "À propos",
+  },
+  about: {
+    title: "À propos de {{name}}",
+    version: "Version {{version}}",
+    author: "Auteur : {{author}}",
+    license: "Sous licence {{license}}",
+    githubLink: "Voir sur GitHub",
+    issuesLink: "Signaler un problème",
   },
   undoRedo: {
     ariaLabel: "Annuler/rétablir",

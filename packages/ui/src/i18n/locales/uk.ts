@@ -7,6 +7,16 @@ export default {
   },
   app: {
     basemap: "Базова карта",
+    settings: "Налаштування",
+    about: "Про програму",
+  },
+  about: {
+    title: "Про {{name}}",
+    version: "Версія {{version}}",
+    author: "Автор: {{author}}",
+    license: "Ліцензовано за {{license}}",
+    githubLink: "Переглянути на GitHub",
+    issuesLink: "Повідомити про проблему",
   },
   undoRedo: {
     ariaLabel: "Скасувати/повторити",

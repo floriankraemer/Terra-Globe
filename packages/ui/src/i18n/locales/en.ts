@@ -7,6 +7,16 @@ export default {
   },
   app: {
     basemap: "Basemap",
+    settings: "Settings",
+    about: "About",
+  },
+  about: {
+    title: "About {{name}}",
+    version: "Version {{version}}",
+    author: "Author: {{author}}",
+    license: "Licensed under the {{license}}",
+    githubLink: "View on GitHub",
+    issuesLink: "Report an issue",
   },
   undoRedo: {
     ariaLabel: "Undo/redo",

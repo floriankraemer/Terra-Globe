@@ -7,6 +7,16 @@ export default {
   },
   app: {
     basemap: "Basiskarte",
+    settings: "Einstellungen",
+    about: "Über",
+  },
+  about: {
+    title: "Über {{name}}",
+    version: "Version {{version}}",
+    author: "Autor: {{author}}",
+    license: "Lizenziert unter der {{license}}",
+    githubLink: "Auf GitHub ansehen",
+    issuesLink: "Problem melden",
   },
   undoRedo: {
     ariaLabel: "Rückgängig/Wiederholen",

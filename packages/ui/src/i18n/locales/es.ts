@@ -7,6 +7,16 @@ export default {
   },
   app: {
     basemap: "Mapa base",
+    settings: "Configuración",
+    about: "Acerca de",
+  },
+  about: {
+    title: "Acerca de {{name}}",
+    version: "Versión {{version}}",
+    author: "Autor: {{author}}",
+    license: "Con licencia {{license}}",
+    githubLink: "Ver en GitHub",
+    issuesLink: "Informar de un problema",
   },
   undoRedo: {
     ariaLabel: "Deshacer/rehacer",

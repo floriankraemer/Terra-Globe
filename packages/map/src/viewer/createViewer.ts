@@ -24,7 +24,7 @@ export function createViewer(
   const viewer = new Cesium.Viewer(container, {
     baseLayerPicker: false,
     geocoder: false,
-    homeButton: true,
+    homeButton: false,
     sceneModePicker: false,
     navigationHelpButton: false,
     timeline: false,

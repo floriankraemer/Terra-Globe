@@ -119,6 +119,10 @@ input:not([type]) {
   color: var(--color-text-muted);
 }
 
+.topbar-actions {
+  margin-left: auto;
+}
+
 .toolbar-group .base-layer-select {
   background: none;
   border: none;
@@ -147,6 +151,9 @@ input:not([type]) {
   cursor: pointer;
   white-space: nowrap;
   transition: background-color 0.12s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
 }
 
 .btn:hover {
@@ -1105,6 +1112,38 @@ input:not([type]) {
   display: flex;
   gap: var(--space-2);
   justify-content: flex-end;
+}
+
+.about-modal {
+  min-width: 360px;
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.about-modal-title {
+  font-size: 15px;
+  font-weight: 600;
+  padding-right: var(--space-4);
+}
+
+.about-modal-line {
+  font-size: 13px;
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.about-modal-links {
+  display: flex;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
+}
+
+.about-modal-links a {
+  font-size: 13px;
+  color: var(--color-primary);
 }
 
 .settings-modal {

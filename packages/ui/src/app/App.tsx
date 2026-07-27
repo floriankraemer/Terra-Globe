@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Info, Settings as SettingsIcon } from "lucide-react";
 import type * as Cesium from "cesium";
 import { SceneMode } from "cesium";
 import {
@@ -44,6 +45,7 @@ import { useImportExport } from "../features/import-export/useImportExport.js";
 import { Notice, type NoticeData } from "../features/notice/Notice.js";
 import { PlacemarkEditor } from "../features/placemark-editor/PlacemarkEditor.js";
 import { SettingsModal } from "../features/settings/SettingsModal.js";
+import { AboutModal } from "../features/about/AboutModal.js";
 import { useSettings } from "../features/settings/useSettings.js";
 import i18n from "../i18n/i18n.js";
 import { useFloatingPanel } from "./useFloatingPanel.js";
@@ -75,6 +77,7 @@ export function App() {
   const [editorStyle, setEditorStyle] = useState<PlacemarkStyleEdits>(DEFAULT_STYLE);
   const [notice, setNotice] = useState<NoticeData | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const sidebar = useResizableWidth(260, 200, 600, "terra-globe:sidebarWidth");
   const topbarRef = useRef<HTMLDivElement>(null);
   const [placesPanelTop, setPlacesPanelTop] = useState(76);
@@ -183,12 +186,6 @@ export function App() {
     // harmless in production, mirrors the common devtools-debugging pattern.
     (window as unknown as { __terraGlobeViewer?: Cesium.Viewer }).__terraGlobeViewer =
       handle.viewer;
-    // Repurpose Cesium's built-in "home" button: cancel its default
-    // fly-to-home behavior and open the Settings modal instead.
-    handle.viewer.homeButton.viewModel.command.beforeExecute.addEventListener((commandInfo) => {
-      commandInfo.cancel = true;
-      setSettingsOpen(true);
-    });
   });
 
   const library = useLibrary(viewer);
@@ -375,6 +372,21 @@ export function App() {
           onExportKml={() => void importExport.exportKml()}
           onExportKmz={() => void importExport.exportKmz()}
         />
+        <div className="toolbar-group topbar-actions">
+          <button type="button" className="btn" onClick={() => setSettingsOpen(true)}>
+            <SettingsIcon size={16} aria-hidden="true" />
+            {t("app.settings")}
+          </button>
+          <button
+            type="button"
+            className="btn"
+            aria-label={t("app.about")}
+            title={t("app.about")}
+            onClick={() => setAboutOpen(true)}
+          >
+            <Info size={18} aria-hidden="true" />
+          </button>
+        </div>
       </div>
       {notice && (
         <div className="notice-container">
@@ -624,6 +636,7 @@ export function App() {
           onClose={() => setSettingsOpen(false)}
         />
       )}
+      {aboutOpen && <AboutModal onClose={() => setAboutOpen(false)} />}
       <CesiumViewerHost baseLayer={baseLayer} sceneMode={sceneMode} onReady={onReadyRef.current} />
       <ScreenOverlayLayer overlays={library.screenOverlays} />
     </div>
