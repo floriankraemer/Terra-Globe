@@ -31,6 +31,13 @@ export function createViewer(
     animation: false,
     baseLayer: false,
     infoBox: false,
+    // Cesium's default indicator anchors to entity.position, which for
+    // ground-clamped shapes (circle/rectangle/polygon) has no real altitude
+    // and gets padded by the full terrain elevation range - it floats far
+    // above the shape, worst at grazing camera angles. Nothing in the app
+    // reads viewer.selectedEntity, so drop the indicator instead of chasing
+    // a correct height for it.
+    selectionIndicator: false,
   });
 
   let currentLayer: Cesium.ImageryLayer | undefined;
