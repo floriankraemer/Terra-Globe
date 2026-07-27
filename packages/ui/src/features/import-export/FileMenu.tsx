@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { Save } from "lucide-react";
 import { MenuButton } from "../../components/MenuButton.js";
 
 export interface FileMenuProps {
@@ -28,7 +29,15 @@ export function FileMenu({ disabled, onImportFile, onExportKml, onExportKmz }: F
         aria-hidden="true"
         tabIndex={-1}
       />
-      <MenuButton label={t("fileMenu.trigger")} disabled={disabled}>
+      <MenuButton
+        label={
+          <>
+            <Save size={16} aria-hidden="true" />
+            {t("fileMenu.trigger")}
+          </>
+        }
+        disabled={disabled}
+      >
         {(close) => (
           <>
             <button

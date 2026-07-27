@@ -1,11 +1,9 @@
-import { readFileSync } from "node:fs";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import cesium from "vite-plugin-cesium";
+import { getAppMetadata } from "./appMetadata.js";
 
-const { version } = JSON.parse(
-  readFileSync(new URL("../../src-tauri/tauri.conf.json", import.meta.url), "utf-8"),
-) as { version: string };
+const { version, libraries } = getAppMetadata();
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -16,5 +14,6 @@ export default defineConfig({
   },
   define: {
     __APP_VERSION__: JSON.stringify(version),
+    __APP_LIBRARIES__: JSON.stringify(libraries),
   },
 });

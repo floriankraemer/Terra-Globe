@@ -278,8 +278,36 @@ export function App() {
   return (
     <div className="app-shell" data-app-ready={library.ready}>
       <div className="app-topbar" ref={topbarRef}>
+        <FileMenu
+          disabled={!library.ready}
+          onImportFile={(file) => {
+            importExport
+              .importFile(file)
+              .then((summary) => {
+                const parts = [
+                  t("importExport.importedPlacemarks", { count: summary.placemarksImported }),
+                  summary.foldersImported > 0
+                    ? t("importExport.importedFolders", { count: summary.foldersImported })
+                    : null,
+                ].filter(Boolean);
+                const message =
+                  summary.warnings.length > 0
+                    ? `${parts.join(", ")}. ${t("importExport.skippedItems", { count: summary.warnings.length, warnings: summary.warnings.join(" ") })}`
+                    : `${parts.join(", ")}.`;
+                setNotice({ level: "success", message });
+              })
+              .catch((err: unknown) => {
+                setNotice({
+                  level: "error",
+                  message: err instanceof Error ? err.message : String(err),
+                });
+              });
+          }}
+          onExportKml={() => void importExport.exportKml()}
+          onExportKmz={() => void importExport.exportKmz()}
+        />
         <label className="base-layer-select">
-          {t("app.basemap")}
+          {t("app.basemap")}:
           <select value={baseLayerId} onChange={(e) => setBaseLayerId(e.target.value)}>
             {tileSources.map((source) => (
               <option key={source.id} value={source.id}>
@@ -343,34 +371,6 @@ export function App() {
             if (viewer) flyToGeometry(viewer, createPointGeometry(result.point));
             geocoding.reset();
           }}
-        />
-        <FileMenu
-          disabled={!library.ready}
-          onImportFile={(file) => {
-            importExport
-              .importFile(file)
-              .then((summary) => {
-                const parts = [
-                  t("importExport.importedPlacemarks", { count: summary.placemarksImported }),
-                  summary.foldersImported > 0
-                    ? t("importExport.importedFolders", { count: summary.foldersImported })
-                    : null,
-                ].filter(Boolean);
-                const message =
-                  summary.warnings.length > 0
-                    ? `${parts.join(", ")}. ${t("importExport.skippedItems", { count: summary.warnings.length, warnings: summary.warnings.join(" ") })}`
-                    : `${parts.join(", ")}.`;
-                setNotice({ level: "success", message });
-              })
-              .catch((err: unknown) => {
-                setNotice({
-                  level: "error",
-                  message: err instanceof Error ? err.message : String(err),
-                });
-              });
-          }}
-          onExportKml={() => void importExport.exportKml()}
-          onExportKmz={() => void importExport.exportKmz()}
         />
         <div className="toolbar-group topbar-actions">
           <button type="button" className="btn" onClick={() => setSettingsOpen(true)}>
