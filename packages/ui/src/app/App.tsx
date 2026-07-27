@@ -336,6 +336,7 @@ export function App() {
         />
         <AddressSearchBox
           disabled={!viewer}
+          hideLabel
           status={geocoding.status}
           results={geocoding.results}
           error={geocoding.error}
