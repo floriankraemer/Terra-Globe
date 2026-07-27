@@ -68,13 +68,16 @@ function labelGraphics(
   if (!name) return undefined;
   return {
     text: name,
-    font: "14px sans-serif",
+    font: "bold 16px sans-serif",
     fillColor: Cesium.Color.WHITE,
     outlineColor: Cesium.Color.BLACK,
     outlineWidth: 2,
     style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+    // Marker billboard is CANVAS_PIXEL_SIZE (48px) tall, anchored bottom-up
+    // at the entity position - offset above that, not just above the point,
+    // so the label clears the icon instead of sitting behind it.
     verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-    pixelOffset: new Cesium.Cartesian2(0, -12),
+    pixelOffset: new Cesium.Cartesian2(0, -52),
     distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, LABEL_MAX_DISTANCE_METERS),
     scaleByDistance: new Cesium.NearFarScalar(
       LABEL_NEAR_DISTANCE_METERS,
