@@ -46,6 +46,20 @@ button {
   font-family: inherit;
 }
 
+input[type="text"],
+input[type="search"],
+input[type="number"],
+input[type="password"],
+input:not([type]) {
+  font: inherit;
+  font-size: 13px;
+  color: var(--color-text);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+}
+
 .app-shell {
   position: absolute;
   inset: 0;
@@ -401,11 +415,7 @@ button {
 
 .tree-rename-input {
   flex: 1;
-  font: inherit;
-  font-size: 13px;
-  color: var(--color-text);
-  background: var(--color-bg);
-  border: 1px solid var(--color-primary);
+  border-color: var(--color-primary);
   border-radius: 4px;
   padding: 1px 4px;
 }
@@ -420,13 +430,8 @@ button {
 .new-folder-form input {
   flex: 1;
   min-width: 0;
-  font: inherit;
-  font-size: 13px;
-  border: 1px solid var(--color-border);
   border-radius: 4px;
   padding: 3px 6px;
-  background: var(--color-bg);
-  color: var(--color-text);
 }
 
 .new-folder-btn {
@@ -511,8 +516,6 @@ button {
   color: var(--color-text-muted);
 }
 
-.placemark-editor-field input[type="text"],
-.placemark-editor-field input:not([type]),
 .placemark-editor-field textarea {
   font: inherit;
   font-size: 13px;
@@ -534,13 +537,6 @@ button {
 }
 
 .placemark-editor-field input[type="number"] {
-  font: inherit;
-  font-size: 13px;
-  color: var(--color-text);
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  padding: var(--space-1) var(--space-2);
   width: 100%;
 }
 
@@ -965,13 +961,6 @@ button {
 }
 
 .address-search-label input {
-  font: inherit;
-  font-size: 13px;
-  color: var(--color-text);
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  padding: var(--space-1) var(--space-2);
   width: 220px;
 }
 
