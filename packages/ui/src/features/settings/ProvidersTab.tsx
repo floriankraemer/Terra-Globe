@@ -116,9 +116,7 @@ export function ProvidersTab({
   return (
     <>
       <div className="settings-modal-section-header">{t("providers.header")}</div>
-      {!isTauri() && (
-        <div className="provider-secret-warning">{t("providers.desktopWarning")}</div>
-      )}
+      {!isTauri() && <div className="provider-secret-warning">{t("providers.desktopWarning")}</div>}
 
       <ul className="providers-list">
         {providers.map((config) => {
@@ -139,9 +137,7 @@ export function ProvidersTab({
             </li>
           );
         })}
-        {providers.length === 0 && (
-          <li className="provider-item-empty">{t("providers.empty")}</li>
-        )}
+        {providers.length === 0 && <li className="provider-item-empty">{t("providers.empty")}</li>}
       </ul>
 
       <form className="provider-add-form" onSubmit={handleSubmit}>

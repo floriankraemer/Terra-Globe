@@ -3,4 +3,6 @@ import { IndexedDbPlacesRepository } from "../src/IndexedDbPlacesRepository.js";
 
 let dbCounter = 0;
 
-sharedRepositoryContractTests(() => new IndexedDbPlacesRepository(`terra-globe-test-${dbCounter++}`));
+sharedRepositoryContractTests(
+  () => new IndexedDbPlacesRepository(`terra-globe-test-${dbCounter++}`),
+);

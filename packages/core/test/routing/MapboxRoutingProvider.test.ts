@@ -48,4 +48,10 @@ describe("MapboxRoutingProvider", () => {
     const provider = new MapboxRoutingProvider("bad", fetchImpl);
     await expect(provider.route([A, B], "car")).rejects.toThrow(/401/);
   });
+
+  it("surfaces malformed routes instead of silently dropping them", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ routes: [{ distance: 500 }] }));
+    const provider = new MapboxRoutingProvider("token", fetchImpl);
+    await expect(provider.route([A, B], "car")).rejects.toThrow(/malformed/i);
+  });
 });

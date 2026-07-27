@@ -21,11 +21,22 @@ function isOsrmRoute(value: unknown): value is OsrmRoute {
 
 /** Shared response shape between OSRM and Mapbox Directions (both OSRM-derived APIs). */
 export function mapOsrmCompatibleResults(body: unknown): RouteLeg[] {
-  if (typeof body !== "object" || body === null) return [];
+  if (typeof body !== "object" || body === null) {
+    throw new Error("Malformed routing response: expected a JSON object");
+  }
   const routes = (body as { routes?: unknown }).routes;
-  if (!Array.isArray(routes)) return [];
+  if (!Array.isArray(routes)) {
+    throw new Error("Malformed routing response: expected a `routes` array");
+  }
 
-  return routes.filter(isOsrmRoute).map((route) => ({
+  const malformed = routes.filter((route) => !isOsrmRoute(route));
+  if (malformed.length > 0) {
+    throw new Error(
+      `Malformed routing response: ${malformed.length} route(s) missing required fields`,
+    );
+  }
+
+  return (routes as OsrmRoute[]).map((route) => ({
     geometry: createLineStringGeometry(
       route.geometry.coordinates.map(([lon, lat]) => ({ lon, lat })),
     ),

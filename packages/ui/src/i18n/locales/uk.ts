@@ -66,6 +66,7 @@ export default {
     moveStopDown: "Перемістити зупинку {{n}} вниз",
     removeStop: "Видалити зупинку {{n}}",
     calculating: "Обчислення маршруту…",
+    attribution: "Дані маршруту © учасники OpenStreetMap (ODbL), через OSRM",
     routeAlternative: "Маршрут {{n}}: {{distance}} · {{duration}}",
   },
   geocoding: {

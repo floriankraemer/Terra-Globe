@@ -906,6 +906,12 @@ button {
   color: var(--color-text-muted);
 }
 
+.route-planner-panel-attribution {
+  margin-top: var(--space-2);
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
 .route-planner-panel-error {
   color: var(--color-danger);
 }

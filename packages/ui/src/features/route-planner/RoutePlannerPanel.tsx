@@ -209,6 +209,9 @@ export function RoutePlannerPanel({
                 ))}
               </ul>
             )}
+            {mode !== "train" && mode !== "plane" && (
+              <div className="route-planner-panel-attribution">{t("routePlanner.attribution")}</div>
+            )}
           </>
         )}
       </div>

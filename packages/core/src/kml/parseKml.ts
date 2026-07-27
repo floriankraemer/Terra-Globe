@@ -638,7 +638,9 @@ function parseFolder(
     name: String(node.name ?? ""),
     parentId,
     order:
-      extendedData["terra-globe:order"] !== undefined ? Number(extendedData["terra-globe:order"]) : 0,
+      extendedData["terra-globe:order"] !== undefined
+        ? Number(extendedData["terra-globe:order"])
+        : 0,
     visibility: node.visibility === undefined ? true : String(node.visibility) === "1",
     description: node.description !== undefined ? String(node.description) : undefined,
     open: node.open !== undefined ? String(node.open) === "1" : undefined,

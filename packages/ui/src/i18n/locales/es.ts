@@ -66,6 +66,7 @@ export default {
     moveStopDown: "Mover parada {{n}} hacia abajo",
     removeStop: "Eliminar parada {{n}}",
     calculating: "Calculando ruta…",
+    attribution: "Datos de ruta © colaboradores de OpenStreetMap (ODbL), vía OSRM",
     routeAlternative: "Ruta {{n}}: {{distance}} · {{duration}}",
   },
   geocoding: {

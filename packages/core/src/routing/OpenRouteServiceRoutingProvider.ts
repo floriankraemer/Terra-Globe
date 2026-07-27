@@ -26,11 +26,22 @@ function isOrsFeature(value: unknown): value is OrsFeature {
 }
 
 export function mapOpenRouteServiceResults(body: unknown): RouteLeg[] {
-  if (typeof body !== "object" || body === null) return [];
+  if (typeof body !== "object" || body === null) {
+    throw new Error("Malformed OpenRouteService response: expected a JSON object");
+  }
   const features = (body as { features?: unknown }).features;
-  if (!Array.isArray(features)) return [];
+  if (!Array.isArray(features)) {
+    throw new Error("Malformed OpenRouteService response: expected a `features` array");
+  }
 
-  return features.filter(isOrsFeature).map((feature) => ({
+  const malformed = features.filter((feature) => !isOrsFeature(feature));
+  if (malformed.length > 0) {
+    throw new Error(
+      `Malformed OpenRouteService response: ${malformed.length} feature(s) missing required fields`,
+    );
+  }
+
+  return (features as OrsFeature[]).map((feature) => ({
     geometry: createLineStringGeometry(
       feature.geometry.coordinates.map(([lon, lat]) => ({ lon, lat })),
     ),

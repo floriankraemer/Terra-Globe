@@ -53,4 +53,10 @@ describe("GraphHopperRoutingProvider", () => {
     const provider = new GraphHopperRoutingProvider("bad", fetchImpl);
     await expect(provider.route([A, B], "car")).rejects.toThrow(/403/);
   });
+
+  it("surfaces malformed paths instead of silently dropping them", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ paths: [{ distance: 2000 }] }));
+    const provider = new GraphHopperRoutingProvider("key", fetchImpl);
+    await expect(provider.route([A, B], "car")).rejects.toThrow(/malformed/i);
+  });
 });

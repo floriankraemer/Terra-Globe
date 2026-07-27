@@ -51,4 +51,14 @@ describe("OpenRouteServiceRoutingProvider", () => {
     const provider = new OpenRouteServiceRoutingProvider("bad", fetchImpl);
     await expect(provider.route([A, B], "car")).rejects.toThrow(/429/);
   });
+
+  it("surfaces malformed features instead of silently dropping them", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(
+        jsonResponse({ features: [{ properties: { summary: { distance: 800 } } }] }),
+      );
+    const provider = new OpenRouteServiceRoutingProvider("key", fetchImpl);
+    await expect(provider.route([A, B], "car")).rejects.toThrow(/malformed/i);
+  });
 });

@@ -116,7 +116,9 @@ describe("useSettings", () => {
     expect(result.current.providers).toEqual([
       { id, kind: "tile", preset: "mapbox-streets", name: "My Mapbox", enabled: false },
     ]);
-    expect(JSON.parse(window.localStorage.getItem("terra-globe:settings")!).providers).toHaveLength(1);
+    expect(JSON.parse(window.localStorage.getItem("terra-globe:settings")!).providers).toHaveLength(
+      1,
+    );
   });
 
   it("setProviderEnabled enables the target provider", () => {

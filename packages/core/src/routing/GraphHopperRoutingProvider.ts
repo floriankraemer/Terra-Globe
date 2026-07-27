@@ -28,11 +28,22 @@ function isGraphHopperPath(value: unknown): value is GraphHopperPath {
 }
 
 export function mapGraphHopperResults(body: unknown): RouteLeg[] {
-  if (typeof body !== "object" || body === null) return [];
+  if (typeof body !== "object" || body === null) {
+    throw new Error("Malformed GraphHopper response: expected a JSON object");
+  }
   const paths = (body as { paths?: unknown }).paths;
-  if (!Array.isArray(paths)) return [];
+  if (!Array.isArray(paths)) {
+    throw new Error("Malformed GraphHopper response: expected a `paths` array");
+  }
 
-  return paths.filter(isGraphHopperPath).map((path) => ({
+  const malformed = paths.filter((path) => !isGraphHopperPath(path));
+  if (malformed.length > 0) {
+    throw new Error(
+      `Malformed GraphHopper response: ${malformed.length} path(s) missing required fields`,
+    );
+  }
+
+  return (paths as GraphHopperPath[]).map((path) => ({
     geometry: createLineStringGeometry(path.points.coordinates.map(([lon, lat]) => ({ lon, lat }))),
     distanceMeters: path.distance,
     durationSeconds: path.time / 1000,

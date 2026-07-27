@@ -66,6 +66,7 @@ export default {
     moveStopDown: "Déplacer l'étape {{n}} vers le bas",
     removeStop: "Supprimer l'étape {{n}}",
     calculating: "Calcul de l'itinéraire…",
+    attribution: "Données d'itinéraire © contributeurs OpenStreetMap (ODbL), via OSRM",
     routeAlternative: "Itinéraire {{n}} : {{distance}} · {{duration}}",
   },
   geocoding: {

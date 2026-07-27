@@ -60,13 +60,36 @@ describe("OsrmRoutingProvider", () => {
       durationSeconds: 120,
     });
     const [url] = fetchImpl.mock.calls[0] as [URL];
-    expect(url.pathname).toContain("/route/v1/walking/13.4,52.5;13.5,52.6");
+    expect(url.hostname).toBe("routing.openstreetmap.de");
+    expect(url.pathname).toContain("/routed-foot/route/v1/walking/13.4,52.5;13.5,52.6");
     expect(url.searchParams.get("geometries")).toBe("geojson");
+  });
+
+  it("uses a different host per profile, since router.project-osrm.org ignores the profile segment", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ routes: [] }));
+    const provider = new OsrmRoutingProvider(undefined, fetchImpl);
+
+    await provider.route([A, B], "car");
+    await provider.route([A, B], "foot");
+    await provider.route([A, B], "bike");
+
+    const hosts = fetchImpl.mock.calls.map(([url]: [URL]) => url.pathname.split("/")[1]);
+    expect(hosts).toEqual(["routed-car", "routed-foot", "routed-bike"]);
   });
 
   it("throws on an HTTP error response", async () => {
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({}, { ok: false, status: 500 }));
     const provider = new OsrmRoutingProvider(undefined, fetchImpl);
     await expect(provider.route([A, B], "car")).rejects.toThrow(/500/);
+  });
+
+  it("surfaces malformed routes instead of silently dropping them", async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(
+      jsonResponse({
+        routes: [{ distance: 1000 }],
+      }),
+    );
+    const provider = new OsrmRoutingProvider(undefined, fetchImpl);
+    await expect(provider.route([A, B], "car")).rejects.toThrow(/malformed/i);
   });
 });
