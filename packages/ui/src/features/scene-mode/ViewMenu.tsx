@@ -15,9 +15,10 @@ const MODES: { mode: Cesium.SceneMode; labelKey: "scene3d" | "scene2d" | "columb
 
 export function ViewMenu({ mode, onChange }: ViewMenuProps) {
   const { t } = useTranslation();
+  const activeLabelKey = MODES.find((m) => m.mode === mode)?.labelKey ?? "scene3d";
   return (
     <div className="toolbar-group">
-      <MenuButton label={t("viewMenu.trigger")}>
+      <MenuButton label={`${t("viewMenu.trigger")}: ${t(`sceneMode.${activeLabelKey}`)}`}>
         {(close) =>
           MODES.map(({ mode: buttonMode, labelKey }) => (
             <button

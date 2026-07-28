@@ -7,19 +7,28 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 RUN corepack enable && corepack prepare pnpm@9 --activate
 
 WORKDIR /workspace
+RUN chown node:node /workspace
 
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml ./
-COPY packages/core/package.json packages/core/package.json
-COPY packages/map/package.json packages/map/package.json
-COPY packages/storage-indexeddb/package.json packages/storage-indexeddb/package.json
-COPY packages/storage-sqlite/package.json packages/storage-sqlite/package.json
-COPY packages/storage-remote/package.json packages/storage-remote/package.json
-COPY packages/ui/package.json packages/ui/package.json
-COPY e2e/playwright/package.json e2e/playwright/package.json
+# Build as the image's built-in node user (uid/gid 1000) instead of root, so
+# node_modules (baked into the image and into the web_node_modules named
+# volume on first mount) is owned by uid 1000 - matching the docker-compose
+# `user: "${UID:-1000}:${GID:-1000}"` override. Building as root here left
+# node_modules root-owned, which the non-root runtime user then couldn't
+# write into (EACCES on vite's .vite/deps_temp_*).
+USER node
+
+COPY --chown=node:node package.json pnpm-workspace.yaml pnpm-lock.yaml ./
+COPY --chown=node:node packages/core/package.json packages/core/package.json
+COPY --chown=node:node packages/map/package.json packages/map/package.json
+COPY --chown=node:node packages/storage-indexeddb/package.json packages/storage-indexeddb/package.json
+COPY --chown=node:node packages/storage-sqlite/package.json packages/storage-sqlite/package.json
+COPY --chown=node:node packages/storage-remote/package.json packages/storage-remote/package.json
+COPY --chown=node:node packages/ui/package.json packages/ui/package.json
+COPY --chown=node:node e2e/playwright/package.json e2e/playwright/package.json
 
 RUN pnpm install --frozen-lockfile || pnpm install
 
-COPY . .
+COPY --chown=node:node . .
 
 EXPOSE 5173 4173
 

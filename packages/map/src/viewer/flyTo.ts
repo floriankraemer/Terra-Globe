@@ -45,7 +45,12 @@ export function flyToGeometry(viewer: Cesium.Viewer, geometry: PlacemarkGeometry
   const positions = geometryPoints(geometry).map(toCartesian);
   const sphere = Cesium.BoundingSphere.fromPoints(positions);
   sphere.radius = Math.max(sphere.radius, MIN_BOUNDING_RADIUS_METERS);
-  viewer.camera.flyToBoundingSphere(sphere);
+  // Cesium's flyToBoundingSphere defaults to a fixed 45deg pitch (Camera.DEFAULT_OFFSET)
+  // when no offset is given, forcing a tilt in 3D mode no matter the current view.
+  // Look straight down instead, matching the top-down framing 2D/Columbus already use.
+  viewer.camera.flyToBoundingSphere(sphere, {
+    offset: new Cesium.HeadingPitchRange(0, -Cesium.Math.PI_OVER_TWO, 0),
+  });
 }
 
 function num(params: Record<string, number | string>, key: string, fallback: number): number {
