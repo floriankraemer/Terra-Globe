@@ -9,7 +9,7 @@ describe("ViewMenu", () => {
     const user = userEvent.setup();
     render(<ViewMenu mode={Cesium.SceneMode.SCENE2D} onChange={vi.fn()} />);
 
-    await user.click(screen.getByRole("button", { name: "View" }));
+    await user.click(screen.getByRole("button", { name: "View: 2D" }));
 
     expect(screen.getByRole("menuitemradio", { name: "2D" })).toHaveAttribute(
       "aria-checked",
@@ -26,7 +26,7 @@ describe("ViewMenu", () => {
     const user = userEvent.setup();
     render(<ViewMenu mode={Cesium.SceneMode.SCENE3D} onChange={onChange} />);
 
-    await user.click(screen.getByRole("button", { name: "View" }));
+    await user.click(screen.getByRole("button", { name: "View: 3D" }));
     await user.click(screen.getByRole("menuitemradio", { name: "Columbus View" }));
 
     expect(onChange).toHaveBeenCalledWith(Cesium.SceneMode.COLUMBUS_VIEW);
