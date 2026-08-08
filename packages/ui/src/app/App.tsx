@@ -31,6 +31,7 @@ import { FolderTree } from "../features/folders/FolderTree.js";
 import { useLibrary } from "../features/folders/useLibrary.js";
 import { UndoRedoToolbar } from "../features/undo-redo/UndoRedoToolbar.js";
 import { ViewMenu } from "../features/scene-mode/ViewMenu.js";
+import { BaseLayerMenu } from "../features/basemap/BaseLayerMenu.js";
 import { useUndoRedo } from "../features/undo-redo/useUndoRedo.js";
 import { ScreenOverlayLayer } from "../features/screen-overlays/ScreenOverlayLayer.js";
 import { HeightProfilePanel } from "../features/height-profile/HeightProfilePanel.js";
@@ -306,16 +307,11 @@ export function App() {
           onExportKml={() => void importExport.exportKml()}
           onExportKmz={() => void importExport.exportKmz()}
         />
-        <label className="base-layer-select">
-          {t("app.basemap")}:
-          <select value={baseLayerId} onChange={(e) => setBaseLayerId(e.target.value)}>
-            {tileSources.map((source) => (
-              <option key={source.id} value={source.id}>
-                {source.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <BaseLayerMenu
+          tileSources={tileSources}
+          baseLayerId={baseLayerId}
+          onChange={setBaseLayerId}
+        />
         <ViewMenu mode={sceneMode} onChange={setSceneMode} />
         <UndoRedoToolbar
           canUndo={undoRedo.canUndo}
