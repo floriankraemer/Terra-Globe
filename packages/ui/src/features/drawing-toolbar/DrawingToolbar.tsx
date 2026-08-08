@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { MenuButton } from "../../components/MenuButton.js";
 
 export type DrawingTool = "point" | "rectangle" | "circle" | "polygon" | "line";
 export type DrawingMode = DrawingTool | "idle";
@@ -25,7 +26,7 @@ export function DrawingToolbar({
     { tool: "polygon", label: t("drawingToolbar.polygon") },
     { tool: "line", label: t("drawingToolbar.line") },
   ];
-  const geometryValue = geometryTools.some((entry) => entry.tool === mode) ? mode : "";
+  const activeGeometry = geometryTools.find((entry) => entry.tool === mode);
 
   return (
     <div role="toolbar" aria-label={t("drawingToolbar.ariaLabel")} className="toolbar-group">
@@ -38,23 +39,28 @@ export function DrawingToolbar({
       >
         {t("drawingToolbar.marker")}
       </button>
-      <label className="base-layer-select">
-        {t("drawingToolbar.geometryLabel")}
-        <select
-          value={geometryValue}
-          disabled={disabled}
-          onChange={(e) => onSelectTool(e.target.value as DrawingTool)}
-        >
-          <option value="" disabled>
-            {t("drawingToolbar.selectShape")}
-          </option>
-          {geometryTools.map(({ tool, label }) => (
-            <option key={tool} value={tool}>
+      <MenuButton
+        label={`${t("drawingToolbar.geometryLabel")}: ${activeGeometry?.label ?? t("drawingToolbar.selectShape")}`}
+        disabled={disabled}
+      >
+        {(close) =>
+          geometryTools.map(({ tool, label }) => (
+            <button
+              key={tool}
+              type="button"
+              role="menuitemradio"
+              className="menu-item"
+              aria-checked={mode === tool}
+              onClick={() => {
+                onSelectTool(tool);
+                close();
+              }}
+            >
               {label}
-            </option>
-          ))}
-        </select>
-      </label>
+            </button>
+          ))
+        }
+      </MenuButton>
       {(mode === "polygon" || mode === "line") && (
         <button type="button" className="btn" onClick={onFinish}>
           {t("drawingToolbar.finish")}

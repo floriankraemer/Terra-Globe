@@ -5,10 +5,30 @@
 help:            ## show this list of commands
 	@grep -E '^[a-zA-Z_-]+:.*## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
-dev:            ## run browser dev server in a container (http://localhost:5173)
-	docker compose up web-dev
+WEB_IMAGE_DEPS = docker/Dockerfile.web package.json pnpm-workspace.yaml pnpm-lock.yaml \
+	packages/core/package.json packages/map/package.json \
+	packages/storage-indexeddb/package.json packages/storage-sqlite/package.json \
+	packages/storage-remote/package.json packages/ui/package.json \
+	e2e/playwright/package.json
 
-test:           ## run all unit tests (TS via container + Rust via cargo, if available)
+TAURI_IMAGE_DEPS = docker/Dockerfile.tauri-linux package.json pnpm-workspace.yaml pnpm-lock.yaml \
+	packages/core/package.json packages/map/package.json \
+	packages/storage-indexeddb/package.json packages/storage-sqlite/package.json \
+	packages/storage-remote/package.json packages/ui/package.json \
+	e2e/playwright/package.json
+
+.docker/web.stamp: $(WEB_IMAGE_DEPS)
+	docker compose build web-dev
+	@mkdir -p .docker && touch $@
+
+.docker/tauri-linux.stamp: $(TAURI_IMAGE_DEPS)
+	docker compose build tauri-linux-build
+	@mkdir -p .docker && touch $@
+
+dev: .docker/web.stamp   ## run browser dev server in a container (http://localhost:5173)
+	docker compose up --no-build web-dev
+
+test: .docker/web.stamp .docker/tauri-linux.stamp   ## run all unit tests (TS via container + Rust via cargo, if available)
 	docker compose run --rm test
 	@if command -v cargo >/dev/null 2>&1; then \
 		cargo test --manifest-path src-tauri/Cargo.toml; \
@@ -16,17 +36,17 @@ test:           ## run all unit tests (TS via container + Rust via cargo, if ava
 		docker compose run --rm tauri-linux-build cargo test --manifest-path src-tauri/Cargo.toml; \
 	fi
 
-lint:            ## eslint+prettier+clippy+rustfmt check
+lint: .docker/web.stamp .docker/tauri-linux.stamp   ## eslint+prettier+clippy+rustfmt check
 	docker compose run --rm test pnpm -r lint
 	docker compose run --rm tauri-linux-build sh -c "cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings && cargo fmt --manifest-path src-tauri/Cargo.toml --check"
 
-build-web:       ## static browser bundle -> packages/ui/dist
+build-web: .docker/web.stamp   ## static browser bundle -> packages/ui/dist
 	docker compose run --rm web-build
 
-build-linux:     ## Tauri Linux bundle (.AppImage/.deb) via container
+build-linux: .docker/tauri-linux.stamp   ## Tauri Linux bundle (.AppImage/.deb) via container
 	docker compose run --rm tauri-linux-build cargo tauri build
 
-build-windows:   ## Windows NSIS installer + raw .exe via cargo-xwin cross-compile (unsigned)
+build-windows: .docker/tauri-linux.stamp   ## Windows NSIS installer + raw .exe via cargo-xwin cross-compile (unsigned)
 	docker compose run --rm tauri-linux-build cargo tauri build --target x86_64-pc-windows-msvc --runner cargo-xwin
 	@mkdir -p dist-windows
 	docker run --rm -v terra-globe_tauri_target:/target -v "$$(pwd)/dist-windows:/out" alpine sh -c "\
@@ -44,4 +64,4 @@ build-all: build-linux build-windows build-macos
 
 clean:           ## tear down containers/volumes and local build output
 	docker compose down -v
-	rm -rf packages/*/dist src-tauri/target
+	rm -rf packages/*/dist src-tauri/target .docker
