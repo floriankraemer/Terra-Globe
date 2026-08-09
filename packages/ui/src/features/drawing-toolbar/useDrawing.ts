@@ -49,7 +49,7 @@ export function useDrawing(
   useEffect(() => {
     if (!viewer) return;
 
-    const entityFactory = new CesiumEntityFactory(viewer.entities);
+    const entityFactory = new CesiumEntityFactory(viewer);
     const controller = new DrawingController(entityFactory);
     const picker = new CesiumScreenPicker(viewer);
     controllerRef.current = controller;

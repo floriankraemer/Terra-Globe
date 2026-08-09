@@ -165,7 +165,7 @@ export function useLibrary(viewer: Cesium.Viewer | null): UseLibraryResult {
     createRepository().then(async (repo) => {
       if (cancelled) return;
       repoRef.current = repo;
-      const synchronizer = new EntitySynchronizer(repo, new CesiumEntityFactory(viewer.entities));
+      const synchronizer = new EntitySynchronizer(repo, new CesiumEntityFactory(viewer));
       syncRef.current = synchronizer;
       await synchronizer.loadAll();
       await refresh();

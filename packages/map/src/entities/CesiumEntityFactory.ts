@@ -2,6 +2,7 @@ import * as Cesium from "cesium";
 import {
   circleToPolygonRing,
   geometryCenter,
+  type AltitudeMode,
   type CircleGeometry,
   type GeoPoint,
   type GroundOverlayGeometry,
@@ -21,6 +22,32 @@ const HEIGHT_REFERENCE = {
   relativeToGround: Cesium.HeightReference.RELATIVE_TO_GROUND,
   absolute: Cesium.HeightReference.NONE,
 } as const;
+
+// Without real elevation data, `HeightReference.NONE` places a marker at its
+// literal stored altitude above the ellipsoid while the basemap imagery is
+// draped flat at the ellipsoid surface - a marker with a KML "absolute"
+// altitude (e.g. imported GPS elevation) then renders floating in mid-air.
+// Once a real terrain provider is loaded, that same height reference
+// correctly floats the marker above the actual 3D terrain instead, so this
+// is re-checked on every render rather than cached at construction time.
+function hasElevationTerrain(viewer: Cesium.Viewer): boolean {
+  return !(viewer.terrainProvider instanceof Cesium.EllipsoidTerrainProvider);
+}
+
+// KML omits altitudeMode far more often than it sets it, and per spec that
+// means "clampToGround" - not "absolute". Falling back to NONE (absolute)
+// here was the actual cause of ordinary imported points floating: their
+// <coordinates> altitude (e.g. GPS elevation) got treated as literal height
+// above the ellipsoid. clampToGround also doubles as the "no DEM available"
+// normalization: it snaps to the basemap surface when terrain is flat, and
+// to the real 3D height model once a terrain provider supplies one.
+function pointHeightReference(
+  altitudeMode: AltitudeMode | undefined,
+  viewer: Cesium.Viewer,
+): Cesium.HeightReference {
+  if (!hasElevationTerrain(viewer)) return Cesium.HeightReference.CLAMP_TO_GROUND;
+  return HEIGHT_REFERENCE[altitudeMode ?? "clampToGround"];
+}
 
 // KML Model.Link can point at any 3D format (COLLADA .dae is the KML norm) -
 // Cesium's ModelGraphics only loads glTF, so anything else falls back to a
@@ -164,10 +191,11 @@ function outlineBoundaryLoops(geometry: PlacemarkGeometry, style: Style | undefi
 
 function toEntityOptions(
   geometry: PlacemarkGeometry,
+  viewer: Cesium.Viewer,
   style?: Style,
   name?: string,
 ): Cesium.Entity.ConstructorOptions {
-  const options = toGeometryOptions(geometry, style);
+  const options = toGeometryOptions(geometry, viewer, style);
   const label = labelGraphics(name);
   if (label) {
     // Rectangle/Polygon/LineString have no entity.position of their own
@@ -184,6 +212,7 @@ function toEntityOptions(
 
 function toGeometryOptions(
   geometry: PlacemarkGeometry,
+  viewer: Cesium.Viewer,
   style?: Style,
 ): Cesium.Entity.ConstructorOptions {
   switch (geometry.type) {
@@ -196,9 +225,7 @@ function toGeometryOptions(
         ),
         billboard: markerBillboard(
           style,
-          geometry.coordinates.altitudeMode
-            ? HEIGHT_REFERENCE[geometry.coordinates.altitudeMode]
-            : undefined,
+          pointHeightReference(geometry.coordinates.altitudeMode, viewer),
         ),
       };
     case "Circle":
@@ -300,6 +327,7 @@ function toGeometryOptions(
 
 function toDynamicGeometryOptions(
   getGeometry: () => PlacemarkGeometry,
+  viewer: Cesium.Viewer,
   style: Style | undefined,
 ): Cesium.Entity.ConstructorOptions {
   // Only the vertex/shape data changes every animation frame during a drag;
@@ -318,9 +346,7 @@ function toDynamicGeometryOptions(
         }, false),
         billboard: markerBillboard(
           style,
-          shape.type === "Point" && shape.coordinates.altitudeMode
-            ? HEIGHT_REFERENCE[shape.coordinates.altitudeMode]
-            : undefined,
+          pointHeightReference(shape.coordinates.altitudeMode, viewer),
         ),
       };
     case "Circle":
@@ -412,7 +438,7 @@ function toDynamicGeometryOptions(
       };
     case "Model":
       return {
-        ...toGeometryOptions(shape, style),
+        ...toGeometryOptions(shape, viewer, style),
         position: new Cesium.CallbackPositionProperty(() => {
           const g = getGeometry() as ModelGeometry;
           return Cesium.Cartesian3.fromDegrees(
@@ -430,7 +456,11 @@ function toDynamicGeometryOptions(
 }
 
 export class CesiumEntityFactory implements IEntityFactory {
-  constructor(private readonly entities: Cesium.EntityCollection) {}
+  private readonly entities: Cesium.EntityCollection;
+
+  constructor(private readonly viewer: Cesium.Viewer) {
+    this.entities = viewer.entities;
+  }
 
   // Companion outline-polyline entities per main entity id (see
   // outlineBoundaryLoops). A placemark's geometry never changes after
@@ -499,7 +529,7 @@ export class CesiumEntityFactory implements IEntityFactory {
     let current = initialGeometry;
     const entity = this.entities.add({
       id,
-      ...toDynamicGeometryOptions(() => current, style),
+      ...toDynamicGeometryOptions(() => current, this.viewer, style),
     });
     return {
       handle: { entityId: entity.id },
@@ -515,7 +545,7 @@ export class CesiumEntityFactory implements IEntityFactory {
     style?: Style,
     name?: string,
   ): EntityHandle {
-    const entity = this.entities.add({ id, ...toEntityOptions(geometry, style, name) });
+    const entity = this.entities.add({ id, ...toEntityOptions(geometry, this.viewer, style, name) });
     this.syncOutlineEntities(entity.id, geometry, style);
     return { entityId: entity.id };
   }
@@ -534,7 +564,7 @@ export class CesiumEntityFactory implements IEntityFactory {
     // primitives (expensive tessellation for ellipse/rectangle/polygon) on
     // every call - this is what made the rectangle/circle drag preview,
     // which calls updateEntity on every mouse-move tick, feel sluggish.
-    const options = toEntityOptions(geometry, style, name);
+    const options = toEntityOptions(geometry, this.viewer, style, name);
     entity.position = options.position
       ? new Cesium.ConstantPositionProperty(options.position as Cesium.Cartesian3)
       : undefined;
@@ -589,7 +619,7 @@ export class CesiumEntityFactory implements IEntityFactory {
     if (!entity) throw new Error(`Unknown entity: ${handle.entityId}`);
 
     let current = initialGeometry;
-    const options = toDynamicGeometryOptions(() => current, style);
+    const options = toDynamicGeometryOptions(() => current, this.viewer, style);
 
     // Rectangle/Polygon/LineString have no entity.position of their own in
     // toDynamicGeometryOptions (same as the static path) - give them a
