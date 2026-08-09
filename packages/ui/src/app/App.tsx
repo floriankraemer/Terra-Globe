@@ -6,6 +6,7 @@ import { SceneMode } from "cesium";
 import {
   createPointGeometry,
   DEFAULT_MARKER_ICON,
+  geometryCenter,
   NominatimGeocodingProvider,
   OsrmRoutingProvider,
   type GeocodeResult,
@@ -39,6 +40,7 @@ import { FileMenu } from "../features/import-export/FileMenu.js";
 import { RulerToolbar } from "../features/ruler/RulerToolbar.js";
 import { RulerPanel } from "../features/ruler/RulerPanel.js";
 import { useRuler } from "../features/ruler/useRuler.js";
+import { useDistanceRings } from "../features/placemark-editor/useDistanceRings.js";
 import { RoutePlannerToolbar } from "../features/route-planner/RoutePlannerToolbar.js";
 import { RoutePlannerPanel } from "../features/route-planner/RoutePlannerPanel.js";
 import { useRoutePlanner } from "../features/route-planner/useRoutePlanner.js";
@@ -206,6 +208,7 @@ export function App() {
   );
   const exitConfirm = useExitConfirm(fileSync.dirty, settings.autoSave, fileSync.saveNow);
   const ruler = useRuler(viewer);
+  const distanceRings = useDistanceRings(viewer);
   const routePlanner = useRoutePlanner(viewer, routingProvider, geocodingProvider);
   const { mode, selectTool, finish, cancel } = useDrawing(
     viewer,
@@ -519,6 +522,13 @@ export function App() {
             onDragStart={placemarkPanel.startDrag}
             onPreview={(patch) => library.previewPlacemarkEdits(editingPlacemark.id, patch)}
             onShowElevationProfile={() => setElevationProfilePlacemarkId(editingPlacemark.id)}
+            onDistanceRingsChange={(rings) =>
+              distanceRings.set(
+                geometryCenter(editingPlacemark.geometry),
+                rings,
+                settings.unitSystem,
+              )
+            }
             onClose={() => setSelectedPlacemarkId(null)}
             onDelete={() => {
               // Wait for the delete (including its internal refresh()) before

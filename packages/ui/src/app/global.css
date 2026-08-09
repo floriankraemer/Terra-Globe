@@ -488,6 +488,16 @@ input:not([type]) {
   color: var(--color-text-muted);
 }
 
+.placemark-editor-field-row {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.placemark-editor-field-row .placemark-editor-field {
+  flex: 1;
+  min-width: 0;
+}
+
 .placemark-editor-field textarea {
   font: inherit;
   font-size: 13px;

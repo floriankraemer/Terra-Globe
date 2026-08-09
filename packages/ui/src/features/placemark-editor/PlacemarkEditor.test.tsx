@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import type { Placemark } from "@terra-globe/core";
+import { metersToUnit, unitToMeters, type Placemark } from "@terra-globe/core";
 import { PlacemarkEditor, type PlacemarkStyleEdits } from "./PlacemarkEditor.js";
 
 function placemark(overrides: Partial<Placemark> = {}): Placemark {
@@ -223,6 +223,166 @@ describe("PlacemarkEditor - Point (marker)", () => {
     );
 
     expect(screen.getByLabelText("Color")).toHaveValue("#00ff00");
+  });
+});
+
+describe("PlacemarkEditor - distance rings (session-only)", () => {
+  it("hides the ring fields until the checkbox is checked", async () => {
+    const user = userEvent.setup();
+    render(
+      <PlacemarkEditor
+        placemark={placemark()}
+        style={style()}
+        onSave={vi.fn()}
+        onClose={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByLabelText("Ring spacing")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Disc radius")).not.toBeInTheDocument();
+
+    await user.click(screen.getByLabelText("Show distance rings"));
+
+    expect(screen.getByLabelText("Ring spacing")).toHaveValue(100);
+    expect(screen.getByLabelText("Disc radius")).toHaveValue(500);
+  });
+
+  it("shows imperial-converted defaults when unitSystem is imperial", async () => {
+    const user = userEvent.setup();
+    render(
+      <PlacemarkEditor
+        placemark={placemark()}
+        style={style()}
+        unitSystem="imperial"
+        onSave={vi.fn()}
+        onClose={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByLabelText("Show distance rings"));
+
+    expect(screen.getByLabelText("Ring spacing")).not.toHaveValue(100);
+    expect(screen.getByLabelText("Disc radius")).not.toHaveValue(500);
+  });
+
+  it("checking the checkbox reports the default rings in meters", async () => {
+    const onDistanceRingsChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <PlacemarkEditor
+        placemark={placemark()}
+        style={style()}
+        onSave={vi.fn()}
+        onClose={vi.fn()}
+        onDelete={vi.fn()}
+        onDistanceRingsChange={onDistanceRingsChange}
+      />,
+    );
+    onDistanceRingsChange.mockClear();
+
+    await user.click(screen.getByLabelText("Show distance rings"));
+
+    expect(onDistanceRingsChange).toHaveBeenLastCalledWith({
+      spacingMeters: 100,
+      discRadiusMeters: 500,
+    });
+  });
+
+  it("typing in the spacing/radius inputs reports correctly converted meters", async () => {
+    const onDistanceRingsChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <PlacemarkEditor
+        placemark={placemark()}
+        style={style()}
+        unitSystem="imperial"
+        onSave={vi.fn()}
+        onClose={vi.fn()}
+        onDelete={vi.fn()}
+        onDistanceRingsChange={onDistanceRingsChange}
+      />,
+    );
+
+    await user.click(screen.getByLabelText("Show distance rings"));
+
+    const spacingInput = screen.getByLabelText("Ring spacing");
+    await user.clear(spacingInput);
+    await user.type(spacingInput, "200");
+
+    expect(onDistanceRingsChange).toHaveBeenLastCalledWith({
+      spacingMeters: unitToMeters(200, "imperial"),
+      discRadiusMeters: unitToMeters(metersToUnit(500, "imperial"), "imperial"),
+    });
+  });
+
+  it("unchecking the checkbox reports null", async () => {
+    const onDistanceRingsChange = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <PlacemarkEditor
+        placemark={placemark()}
+        style={style()}
+        onSave={vi.fn()}
+        onClose={vi.fn()}
+        onDelete={vi.fn()}
+        onDistanceRingsChange={onDistanceRingsChange}
+      />,
+    );
+
+    await user.click(screen.getByLabelText("Show distance rings"));
+    onDistanceRingsChange.mockClear();
+    await user.click(screen.getByLabelText("Show distance rings"));
+
+    expect(onDistanceRingsChange).toHaveBeenLastCalledWith(null);
+  });
+
+  it("reports null on unmount even if rings were enabled", async () => {
+    const onDistanceRingsChange = vi.fn();
+    const user = userEvent.setup();
+    const { unmount } = render(
+      <PlacemarkEditor
+        placemark={placemark()}
+        style={style()}
+        onSave={vi.fn()}
+        onClose={vi.fn()}
+        onDelete={vi.fn()}
+        onDistanceRingsChange={onDistanceRingsChange}
+      />,
+    );
+
+    await user.click(screen.getByLabelText("Show distance rings"));
+    onDistanceRingsChange.mockClear();
+
+    unmount();
+
+    expect(onDistanceRingsChange).toHaveBeenLastCalledWith(null);
+  });
+
+  it("does not include the rings state in the onSave payload", async () => {
+    const onSave = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <PlacemarkEditor
+        placemark={placemark()}
+        style={style()}
+        onSave={onSave}
+        onClose={vi.fn()}
+        onDelete={vi.fn()}
+      />,
+    );
+
+    await user.click(screen.getByLabelText("Show distance rings"));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(onSave).toHaveBeenCalledWith({
+      name: "Berlin",
+      description: "Capital of Germany",
+      style: style(),
+      visibility: true,
+      geometry: placemark().geometry,
+    });
   });
 });
 

@@ -55,6 +55,10 @@ export interface PlacemarkEditorProps {
     geometry: PlacemarkGeometry;
   }) => void;
   onShowElevationProfile?: () => void;
+  /** Session-only distance rings around a Point marker - never persisted, see useDistanceRings. */
+  onDistanceRingsChange?: (
+    rings: { spacingMeters: number; discRadiusMeters: number } | null,
+  ) => void;
 }
 
 function geometryMeasurements(
@@ -104,6 +108,7 @@ export function PlacemarkEditor({
   onDragStart,
   onPreview,
   onShowElevationProfile,
+  onDistanceRingsChange,
 }: PlacemarkEditorProps) {
   const { t } = useTranslation();
   const geometryType = placemark.geometry.type;
@@ -130,6 +135,18 @@ export function PlacemarkEditor({
   );
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [confirmingClose, setConfirmingClose] = useState(false);
+
+  // Session-only overlay, never persisted (see PlacemarkEditorProps.onDistanceRingsChange)
+  // - always starts off, resetting whenever the editor remounts for a new placemark.
+  const [ringsEnabled, setRingsEnabled] = useState(false);
+  const [ringSpacingMeters, setRingSpacingMeters] = useState(100);
+  const [ringDiscRadiusMeters, setRingDiscRadiusMeters] = useState(500);
+  const [ringSpacingText, setRingSpacingText] = useState(() =>
+    String(metersToUnit(ringSpacingMeters, unitSystem)),
+  );
+  const [ringDiscRadiusText, setRingDiscRadiusText] = useState(() =>
+    String(metersToUnit(ringDiscRadiusMeters, unitSystem)),
+  );
 
   const draftGeometry: PlacemarkGeometry =
     geometryType === "Circle"
@@ -185,6 +202,26 @@ export function PlacemarkEditor({
   useEffect(() => {
     return () => {
       if (!suppressRevertRef.current) onPreviewRef.current?.(originalRef.current);
+    };
+  }, []);
+
+  // Distance rings are a separate, session-only overlay - kept entirely out
+  // of onPreview/draftGeometry/draftStyle/isDirty/onSave so they never leak
+  // into a Save or KML export.
+  const onDistanceRingsChangeRef = useRef(onDistanceRingsChange);
+  onDistanceRingsChangeRef.current = onDistanceRingsChange;
+
+  useEffect(() => {
+    onDistanceRingsChangeRef.current?.(
+      ringsEnabled
+        ? { spacingMeters: ringSpacingMeters, discRadiusMeters: ringDiscRadiusMeters }
+        : null,
+    );
+  }, [ringsEnabled, ringSpacingMeters, ringDiscRadiusMeters]);
+
+  useEffect(() => {
+    return () => {
+      onDistanceRingsChangeRef.current?.(null);
     };
   }, []);
 
@@ -328,6 +365,62 @@ export function PlacemarkEditor({
               ))}
             </div>
           </div>
+          <label className="placemark-editor-checkbox-field">
+            <input
+              type="checkbox"
+              checked={ringsEnabled}
+              onChange={(e) => setRingsEnabled(e.target.checked)}
+            />
+            {t("placemarkEditor.showDistanceRings")}
+          </label>
+          {ringsEnabled && (
+            <div className="placemark-editor-field-row">
+              <div className="placemark-editor-field">
+                <label htmlFor="placemark-editor-ring-spacing">
+                  {t("placemarkEditor.ringSpacing")}
+                </label>
+                <div className="placemark-editor-radius-input">
+                  <input
+                    id="placemark-editor-ring-spacing"
+                    type="number"
+                    min={0.01}
+                    step="any"
+                    value={ringSpacingText}
+                    onChange={(e) => {
+                      setRingSpacingText(e.target.value);
+                      const next = Number(e.target.value);
+                      if (Number.isFinite(next) && next > 0) {
+                        setRingSpacingMeters(unitToMeters(next, unitSystem));
+                      }
+                    }}
+                  />
+                  <span>{distanceUnitLabel(unitSystem)}</span>
+                </div>
+              </div>
+              <div className="placemark-editor-field">
+                <label htmlFor="placemark-editor-ring-disc-radius">
+                  {t("placemarkEditor.discRadius")}
+                </label>
+                <div className="placemark-editor-radius-input">
+                  <input
+                    id="placemark-editor-ring-disc-radius"
+                    type="number"
+                    min={0.01}
+                    step="any"
+                    value={ringDiscRadiusText}
+                    onChange={(e) => {
+                      setRingDiscRadiusText(e.target.value);
+                      const next = Number(e.target.value);
+                      if (Number.isFinite(next) && next > 0) {
+                        setRingDiscRadiusMeters(unitToMeters(next, unitSystem));
+                      }
+                    }}
+                  />
+                  <span>{distanceUnitLabel(unitSystem)}</span>
+                </div>
+              </div>
+            </div>
+          )}
         </>
       )}
 
