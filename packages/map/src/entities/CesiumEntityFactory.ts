@@ -545,7 +545,10 @@ export class CesiumEntityFactory implements IEntityFactory {
     style?: Style,
     name?: string,
   ): EntityHandle {
-    const entity = this.entities.add({ id, ...toEntityOptions(geometry, this.viewer, style, name) });
+    const entity = this.entities.add({
+      id,
+      ...toEntityOptions(geometry, this.viewer, style, name),
+    });
     this.syncOutlineEntities(entity.id, geometry, style);
     return { entityId: entity.id };
   }
