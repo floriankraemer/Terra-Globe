@@ -5,7 +5,6 @@ import type * as Cesium from "cesium";
 import { SceneMode } from "cesium";
 import {
   createPointGeometry,
-  DEFAULT_MARKER_ICON,
   geometryCenter,
   NominatimGeocodingProvider,
   OsrmRoutingProvider,
@@ -61,15 +60,6 @@ import { createRoutingProvider } from "../platform/createRoutingProvider.js";
 import { createSecretStore } from "../platform/createSecretStore.js";
 import { buildTileSources } from "../platform/tileProviderRegistry.js";
 
-const DEFAULT_STYLE: PlacemarkStyleEdits = {
-  outlineEnabled: true,
-  outlineColor: "#ff0000",
-  outlineWidth: 2,
-  filled: false,
-  fillColor: "#ff0000",
-  markerIcon: DEFAULT_MARKER_ICON,
-};
-
 export function App() {
   const { t } = useTranslation();
   const defaultTileSource = BUILTIN_TILE_SOURCES[0]!;
@@ -80,7 +70,7 @@ export function App() {
     tileSources.find((source) => source.id === baseLayerId) ?? defaultTileSource;
   const [viewer, setViewer] = useState<Cesium.Viewer | null>(null);
   const [selectedPlacemarkId, setSelectedPlacemarkId] = useState<string | null>(null);
-  const [editorStyle, setEditorStyle] = useState<PlacemarkStyleEdits>(DEFAULT_STYLE);
+  const [editorStyle, setEditorStyle] = useState<PlacemarkStyleEdits | null>(null);
   const [notice, setNotice] = useState<NoticeData | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
@@ -305,13 +295,15 @@ export function App() {
     showHeightProfile && editingPlacemark?.geometry.type === "LineString" ? editingPlacemark : null;
 
   useEffect(() => {
+    // Clear synchronously on every selection change (including deselection) -
+    // the editor only mounts once editorStyle is non-null (see the JSX
+    // below), so this guarantees it never mounts for a new placemark using
+    // the PREVIOUS one's style. Resolving that gap by falling back to a
+    // default style instead would just trade one wrong color (stale) for
+    // another (default) - not mounting the editor at all until the correct
+    // style has loaded is the only way to never preview a wrong color.
+    setEditorStyle(null);
     if (!selectedPlacemarkId) return;
-    // Reset synchronously before the async lookup below resolves - otherwise
-    // the editor (which mounts immediately on selection, keyed by the new
-    // placemark's id) briefly previews with the PREVIOUS placemark's style,
-    // painting its highlight color onto the newly selected entity until the
-    // fetch for the new one completes.
-    setEditorStyle(DEFAULT_STYLE);
     let cancelled = false;
     library.getPlacemarkStyle(selectedPlacemarkId).then((style) => {
       if (!cancelled) setEditorStyle(style);
@@ -325,7 +317,7 @@ export function App() {
     viewer,
     editingPlacemark,
     mode !== "idle" || ruler.active || routePlanner.active,
-    (id) => library.beginPlacemarkDrag(id, editorStyle),
+    (id) => (editorStyle ? library.beginPlacemarkDrag(id, editorStyle) : undefined),
     (id, geometry) => {
       void wrap(() => library.updatePlacemarkGeometry(id, geometry));
     },
@@ -509,7 +501,7 @@ export function App() {
           onMouseDown={sidebar.startResize}
         />
       </div>
-      {editingPlacemark && (
+      {editingPlacemark && editorStyle && (
         <div
           className="placemark-editor-panel"
           style={{
