@@ -159,7 +159,7 @@ export function useRoutePlanner(
   useEffect(() => {
     if (!viewer) return;
 
-    const entityFactory = new CesiumEntityFactory(viewer.entities);
+    const entityFactory = new CesiumEntityFactory(viewer);
     entityFactoryRef.current = entityFactory;
     pickerRef.current = new CesiumScreenPicker(viewer);
 

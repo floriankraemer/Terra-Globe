@@ -124,7 +124,7 @@ export function useRuler(viewer: Cesium.Viewer | null): UseRulerResult {
   useEffect(() => {
     if (!viewer) return;
 
-    const entityFactory = new CesiumEntityFactory(viewer.entities);
+    const entityFactory = new CesiumEntityFactory(viewer);
     const controller = new RulerController();
     const picker = new CesiumScreenPicker(viewer);
     controllerRef.current = controller;
