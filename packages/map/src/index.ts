@@ -4,6 +4,7 @@ export * from "./viewer/flyTo.js";
 export * from "./entities/IEntityFactory.js";
 export * from "./entities/FakeEntityFactory.js";
 export * from "./entities/CesiumEntityFactory.js";
+export * from "./entities/DistanceRingsRenderer.js";
 export * from "./drawing/geometryMath.js";
 export * from "./drawing/DrawingController.js";
 export * from "./drawing/IScreenPicker.js";
