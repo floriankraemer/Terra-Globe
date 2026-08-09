@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Info, Settings as SettingsIcon } from "lucide-react";
 import type * as Cesium from "cesium";
@@ -48,6 +48,9 @@ import { PlacemarkEditor } from "../features/placemark-editor/PlacemarkEditor.js
 import { SettingsModal } from "../features/settings/SettingsModal.js";
 import { AboutModal } from "../features/about/AboutModal.js";
 import { useSettings } from "../features/settings/useSettings.js";
+import { useFileSync } from "../features/file-sync/useFileSync.js";
+import { useExitConfirm } from "../features/file-sync/useExitConfirm.js";
+import { ConfirmModal } from "../features/confirm/ConfirmModal.js";
 import i18n from "../i18n/i18n.js";
 import { useFloatingPanel } from "./useFloatingPanel.js";
 import { useResizableWidth } from "./useResizableWidth.js";
@@ -79,6 +82,7 @@ export function App() {
   const [notice, setNotice] = useState<NoticeData | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [loadConfirmOpen, setLoadConfirmOpen] = useState(false);
   const sidebar = useResizableWidth(260, 200, 600, "terra-globe:sidebarWidth");
   const topbarRef = useRef<HTMLDivElement>(null);
   const [placesPanelTop, setPlacesPanelTop] = useState(76);
@@ -191,22 +195,30 @@ export function App() {
 
   const library = useLibrary(viewer);
   const undoRedo = useUndoRedo(library);
+  const fileSync = useFileSync(library, settings.autoSave);
+  // Every persisted mutation goes through both: undoRedo.wrap snapshots
+  // before/after for undo/redo, fileSync.wrap marks the file dirty and
+  // schedules an autosave. Order matters - fileSync must see the
+  // already-undo-tracked action's result, not wrap undoRedo itself.
+  const wrap = useCallback(
+    <T,>(action: () => Promise<T>): Promise<T> => fileSync.wrap(() => undoRedo.wrap(action)),
+    [fileSync, undoRedo],
+  );
+  const exitConfirm = useExitConfirm(fileSync.dirty, settings.autoSave, fileSync.saveNow);
   const ruler = useRuler(viewer);
   const routePlanner = useRoutePlanner(viewer, routingProvider, geocodingProvider);
   const { mode, selectTool, finish, cancel } = useDrawing(
     viewer,
     (geometry) => {
-      void undoRedo
-        .wrap(() => library.addPlacemark(geometry))
-        .then((id) => {
-          if (id) setSelectedPlacemarkId(id);
-        });
+      void wrap(() => library.addPlacemark(geometry)).then((id) => {
+        if (id) setSelectedPlacemarkId(id);
+      });
     },
     (entityId) => {
       if (library.placemarks.some((p) => p.id === entityId)) setSelectedPlacemarkId(entityId);
     },
   );
-  const importExport = useImportExport(library, undoRedo.wrap);
+  const importExport = useImportExport(library, wrap);
 
   // The placemark editor keeps live-previewing the selected entity while
   // open; a restore can remove or replace that entity out from under it
@@ -214,11 +226,45 @@ export function App() {
   // close it before time-travelling, same as a plain delete does.
   function runUndo() {
     setSelectedPlacemarkId(null);
-    void undoRedo.undo();
+    // Uses fileSync.wrap directly (not the composed `wrap`) - undo/redo
+    // already manage their own history stacks via undoRedo.undo(), so
+    // routing through undoRedo.wrap too would record a spurious new entry.
+    void fileSync.wrap(() => undoRedo.undo());
   }
   function runRedo() {
     setSelectedPlacemarkId(null);
-    void undoRedo.redo();
+    void fileSync.wrap(() => undoRedo.redo());
+  }
+
+  async function performLoad() {
+    const result = await fileSync.loadFromDisk();
+    if (!result) return;
+    try {
+      await undoRedo.wrap(() => library.restoreSnapshot(result.snapshot));
+      fileSync.onLoaded(result.filePath);
+      if (result.warnings.length > 0) {
+        setNotice({
+          level: "error",
+          message: t("importExport.skippedItems", {
+            count: result.warnings.length,
+            warnings: result.warnings.join(" "),
+          }),
+        });
+      }
+    } catch (err) {
+      setNotice({
+        level: "error",
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  function onLoad() {
+    if (fileSync.dirty && !settings.autoSave) {
+      setLoadConfirmOpen(true);
+      return;
+    }
+    void performLoad();
   }
 
   useEffect(() => {
@@ -244,7 +290,7 @@ export function App() {
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [undoRedo]);
+  }, [undoRedo, fileSync]);
 
   const editingPlacemark = library.placemarks.find((p) => p.id === selectedPlacemarkId) ?? null;
   const [elevationProfilePlacemarkId, setElevationProfilePlacemarkId] = useState<string | null>(
@@ -272,7 +318,7 @@ export function App() {
     mode !== "idle" || ruler.active || routePlanner.active,
     (id) => library.beginPlacemarkDrag(id, editorStyle),
     (id, geometry) => {
-      void undoRedo.wrap(() => library.updatePlacemarkGeometry(id, geometry));
+      void wrap(() => library.updatePlacemarkGeometry(id, geometry));
     },
   );
 
@@ -306,6 +352,9 @@ export function App() {
           }}
           onExportKml={() => void importExport.exportKml()}
           onExportKmz={() => void importExport.exportKmz()}
+          onLoad={onLoad}
+          onSave={() => void fileSync.saveNow()}
+          saveDisabled={!fileSync.dirty}
         />
         <BaseLayerMenu
           tileSources={tileSources}
@@ -422,25 +471,23 @@ export function App() {
               if (placemark && viewer) flyToGeometry(viewer, placemark.geometry);
             }}
             onCreateFolder={(parentId, name) =>
-              void undoRedo.wrap(() => library.createFolder(parentId, name))
+              void wrap(() => library.createFolder(parentId, name))
             }
-            onRenameFolder={(id, name) => void undoRedo.wrap(() => library.renameFolder(id, name))}
-            onDeleteFolder={(id) => void undoRedo.wrap(() => library.deleteFolder(id))}
-            onToggleFolderVisibility={(id) =>
-              void undoRedo.wrap(() => library.toggleFolderVisibility(id))
-            }
+            onRenameFolder={(id, name) => void wrap(() => library.renameFolder(id, name))}
+            onDeleteFolder={(id) => void wrap(() => library.deleteFolder(id))}
+            onToggleFolderVisibility={(id) => void wrap(() => library.toggleFolderVisibility(id))}
             onMoveFolder={(id, parentId, index) =>
-              void undoRedo.wrap(() => library.moveFolder(id, parentId, index))
+              void wrap(() => library.moveFolder(id, parentId, index))
             }
             onDeletePlacemark={(id) => {
-              void undoRedo.wrap(() => library.deletePlacemark(id));
+              void wrap(() => library.deletePlacemark(id));
               if (id === selectedPlacemarkId) setSelectedPlacemarkId(null);
             }}
             onTogglePlacemarkVisibility={(id) =>
-              void undoRedo.wrap(() => library.togglePlacemarkVisibility(id))
+              void wrap(() => library.togglePlacemarkVisibility(id))
             }
             onMovePlacemark={(id, folderId, index) =>
-              void undoRedo.wrap(() => library.movePlacemark(id, folderId, index))
+              void wrap(() => library.movePlacemark(id, folderId, index))
             }
           />
         </div>
@@ -478,26 +525,24 @@ export function App() {
               // closing, same reasoning as onSave below - otherwise the tree
               // can still show the placemark for a moment after the editor
               // has already closed.
-              void undoRedo
-                .wrap(() => library.deletePlacemark(editingPlacemark.id))
-                .then(() => setSelectedPlacemarkId(null));
+              void wrap(() => library.deletePlacemark(editingPlacemark.id)).then(() =>
+                setSelectedPlacemarkId(null),
+              );
             }}
             onSave={({ name, description, style, visibility, geometry }) => {
               // Wait for the save (including its internal refresh()) before
               // closing - closing immediately (fire-and-forget) let a user
               // re-open the same placemark mid-save and see stale pre-save
               // data, since `placemarks` state hadn't caught up yet.
-              void undoRedo
-                .wrap(() =>
-                  library.savePlacemarkEdits(editingPlacemark.id, {
-                    name,
-                    description,
-                    style,
-                    visibility,
-                    geometry,
-                  }),
-                )
-                .then(() => setSelectedPlacemarkId(null));
+              void wrap(() =>
+                library.savePlacemarkEdits(editingPlacemark.id, {
+                  name,
+                  description,
+                  style,
+                  visibility,
+                  geometry,
+                }),
+              ).then(() => setSelectedPlacemarkId(null));
             }}
           />
           <div
@@ -629,10 +674,42 @@ export function App() {
           onAddProvider={settings.addProvider}
           onSetProviderEnabled={settings.setProviderEnabled}
           onRemoveProvider={settings.removeProvider}
+          autoSave={settings.autoSave}
+          onChangeAutoSave={settings.setAutoSave}
           onClose={() => setSettingsOpen(false)}
         />
       )}
       {aboutOpen && <AboutModal onClose={() => setAboutOpen(false)} />}
+      {loadConfirmOpen && (
+        <ConfirmModal
+          title={t("confirm.unsavedFileChangesTitle")}
+          message={t("confirm.unsavedFileChangesMessage")}
+          confirmLabel={t("confirm.discard")}
+          cancelLabel={t("common.cancel")}
+          extraLabel={t("confirm.save")}
+          onExtra={() => {
+            setLoadConfirmOpen(false);
+            void fileSync.saveNow().then(() => performLoad());
+          }}
+          onConfirm={() => {
+            setLoadConfirmOpen(false);
+            void performLoad();
+          }}
+          onCancel={() => setLoadConfirmOpen(false)}
+        />
+      )}
+      {exitConfirm.confirmOpen && (
+        <ConfirmModal
+          title={t("confirm.unsavedFileChangesTitle")}
+          message={t("confirm.unsavedFileChangesMessage")}
+          confirmLabel={t("confirm.discard")}
+          cancelLabel={t("common.cancel")}
+          extraLabel={t("confirm.save")}
+          onExtra={() => void exitConfirm.onSave()}
+          onConfirm={exitConfirm.onDiscard}
+          onCancel={exitConfirm.onCancel}
+        />
+      )}
       <CesiumViewerHost baseLayer={baseLayer} sceneMode={sceneMode} onReady={onReadyRef.current} />
       <ScreenOverlayLayer overlays={library.screenOverlays} />
     </div>

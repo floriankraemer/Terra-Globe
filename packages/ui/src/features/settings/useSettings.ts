@@ -7,6 +7,8 @@ export interface Settings {
   coordinateFormat: CoordinateFormat;
   language: SupportedLocale;
   providers: ProviderConfig[];
+  /** Tauri only: whether a loaded file is written back to disk automatically on every change, vs. requiring an explicit Save. */
+  autoSave: boolean;
 }
 
 export interface UseSettingsResult extends Settings {
@@ -16,6 +18,7 @@ export interface UseSettingsResult extends Settings {
   addProvider: (input: Omit<ProviderConfig, "id" | "enabled">) => string;
   setProviderEnabled: (id: string, enabled: boolean) => void;
   removeProvider: (id: string) => void;
+  setAutoSave: (autoSave: boolean) => void;
 }
 
 const STORAGE_KEY = "terra-globe:settings";
@@ -25,6 +28,7 @@ const DEFAULT_SETTINGS: Settings = {
   coordinateFormat: "decimal",
   language: "en",
   providers: [],
+  autoSave: true,
 };
 
 function isUnitSystem(value: unknown): value is UnitSystem {
@@ -75,6 +79,8 @@ function readStoredSettings(): Settings {
       providers: Array.isArray(candidate.providers)
         ? candidate.providers.filter(isProviderConfig)
         : DEFAULT_SETTINGS.providers,
+      autoSave:
+        typeof candidate.autoSave === "boolean" ? candidate.autoSave : DEFAULT_SETTINGS.autoSave,
     };
   } catch {
     return DEFAULT_SETTINGS;
@@ -111,6 +117,14 @@ export function useSettings(secretStore: SecretStore): UseSettingsResult {
   const setCoordinateFormat = useCallback((coordinateFormat: CoordinateFormat) => {
     setSettings((prev) => {
       const next = { ...prev, coordinateFormat };
+      persist(next);
+      return next;
+    });
+  }, []);
+
+  const setAutoSave = useCallback((autoSave: boolean) => {
+    setSettings((prev) => {
+      const next = { ...prev, autoSave };
       persist(next);
       return next;
     });
@@ -163,5 +177,6 @@ export function useSettings(secretStore: SecretStore): UseSettingsResult {
     addProvider,
     setProviderEnabled,
     removeProvider,
+    setAutoSave,
   };
 }

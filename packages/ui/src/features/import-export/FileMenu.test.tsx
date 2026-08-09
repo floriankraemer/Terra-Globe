@@ -14,6 +14,8 @@ describe("FileMenu", () => {
         onImportFile={vi.fn()}
         onExportKml={onExportKml}
         onExportKmz={onExportKmz}
+        onLoad={vi.fn()}
+        onSave={vi.fn()}
       />,
     );
 
@@ -36,6 +38,8 @@ describe("FileMenu", () => {
         onImportFile={onImportFile}
         onExportKml={vi.fn()}
         onExportKmz={vi.fn()}
+        onLoad={vi.fn()}
+        onSave={vi.fn()}
       />,
     );
 

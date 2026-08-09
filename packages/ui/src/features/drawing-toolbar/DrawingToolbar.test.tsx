@@ -10,7 +10,7 @@ describe("DrawingToolbar", () => {
     );
 
     expect(screen.getByRole("button", { name: "Marker" })).toHaveAttribute("aria-pressed", "false");
-    expect(screen.getByRole("combobox", { name: "Geometry" })).toHaveValue("");
+    expect(screen.getByRole("button", { name: "Geometry: Select shape" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Finish" })).not.toBeInTheDocument();
   });
@@ -44,12 +44,13 @@ describe("DrawingToolbar", () => {
       />,
     );
 
-    await user.selectOptions(screen.getByRole("combobox", { name: "Geometry" }), "circle");
+    await user.click(screen.getByRole("button", { name: "Geometry: Select shape" }));
+    await user.click(screen.getByRole("menuitemradio", { name: "Circle" }));
 
     expect(onSelectTool).toHaveBeenCalledWith("circle");
   });
 
-  it("reflects the active geometry tool as the dropdown's value and shows Cancel", () => {
+  it("reflects the active geometry tool as the dropdown's label and shows Cancel", () => {
     render(
       <DrawingToolbar
         mode="rectangle"
@@ -59,7 +60,7 @@ describe("DrawingToolbar", () => {
       />,
     );
 
-    expect(screen.getByRole("combobox", { name: "Geometry" })).toHaveValue("rectangle");
+    expect(screen.getByRole("button", { name: "Geometry: Rectangle" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Finish" })).not.toBeInTheDocument();
   });
@@ -105,7 +106,8 @@ describe("DrawingToolbar", () => {
       />,
     );
 
-    await user.selectOptions(screen.getByRole("combobox", { name: "Geometry" }), "line");
+    await user.click(screen.getByRole("button", { name: "Geometry: Select shape" }));
+    await user.click(screen.getByRole("menuitemradio", { name: "Line" }));
 
     expect(onSelectTool).toHaveBeenCalledWith("line");
   });

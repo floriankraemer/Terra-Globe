@@ -109,6 +109,8 @@ export default {
   importExport: {
     importButton: "Importer KML/KMZ",
     exportKml: "Exporter KML",
+    loadButton: "Charger KML/KMZ…",
+    saveButton: "Enregistrer",
     exportKmz: "Exporter KMZ",
     notKmlOrKmz: "« {{fileName}} » n'est pas un fichier .kml ou .kmz.",
     readError: "Impossible de lire « {{fileName}} » : {{error}}",
@@ -130,6 +132,9 @@ export default {
       "Voulez-vous vraiment supprimer « {{name}} » ? Cette action est irréversible.",
     unsavedChangesTitle: "Modifications non enregistrées",
     unsavedChangesMessage: "Enregistrer les modifications de « {{name}} » avant de fermer ?",
+    unsavedFileChangesTitle: "Modifications non enregistrées",
+    unsavedFileChangesMessage:
+      "Enregistrer les modifications du fichier actuel avant de continuer ?",
     discard: "Ignorer",
     save: "Enregistrer",
   },
@@ -164,6 +169,9 @@ export default {
     sectionUnits: "Unités",
     sectionLanguage: "Langue",
     sectionProviders: "Fournisseurs",
+    sectionSave: "Enregistrement",
+    autoSave: "Enregistrement automatique",
+    manualSave: "Enregistrement manuel",
     unitSystem: "Système d'unités",
     metric: "Métrique",
     imperial: "Impérial",

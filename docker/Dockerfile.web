@@ -32,4 +32,5 @@ COPY --chown=node:node . .
 
 EXPOSE 5173 4173
 
+ENTRYPOINT ["docker/entrypoint-web.sh"]
 CMD ["pnpm", "--filter", "@terra-globe/ui", "dev"]
