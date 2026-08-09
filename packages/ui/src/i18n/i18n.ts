@@ -5,6 +5,13 @@ import de from "./locales/de.js";
 import fr from "./locales/fr.js";
 import es from "./locales/es.js";
 import uk from "./locales/uk.js";
+import ja from "./locales/ja.js";
+import zh from "./locales/zh.js";
+import hi from "./locales/hi.js";
+import pl from "./locales/pl.js";
+import no from "./locales/no.js";
+import fi from "./locales/fi.js";
+import sv from "./locales/sv.js";
 import type { SupportedLocale } from "./types.js";
 
 // `en` is the source of truth for translation keys - typing every other
@@ -17,6 +24,13 @@ const resources: Record<SupportedLocale, { translation: Translation }> = {
   fr: { translation: fr },
   es: { translation: es },
   uk: { translation: uk },
+  ja: { translation: ja },
+  zh: { translation: zh },
+  hi: { translation: hi },
+  pl: { translation: pl },
+  no: { translation: no },
+  fi: { translation: fi },
+  sv: { translation: sv },
 };
 
 void i18next.use(initReactI18next).init({

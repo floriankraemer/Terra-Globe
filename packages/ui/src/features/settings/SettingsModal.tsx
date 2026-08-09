@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { CoordinateFormat, ProviderConfig, SecretStore, UnitSystem } from "@terra-globe/core";
 import { SUPPORTED_LOCALES, type SupportedLocale } from "../../i18n/types.js";
 import { ProvidersTab } from "./ProvidersTab.js";
+import { isTauri } from "../../platform/isTauri.js";
 
 export interface SettingsModalProps {
   unitSystem: UnitSystem;
@@ -16,10 +17,13 @@ export interface SettingsModalProps {
   onAddProvider: (input: Omit<ProviderConfig, "id" | "enabled">) => string;
   onSetProviderEnabled: (id: string, enabled: boolean) => void;
   onRemoveProvider: (id: string) => void;
+  /** Tauri only: auto-save vs manual-save for the currently loaded file. */
+  autoSave: boolean;
+  onChangeAutoSave: (autoSave: boolean) => void;
   onClose: () => void;
 }
 
-type SettingsSection = "units" | "language" | "providers";
+type SettingsSection = "units" | "language" | "providers" | "save";
 
 export function SettingsModal({
   unitSystem,
@@ -33,6 +37,8 @@ export function SettingsModal({
   onAddProvider,
   onSetProviderEnabled,
   onRemoveProvider,
+  autoSave,
+  onChangeAutoSave,
   onClose,
 }: SettingsModalProps) {
   const { t } = useTranslation();
@@ -41,6 +47,7 @@ export function SettingsModal({
     { id: "units", label: t("settings.sectionUnits") },
     { id: "language", label: t("settings.sectionLanguage") },
     { id: "providers", label: t("settings.sectionProviders") },
+    ...(isTauri() ? [{ id: "save" as const, label: t("settings.sectionSave") }] : []),
   ];
 
   return (
@@ -117,6 +124,29 @@ export function SettingsModal({
               onSetEnabled={onSetProviderEnabled}
               onRemove={onRemoveProvider}
             />
+          )}
+          {activeSection === "save" && (
+            <>
+              <div className="settings-modal-section-header">{t("settings.sectionSave")}</div>
+              <label className="placemark-editor-field">
+                <input
+                  type="radio"
+                  name="save-mode"
+                  checked={autoSave}
+                  onChange={() => onChangeAutoSave(true)}
+                />
+                {t("settings.autoSave")}
+              </label>
+              <label className="placemark-editor-field">
+                <input
+                  type="radio"
+                  name="save-mode"
+                  checked={!autoSave}
+                  onChange={() => onChangeAutoSave(false)}
+                />
+                {t("settings.manualSave")}
+              </label>
+            </>
           )}
         </div>
         <button type="button" className="btn modal-close" onClick={onClose}>

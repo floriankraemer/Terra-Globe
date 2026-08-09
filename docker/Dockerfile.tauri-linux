@@ -33,6 +33,10 @@ RUN cargo install tauri-cli --version "^2" --locked
 RUN rustup target add x86_64-pc-windows-msvc \
     && cargo install cargo-xwin --locked
 
+# Must come after `rustup target add` above - adding a target can trigger an
+# implicit toolchain reinstall that silently drops components added earlier.
+RUN rustup component add clippy rustfmt
+
 WORKDIR /workspace
 
 COPY package.json pnpm-workspace.yaml ./
@@ -48,4 +52,5 @@ RUN pnpm install --frozen-lockfile || pnpm install
 
 COPY . .
 
+ENTRYPOINT ["docker/entrypoint-tauri.sh"]
 CMD ["cargo", "tauri", "build"]
