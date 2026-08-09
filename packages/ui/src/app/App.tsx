@@ -306,6 +306,12 @@ export function App() {
 
   useEffect(() => {
     if (!selectedPlacemarkId) return;
+    // Reset synchronously before the async lookup below resolves - otherwise
+    // the editor (which mounts immediately on selection, keyed by the new
+    // placemark's id) briefly previews with the PREVIOUS placemark's style,
+    // painting its highlight color onto the newly selected entity until the
+    // fetch for the new one completes.
+    setEditorStyle(DEFAULT_STYLE);
     let cancelled = false;
     library.getPlacemarkStyle(selectedPlacemarkId).then((style) => {
       if (!cancelled) setEditorStyle(style);
