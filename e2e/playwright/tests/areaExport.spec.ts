@@ -12,12 +12,57 @@ interface TestableViewer {
   camera: {
     frustum: { width?: number };
     pickEllipsoid(windowPosition: { x: number; y: number }, ellipsoid: Ellipsoid): unknown;
+    setView(options: {
+      destination: { x: number; y: number; z: number };
+      orientation: { heading: number; pitch: number; roll: number };
+    }): void;
   };
   scene: {
     globe: { ellipsoid: Ellipsoid };
     render: (...args: unknown[]) => unknown;
   };
   canvas: { clientWidth: number; clientHeight: number };
+}
+
+/**
+ * Points the camera straight down at a fixed lon/lat/height, computed as a plain WGS84
+ * geodetic->ECEF Cartesian3 (Cesium's setView only reads .x/.y/.z off the destination, so a
+ * plain object works without needing the Cesium module in the page).
+ *
+ * Deliberately used instead of simulating mouse-wheel zoom: a rapid synthetic wheel-zoom
+ * sequence was found to reproducibly trigger an unrelated Cesium internal bug
+ * (`RangeError: Invalid array length` inside `createPotentiallyVisibleSet`, during frustum
+ * culling mid-zoom) in this headless environment - reproducible even with a single wheel
+ * tick, unrelated to the area-export feature itself (it fires before any area-export code
+ * runs). A direct setView jumps to the final camera pose in one step with no transient
+ * mid-zoom camera state, and was verified stable across repeated runs.
+ */
+async function setCameraAboveGround(
+  page: Page,
+  longitude: number,
+  latitude: number,
+  heightMeters: number,
+): Promise<void> {
+  await page.evaluate(
+    ({ lon, lat, h }) => {
+      const viewer = (window as unknown as { __terraGlobeViewer: TestableViewer })
+        .__terraGlobeViewer;
+      const a = 6_378_137.0;
+      const f = 1 / 298.257223563;
+      const e2 = f * (2 - f);
+      const latR = (lat * Math.PI) / 180;
+      const lonR = (lon * Math.PI) / 180;
+      const n = a / Math.sqrt(1 - e2 * Math.sin(latR) ** 2);
+      const x = (n + h) * Math.cos(latR) * Math.cos(lonR);
+      const y = (n + h) * Math.cos(latR) * Math.sin(lonR);
+      const z = (n * (1 - e2) + h) * Math.sin(latR);
+      viewer.camera.setView({
+        destination: { x, y, z },
+        orientation: { heading: 0, pitch: -Math.PI / 2, roll: 0 },
+      });
+    },
+    { lon: longitude, lat: latitude, h: heightMeters },
+  );
 }
 
 /**
@@ -101,12 +146,11 @@ test("drawing a rectangle and exporting it downloads a PNG framed to the drawn a
 
   // The default camera frames the whole globe, so a screen-space rectangle
   // there spans a huge ground area and would blow the export pixel-dimension
-  // cap regardless of scale/DPI. Zoom in first, as a real user would before
-  // exporting a small area.
-  for (let i = 0; i < 25; i++) {
-    await page.mouse.move(cx, cy);
-    await page.mouse.wheel(0, -300);
-  }
+  // cap regardless of scale/DPI. Move the camera to a fixed low-altitude,
+  // straight-down view first, as a real user would zoom in before exporting
+  // a small area - see setCameraAboveGround's doc comment for why this uses
+  // a direct setView rather than simulating mouse-wheel zoom.
+  await setCameraAboveGround(page, 13.404954, 52.5200066, 2000);
 
   await recordExportFrames(page);
 
