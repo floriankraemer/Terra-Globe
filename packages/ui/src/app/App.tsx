@@ -466,7 +466,14 @@ export function App() {
         </div>
       )}
       {areaExport.exporting && (
-        <div className="area-export-overlay">{t("areaExport.generating")}</div>
+        <div className="area-export-overlay">
+          {areaExport.progress && areaExport.progress.total > 1
+            ? t("areaExport.progress", {
+                done: areaExport.progress.done,
+                total: areaExport.progress.total,
+              })
+            : t("areaExport.generating")}
+        </div>
       )}
       <div
         className="places-panel"
@@ -664,6 +671,7 @@ export function App() {
             scaleDenominator={areaExport.scaleDenominator}
             dpi={areaExport.dpi}
             exporting={areaExport.exporting}
+            progress={areaExport.progress}
             error={areaExport.error}
             plan={areaExport.plan}
             planError={areaExport.planError}

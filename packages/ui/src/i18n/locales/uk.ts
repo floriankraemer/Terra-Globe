@@ -72,12 +72,14 @@ export default {
     customScaleLabel: "Власний знаменник масштабу",
     dpiLabel: "DPI",
     dimensions: "{{width}} x {{height}} px",
+    tileCount: "{{count}} плиток",
     tooLarge:
-      "Експорт становитиме {{width}}x{{height}}px, що перевищує максимум {{max}}px. Зменшіть масштаб або DPI.",
+      "Експорт становитиме {{width}}x{{height}}px, що перевищує максимум {{max}}px на сторону або {{maxMp}}МП загалом, навіть із розбиттям на плитки. Зменшіть масштаб чи DPI, або намалюйте меншу ділянку.",
     redraw: "Перемалювати ділянку",
     export: "Експортувати PNG",
     exporting: "Експортування…",
     generating: "Створення експорту…",
+    progress: "Рендеринг плитки {{done}} з {{total}}…",
   },
   routePlanner: {
     ariaLabel: "Планувальник маршруту",

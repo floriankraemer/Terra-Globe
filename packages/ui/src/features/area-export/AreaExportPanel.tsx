@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { RectangleBounds } from "@terra-globe/core";
 import type { ExportPlan } from "@terra-globe/map";
+import type { ExportProgress, PlanError } from "./useAreaExport.js";
 
 const SCALE_PRESETS = [1000, 2500, 5000, 10000, 25000, 50000, 100000];
 const DPI_PRESETS = [96, 150, 300];
@@ -11,9 +12,10 @@ export interface AreaExportPanelProps {
   scaleDenominator: number;
   dpi: number;
   exporting: boolean;
+  progress: ExportProgress | null;
   error: string | null;
   plan: ExportPlan | null;
-  planError: { pixelWidth: number; pixelHeight: number; maxDimensionPx: number } | null;
+  planError: PlanError | null;
   onDragStart?: (e: React.MouseEvent) => void;
   onClose: () => void;
   onRedraw: () => void;
@@ -27,6 +29,7 @@ export function AreaExportPanel({
   scaleDenominator,
   dpi,
   exporting,
+  progress,
   error,
   plan,
   planError,
@@ -102,6 +105,7 @@ export function AreaExportPanel({
         {bounds && plan && (
           <div className="area-export-dimensions">
             {t("areaExport.dimensions", { width: plan.pixelWidth, height: plan.pixelHeight })}
+            {plan.tileCount > 1 && <> · {t("areaExport.tileCount", { count: plan.tileCount })}</>}
           </div>
         )}
         {bounds && planError && (
@@ -110,10 +114,17 @@ export function AreaExportPanel({
               width: planError.pixelWidth,
               height: planError.pixelHeight,
               max: planError.maxDimensionPx,
+              maxMp: planError.maxMegapixels,
             })}
           </div>
         )}
         {error && <div className="area-export-error">{error}</div>}
+        {exporting && progress && (
+          <div className="area-export-progress">
+            <progress value={progress.done} max={progress.total} />
+            <span>{t("areaExport.progress", { done: progress.done, total: progress.total })}</span>
+          </div>
+        )}
         <div className="area-export-actions">
           {bounds && (
             <button type="button" className="btn" onClick={onRedraw}>

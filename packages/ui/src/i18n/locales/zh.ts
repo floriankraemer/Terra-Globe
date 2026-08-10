@@ -72,11 +72,14 @@ export default {
     customScaleLabel: "自定义比例尺分母",
     dpiLabel: "DPI",
     dimensions: "{{width}} x {{height}} px",
-    tooLarge: "导出尺寸将为 {{width}}x{{height}}px，超过最大值 {{max}}px。请降低比例尺或 DPI。",
+    tileCount: "{{count}} 个瓦片",
+    tooLarge:
+      "导出尺寸将为 {{width}}x{{height}}px，即使分块渲染也会超过每边 {{max}}px 或总计 {{maxMp}}MP 的上限。请降低比例尺或 DPI，或绘制更小的区域。",
     redraw: "重新绘制区域",
     export: "导出 PNG",
     exporting: "正在导出…",
     generating: "正在生成导出…",
+    progress: "正在渲染第 {{done}} / {{total}} 个瓦片…",
   },
   routePlanner: {
     ariaLabel: "路线规划",

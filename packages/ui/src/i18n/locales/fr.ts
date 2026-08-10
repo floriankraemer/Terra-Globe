@@ -72,12 +72,14 @@ export default {
     customScaleLabel: "Dénominateur d'échelle personnalisé",
     dpiLabel: "PPP",
     dimensions: "{{width}} x {{height}} px",
+    tileCount: "{{count}} tuiles",
     tooLarge:
-      "L'export serait de {{width}}x{{height}}px, dépassant le maximum de {{max}}px. Réduisez l'échelle ou la résolution.",
+      "L'export serait de {{width}}x{{height}}px, dépassant le maximum de {{max}}px par côté ou {{maxMp}}MP au total, même en tuilant. Réduisez l'échelle ou la résolution, ou dessinez une zone plus petite.",
     redraw: "Redessiner la zone",
     export: "Exporter en PNG",
     exporting: "Export en cours…",
     generating: "Génération de l'export…",
+    progress: "Rendu de la tuile {{done}} sur {{total}}…",
   },
   routePlanner: {
     ariaLabel: "Planificateur d'itinéraire",

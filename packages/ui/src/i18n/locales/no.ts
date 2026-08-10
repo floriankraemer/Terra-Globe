@@ -72,12 +72,14 @@ export default {
     customScaleLabel: "Egendefinert målestokknevner",
     dpiLabel: "DPI",
     dimensions: "{{width}} x {{height}} px",
+    tileCount: "{{count}} fliser",
     tooLarge:
-      "Eksporten blir {{width}}x{{height}}px, som overskrider maksimum på {{max}}px. Reduser målestokk eller DPI.",
+      "Eksporten blir {{width}}x{{height}}px, som overskrider maksimum på {{max}}px per side eller {{maxMp}}MP totalt, selv med flislegging. Reduser målestokk eller DPI, eller tegn et mindre område.",
     redraw: "Tegn område på nytt",
     export: "Eksporter PNG",
     exporting: "Eksporterer…",
     generating: "Genererer eksport…",
+    progress: "Gjengir flis {{done}} av {{total}}…",
   },
   routePlanner: {
     ariaLabel: "Ruteplanlegger",

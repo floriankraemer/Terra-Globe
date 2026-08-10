@@ -72,12 +72,14 @@ export default {
     customScaleLabel: "カスタム縮尺分母",
     dpiLabel: "DPI",
     dimensions: "{{width}} x {{height}} px",
+    tileCount: "{{count}} タイル",
     tooLarge:
-      "エクスポートは{{width}}x{{height}}pxとなり、最大値{{max}}pxを超えます。縮尺またはDPIを下げてください。",
+      "エクスポートは{{width}}x{{height}}pxとなり、タイル分割しても1辺あたりの最大値{{max}}pxまたは合計{{maxMp}}MPを超えます。縮尺かDPIを下げるか、より小さいエリアを描画してください。",
     redraw: "エリアを再描画",
     export: "PNGをエクスポート",
     exporting: "エクスポート中…",
     generating: "エクスポートを生成中…",
+    progress: "タイル {{done}} / {{total}} をレンダリング中…",
   },
   routePlanner: {
     ariaLabel: "ルートプランナー",

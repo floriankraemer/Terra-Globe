@@ -72,12 +72,14 @@ export default {
     customScaleLabel: "Mukautettu mittakaavan nimittäjä",
     dpiLabel: "DPI",
     dimensions: "{{width}} x {{height}} px",
+    tileCount: "{{count}} laattaa",
     tooLarge:
-      "Vienti olisi {{width}}x{{height}}px, mikä ylittää enimmäismäärän {{max}}px. Pienennä mittakaavaa tai DPI:tä.",
+      "Vienti olisi {{width}}x{{height}}px, mikä ylittää enimmäismäärän {{max}}px sivua kohti tai {{maxMp}}MP yhteensä, myös laatoitettuna. Pienennä mittakaavaa tai DPI:tä, tai piirrä pienempi alue.",
     redraw: "Piirrä alue uudelleen",
     export: "Vie PNG",
     exporting: "Viedään…",
     generating: "Luodaan vientiä…",
+    progress: "Renderöidään laattaa {{done}}/{{total}}…",
   },
   routePlanner: {
     ariaLabel: "Reittisuunnittelija",

@@ -9,6 +9,7 @@ import {
   captureAreaImage,
   computeExportPlan,
   ExportTooLargeError,
+  MAX_TILE_DIMENSION_PX,
   type EntityHandle,
   type ExportPlan,
   type IEntityFactory,
@@ -22,15 +23,31 @@ const maxTextureSize = (): number =>
   (Cesium as unknown as { ContextLimits: { maximumTextureSize: number } }).ContextLimits
     .maximumTextureSize;
 
+/** Per-tile GPU render size: the smaller of the GPU's own limit and our conservative constant. */
+const tileDimensionPx = (): number => Math.min(maxTextureSize(), MAX_TILE_DIMENSION_PX);
+
+export interface ExportProgress {
+  done: number;
+  total: number;
+}
+
+export interface PlanError {
+  pixelWidth: number;
+  pixelHeight: number;
+  maxDimensionPx: number;
+  maxMegapixels: number;
+}
+
 export interface UseAreaExportResult {
   active: boolean;
   bounds: RectangleBounds | null;
   scaleDenominator: number;
   dpi: number;
   exporting: boolean;
+  progress: ExportProgress | null;
   error: string | null;
   plan: ExportPlan | null;
-  planError: { pixelWidth: number; pixelHeight: number; maxDimensionPx: number } | null;
+  planError: PlanError | null;
   start: () => void;
   cancel: () => void;
   redraw: () => void;
@@ -59,6 +76,7 @@ export function useAreaExport(viewer: Cesium.Viewer | null): UseAreaExportResult
   const [scaleDenominator, setScaleDenominator] = useState(10000);
   const [dpi, setDpiState] = useState(150);
   const [exporting, setExporting] = useState(false);
+  const [progress, setProgress] = useState<ExportProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
   const controllerRef = useRef<AreaSelectController | null>(null);
   const entityFactoryRef = useRef<IEntityFactory | null>(null);
@@ -191,9 +209,13 @@ export function useAreaExport(viewer: Cesium.Viewer | null): UseAreaExportResult
     if (!bounds || !viewer) return;
     setExporting(true);
     setError(null);
+    setProgress(null);
     try {
-      const plan = computeExportPlan(bounds, scaleDenominator, dpi, maxTextureSize());
-      const blob = await captureAreaImage(viewer, bounds, plan);
+      const tileDim = tileDimensionPx();
+      const plan = computeExportPlan(bounds, scaleDenominator, dpi, tileDim);
+      const blob = await captureAreaImage(viewer, bounds, plan, tileDim, (done, total) =>
+        setProgress({ done, total }),
+      );
       downloadBlob(blob, `terra-globe-area-export-${Date.now()}.png`, "image/png");
     } catch (err) {
       if (err instanceof ExportTooLargeError) {
@@ -202,6 +224,7 @@ export function useAreaExport(viewer: Cesium.Viewer | null): UseAreaExportResult
             width: err.pixelWidth,
             height: err.pixelHeight,
             max: err.maxDimensionPx,
+            maxMp: err.maxMegapixels,
           }),
         );
       } else {
@@ -209,20 +232,22 @@ export function useAreaExport(viewer: Cesium.Viewer | null): UseAreaExportResult
       }
     } finally {
       setExporting(false);
+      setProgress(null);
     }
   }
 
   let plan: ExportPlan | null = null;
-  let planError: { pixelWidth: number; pixelHeight: number; maxDimensionPx: number } | null = null;
+  let planError: PlanError | null = null;
   if (bounds && viewer) {
     try {
-      plan = computeExportPlan(bounds, scaleDenominator, dpi, maxTextureSize());
+      plan = computeExportPlan(bounds, scaleDenominator, dpi, tileDimensionPx());
     } catch (err) {
       if (err instanceof ExportTooLargeError) {
         planError = {
           pixelWidth: err.pixelWidth,
           pixelHeight: err.pixelHeight,
           maxDimensionPx: err.maxDimensionPx,
+          maxMegapixels: err.maxMegapixels,
         };
       }
     }
@@ -234,6 +259,7 @@ export function useAreaExport(viewer: Cesium.Viewer | null): UseAreaExportResult
     scaleDenominator,
     dpi,
     exporting,
+    progress,
     error,
     plan,
     planError,

@@ -72,12 +72,14 @@ export default {
     customScaleLabel: "Denominador de escala personalizado",
     dpiLabel: "PPP",
     dimensions: "{{width}} x {{height}} px",
+    tileCount: "{{count}} teselas",
     tooLarge:
-      "La exportación sería de {{width}}x{{height}}px, superando el máximo de {{max}}px. Reduzca la escala o los PPP.",
+      "La exportación sería de {{width}}x{{height}}px, superando el máximo de {{max}}px por lado o {{maxMp}}MP en total, incluso con teselado. Reduzca la escala o los PPP, o dibuje un área más pequeña.",
     redraw: "Redibujar área",
     export: "Exportar PNG",
     exporting: "Exportando…",
     generating: "Generando exportación…",
+    progress: "Procesando tesela {{done}} de {{total}}…",
   },
   routePlanner: {
     ariaLabel: "Planificador de ruta",

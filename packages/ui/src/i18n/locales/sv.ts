@@ -72,12 +72,14 @@ export default {
     customScaleLabel: "Anpassad skalnämnare",
     dpiLabel: "DPI",
     dimensions: "{{width}} x {{height}} px",
+    tileCount: "{{count}} plattor",
     tooLarge:
-      "Exporten blir {{width}}x{{height}}px, vilket överskrider maximalt {{max}}px. Minska skalan eller DPI.",
+      "Exporten blir {{width}}x{{height}}px, vilket överskrider maximalt {{max}}px per sida eller {{maxMp}}MP totalt, även med uppdelning i plattor. Minska skalan eller DPI, eller rita ett mindre område.",
     redraw: "Rita om område",
     export: "Exportera PNG",
     exporting: "Exporterar…",
     generating: "Genererar export…",
+    progress: "Renderar platta {{done}} av {{total}}…",
   },
   routePlanner: {
     ariaLabel: "Ruttplanerare",

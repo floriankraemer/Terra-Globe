@@ -72,12 +72,14 @@ export default {
     customScaleLabel: "Custom scale denominator",
     dpiLabel: "DPI",
     dimensions: "{{width}} x {{height}} px",
+    tileCount: "{{count}} tiles",
     tooLarge:
-      "Export would be {{width}}x{{height}}px, exceeding the maximum of {{max}}px. Reduce the scale or DPI.",
+      "Export would be {{width}}x{{height}}px, exceeding the maximum of {{max}}px per side or {{maxMp}}MP total, even with tiling. Reduce the scale or DPI, or draw a smaller area.",
     redraw: "Redraw Area",
     export: "Export PNG",
     exporting: "Exporting…",
     generating: "Generating export…",
+    progress: "Rendering tile {{done}} of {{total}}…",
   },
   routePlanner: {
     ariaLabel: "Route planner",

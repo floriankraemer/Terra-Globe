@@ -72,12 +72,14 @@ export default {
     customScaleLabel: "कस्टम स्केल भाजक",
     dpiLabel: "डीपीआई",
     dimensions: "{{width}} x {{height}} px",
+    tileCount: "{{count}} टाइलें",
     tooLarge:
-      "निर्यात {{width}}x{{height}}px होगा, जो अधिकतम {{max}}px से अधिक है। स्केल या डीपीआई कम करें।",
+      "निर्यात {{width}}x{{height}}px होगा, जो टाइलिंग के साथ भी प्रति भुजा {{max}}px या कुल {{maxMp}}MP की अधिकतम सीमा से अधिक है। स्केल या डीपीआई कम करें, या छोटा क्षेत्र बनाएं।",
     redraw: "क्षेत्र फिर से बनाएं",
     export: "PNG निर्यात करें",
     exporting: "निर्यात हो रहा है…",
     generating: "निर्यात बनाया जा रहा है…",
+    progress: "टाइल {{done}} / {{total}} रेंडर हो रही है…",
   },
   routePlanner: {
     ariaLabel: "मार्ग योजनाकार",

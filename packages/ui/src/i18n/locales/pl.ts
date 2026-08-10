@@ -72,12 +72,14 @@ export default {
     customScaleLabel: "Niestandardowy mianownik skali",
     dpiLabel: "DPI",
     dimensions: "{{width}} x {{height}} px",
+    tileCount: "{{count}} kafelków",
     tooLarge:
-      "Eksport miałby {{width}}x{{height}}px, co przekracza maksimum {{max}}px. Zmniejsz skalę lub DPI.",
+      "Eksport miałby {{width}}x{{height}}px, co przekracza maksimum {{max}}px na bok lub {{maxMp}}MP łącznie, nawet z podziałem na kafelki. Zmniejsz skalę lub DPI albo narysuj mniejszy obszar.",
     redraw: "Narysuj obszar ponownie",
     export: "Eksportuj PNG",
     exporting: "Eksportowanie…",
     generating: "Generowanie eksportu…",
+    progress: "Renderowanie kafelka {{done}} z {{total}}…",
   },
   routePlanner: {
     ariaLabel: "Planer trasy",
