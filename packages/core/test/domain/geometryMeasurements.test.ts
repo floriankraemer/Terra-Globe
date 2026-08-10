@@ -9,6 +9,8 @@ import {
   circleCircumferenceMeters,
   polygonAreaSquareMeters,
   rectangleAreaSquareMeters,
+  rectangleHeightMeters,
+  rectangleWidthMeters,
 } from "../../src/domain/geometryMeasurements.js";
 
 describe("circleAreaSquareMeters", () => {
@@ -57,6 +59,42 @@ describe("rectangleAreaSquareMeters", () => {
       polygonAreaSquareMeters(asPolygon),
       -2,
     );
+  });
+});
+
+describe("rectangleHeightMeters", () => {
+  it("matches the exact meridian-arc distance (a degree of latitude is ~111.2km)", () => {
+    const geometry = createRectangleGeometry({ north: 1, south: 0, east: 1, west: 0 });
+    const expected = (Math.PI / 180) * 6_371_000;
+    expect(rectangleHeightMeters(geometry)).toBeCloseTo(expected, -1);
+  });
+
+  it("is unaffected by longitude span", () => {
+    const narrow = rectangleHeightMeters(
+      createRectangleGeometry({ north: 10, south: 0, east: 1, west: 0 }),
+    );
+    const wide = rectangleHeightMeters(
+      createRectangleGeometry({ north: 10, south: 0, east: 90, west: 0 }),
+    );
+    expect(narrow).toBeCloseTo(wide, -1);
+  });
+});
+
+describe("rectangleWidthMeters", () => {
+  it("returns a positive width for a rectangle at the equator", () => {
+    const geometry = createRectangleGeometry({ north: 1, south: 0, east: 1, west: 0 });
+    // 1 degree of longitude at the equator is ~111.3km.
+    expect(rectangleWidthMeters(geometry)).toBeCloseTo(111_320, -3);
+  });
+
+  it("shrinks with latitude (a degree of longitude is shorter near the poles)", () => {
+    const equatorWidth = rectangleWidthMeters(
+      createRectangleGeometry({ north: 1, south: 0, east: 1, west: 0 }),
+    );
+    const highLatWidth = rectangleWidthMeters(
+      createRectangleGeometry({ north: 81, south: 80, east: 1, west: 0 }),
+    );
+    expect(highLatWidth).toBeLessThan(equatorWidth);
   });
 });
 

@@ -6,6 +6,7 @@
   "permissions": [
     "core:default",
     "core:window:allow-close",
+    "core:webview:allow-create-webview-window",
     "sql:default",
     "sql:allow-load",
     "sql:allow-execute",
