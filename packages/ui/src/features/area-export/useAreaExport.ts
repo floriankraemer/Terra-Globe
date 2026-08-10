@@ -14,7 +14,19 @@ import {
   type ExportPlan,
   type IEntityFactory,
 } from "@terra-globe/map";
+import type { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { downloadBlob } from "../../lib/downloadBlob.js";
+import { isTauri } from "../../platform/isTauri.js";
+import {
+  base64ToBlob,
+  EXPORT_WORKER_PROGRESS_EVENT,
+  EXPORT_WORKER_READY_EVENT,
+  EXPORT_WORKER_REQUEST_EVENT,
+  EXPORT_WORKER_RESULT_EVENT,
+  type ExportWorkerProgress,
+  type ExportWorkerRequest,
+  type ExportWorkerResult,
+} from "./exportWorkerProtocol.js";
 
 // `ContextLimits` is a real runtime export of the `cesium` package (re-exported
 // from `@cesium/engine`) but is missing from the published `cesium` package's
@@ -80,6 +92,9 @@ export function useAreaExport(viewer: Cesium.Viewer | null): UseAreaExportResult
   const [error, setError] = useState<string | null>(null);
   const controllerRef = useRef<AreaSelectController | null>(null);
   const entityFactoryRef = useRef<IEntityFactory | null>(null);
+  // Lazily created once, reused across exports (see ensureExportWorker below) - a fresh hidden
+  // window per export would pay its Cesium/DB startup cost every time.
+  const exportWorkerRef = useRef<{ window: WebviewWindow; ready: Promise<void> } | null>(null);
   const rectangleVisibleRef = useRef(false);
   const previewVisibleRef = useRef(false);
   const livePreviewRef = useRef<{ setGeometry: (geometry: RectangleGeometry) => void } | null>(
@@ -205,18 +220,99 @@ export function useAreaExport(viewer: Cesium.Viewer | null): UseAreaExportResult
     setDpiState(n);
   }
 
+  /**
+   * Creates the hidden export-worker window on first use and waits for its
+   * "area-export-worker:ready" event (see ExportWorkerApp.tsx). Reused across exports via
+   * exportWorkerRef - later calls just await the already-resolved `ready` promise.
+   */
+  async function ensureExportWorker(): Promise<WebviewWindow> {
+    if (exportWorkerRef.current) {
+      await exportWorkerRef.current.ready;
+      return exportWorkerRef.current.window;
+    }
+    const [{ WebviewWindow }, { once }] = await Promise.all([
+      import("@tauri-apps/api/webviewWindow"),
+      import("@tauri-apps/api/event"),
+    ]);
+    const ready = new Promise<void>((resolve) => {
+      void once(EXPORT_WORKER_READY_EVENT, () => resolve());
+    });
+    const window = new WebviewWindow("export-worker", {
+      url: "index.html?exportWorker",
+      visible: false,
+    });
+    exportWorkerRef.current = { window, ready };
+    await ready;
+    return window;
+  }
+
+  /** Runs the export in the hidden worker window so the visible map is never touched. */
+  async function runExportViaWorker(exportBounds: RectangleBounds): Promise<void> {
+    await ensureExportWorker();
+    const { emit, listen } = await import("@tauri-apps/api/event");
+
+    const requestId = crypto.randomUUID();
+    let resolveResult!: (result: ExportWorkerResult) => void;
+    const resultPromise = new Promise<ExportWorkerResult>((resolve) => {
+      resolveResult = resolve;
+    });
+
+    const unlistenResult = await listen<ExportWorkerResult>(EXPORT_WORKER_RESULT_EVENT, (event) => {
+      if (event.payload.requestId === requestId) resolveResult(event.payload);
+    });
+    const unlistenProgress = await listen<ExportWorkerProgress>(
+      EXPORT_WORKER_PROGRESS_EVENT,
+      (event) => {
+        if (event.payload.requestId === requestId) {
+          setProgress({ done: event.payload.done, total: event.payload.total });
+        }
+      },
+    );
+
+    try {
+      const request: ExportWorkerRequest = {
+        requestId,
+        bounds: exportBounds,
+        scaleDenominator,
+        dpiValue: dpi,
+      };
+      await emit(EXPORT_WORKER_REQUEST_EVENT, request);
+      const result = await resultPromise;
+      if ("error" in result) {
+        if (result.tooLarge) {
+          throw new ExportTooLargeError(
+            result.tooLarge.pixelWidth,
+            result.tooLarge.pixelHeight,
+            result.tooLarge.maxDimensionPx,
+            result.tooLarge.maxMegapixels,
+          );
+        }
+        throw new Error(result.error);
+      }
+      const blob = base64ToBlob(result.pngBase64, "image/png");
+      downloadBlob(blob, `terra-globe-area-export-${Date.now()}.png`, "image/png");
+    } finally {
+      unlistenResult();
+      unlistenProgress();
+    }
+  }
+
   async function runExport(): Promise<void> {
     if (!bounds || !viewer) return;
     setExporting(true);
     setError(null);
     setProgress(null);
     try {
-      const tileDim = tileDimensionPx();
-      const plan = computeExportPlan(bounds, scaleDenominator, dpi, tileDim);
-      const blob = await captureAreaImage(viewer, bounds, plan, tileDim, (done, total) =>
-        setProgress({ done, total }),
-      );
-      downloadBlob(blob, `terra-globe-area-export-${Date.now()}.png`, "image/png");
+      if (isTauri()) {
+        await runExportViaWorker(bounds);
+      } else {
+        const tileDim = tileDimensionPx();
+        const plan = computeExportPlan(bounds, scaleDenominator, dpi, tileDim);
+        const blob = await captureAreaImage(viewer, bounds, plan, tileDim, (done, total) =>
+          setProgress({ done, total }),
+        );
+        downloadBlob(blob, `terra-globe-area-export-${Date.now()}.png`, "image/png");
+      }
     } catch (err) {
       if (err instanceof ExportTooLargeError) {
         setError(
