@@ -55,6 +55,7 @@ import { ConfirmModal } from "../features/confirm/ConfirmModal.js";
 import i18n from "../i18n/i18n.js";
 import { useFloatingPanel } from "./useFloatingPanel.js";
 import { useResizableWidth } from "./useResizableWidth.js";
+import { useSavedCameraView } from "./useSavedCameraView.js";
 import { createGeocodingProvider } from "../platform/createGeocodingProvider.js";
 import { createRoutingProvider } from "../platform/createRoutingProvider.js";
 import { createSecretStore } from "../platform/createSecretStore.js";
@@ -185,6 +186,7 @@ export function App() {
       handle.viewer;
   });
 
+  useSavedCameraView(viewer);
   const library = useLibrary(viewer);
   const undoRedo = useUndoRedo(library);
   const fileSync = useFileSync(library, settings.autoSave);

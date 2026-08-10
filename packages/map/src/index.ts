@@ -1,6 +1,7 @@
 export * from "./viewer/imageryProviders/index.js";
 export * from "./viewer/createViewer.js";
 export * from "./viewer/flyTo.js";
+export * from "./viewer/cameraView.js";
 export * from "./entities/IEntityFactory.js";
 export * from "./entities/FakeEntityFactory.js";
 export * from "./entities/CesiumEntityFactory.js";
