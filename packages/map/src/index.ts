@@ -12,3 +12,6 @@ export * from "./drawing/CesiumScreenPicker.js";
 export * from "./ruler/RulerController.js";
 export * from "./routing/RouteController.js";
 export * from "./sync/EntitySynchronizer.js";
+export * from "./viewer/cameraView.js";
+export * from "./drawing/AreaSelectController.js";
+export * from "./viewer/exportImage.js";

@@ -7,21 +7,12 @@ import {
   serializeKmz,
 } from "@terra-globe/core";
 import type { UseLibraryResult } from "../folders/useLibrary.js";
+import { downloadBlob } from "../../lib/downloadBlob.js";
 
 export interface ImportSummary {
   placemarksImported: number;
   foldersImported: number;
   warnings: string[];
-}
-
-function downloadBlob(bytes: BlobPart, filename: string, mimeType: string): void {
-  const blob = new Blob([bytes], { type: mimeType });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
 }
 
 /** File I/O glue: reads/writes via the browser File/Blob APIs (works in both the browser tab and the Tauri webview). */

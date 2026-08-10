@@ -39,6 +39,9 @@ import { FileMenu } from "../features/import-export/FileMenu.js";
 import { RulerToolbar } from "../features/ruler/RulerToolbar.js";
 import { RulerPanel } from "../features/ruler/RulerPanel.js";
 import { useRuler } from "../features/ruler/useRuler.js";
+import { AreaExportToolbar } from "../features/area-export/AreaExportToolbar.js";
+import { AreaExportPanel } from "../features/area-export/AreaExportPanel.js";
+import { useAreaExport } from "../features/area-export/useAreaExport.js";
 import { useDistanceRings } from "../features/placemark-editor/useDistanceRings.js";
 import { RoutePlannerToolbar } from "../features/route-planner/RoutePlannerToolbar.js";
 import { RoutePlannerPanel } from "../features/route-planner/RoutePlannerPanel.js";
@@ -126,6 +129,14 @@ export function App() {
     maxHeight: 600,
     storageKey: "terra-globe:routePlannerPanelGeometry",
   });
+  const areaExportPanel = useFloatingPanel({
+    initial: { x: window.innerWidth - 260 - 12, y: 56, width: 260, height: 320 },
+    minWidth: 220,
+    minHeight: 260,
+    maxWidth: 480,
+    maxHeight: 600,
+    storageKey: "terra-globe:areaExportPanelGeometry",
+  });
   const secretStore = useRef(createSecretStore()).current;
   const settings = useSettings(secretStore);
 
@@ -198,6 +209,7 @@ export function App() {
   );
   const exitConfirm = useExitConfirm(fileSync.dirty, settings.autoSave, fileSync.saveNow);
   const ruler = useRuler(viewer);
+  const areaExport = useAreaExport(viewer);
   const distanceRings = useDistanceRings(viewer);
   const routePlanner = useRoutePlanner(viewer, routingProvider, geocodingProvider);
   const { mode, selectTool, finish, cancel } = useDrawing(
@@ -316,7 +328,7 @@ export function App() {
   useDragToMove(
     viewer,
     editingPlacemark,
-    mode !== "idle" || ruler.active || routePlanner.active,
+    mode !== "idle" || ruler.active || routePlanner.active || areaExport.active,
     (id) => (editorStyle ? library.beginPlacemarkDrag(id, editorStyle) : undefined),
     (id, geometry) => {
       void wrap(() => library.updatePlacemarkGeometry(id, geometry));
@@ -375,6 +387,7 @@ export function App() {
           onSelectTool={(tool) => {
             ruler.cancel();
             routePlanner.finish();
+            areaExport.cancel();
             selectTool(tool);
           }}
           onFinish={finish}
@@ -387,6 +400,7 @@ export function App() {
           onStart={() => {
             cancel();
             routePlanner.finish();
+            areaExport.cancel();
             ruler.start();
           }}
           onUndo={ruler.undo}
@@ -403,8 +417,20 @@ export function App() {
             }
             cancel();
             ruler.cancel();
+            areaExport.cancel();
             routePlanner.start();
           }}
+        />
+        <AreaExportToolbar
+          active={areaExport.active}
+          disabled={!library.ready}
+          onStart={() => {
+            cancel();
+            ruler.cancel();
+            routePlanner.finish();
+            areaExport.start();
+          }}
+          onCancel={areaExport.cancel}
         />
         <AddressSearchBox
           disabled={!viewer}
@@ -438,6 +464,9 @@ export function App() {
         <div className="notice-container">
           <Notice notice={notice} onDismiss={() => setNotice(null)} />
         </div>
+      )}
+      {areaExport.exporting && (
+        <div className="area-export-overlay">{t("areaExport.generating")}</div>
       )}
       <div
         className="places-panel"
@@ -617,6 +646,41 @@ export function App() {
                 : "placemark-editor-resize-handle"
             }
             onMouseDown={rulerPanel.startResize}
+          />
+        </div>
+      )}
+      {areaExport.active && (
+        <div
+          className="area-export-panel-panel"
+          style={{
+            left: areaExportPanel.geometry.x,
+            top: areaExportPanel.geometry.y,
+            width: areaExportPanel.geometry.width,
+            height: areaExportPanel.geometry.height,
+          }}
+        >
+          <AreaExportPanel
+            bounds={areaExport.bounds}
+            scaleDenominator={areaExport.scaleDenominator}
+            dpi={areaExport.dpi}
+            exporting={areaExport.exporting}
+            error={areaExport.error}
+            plan={areaExport.plan}
+            planError={areaExport.planError}
+            onDragStart={areaExportPanel.startDrag}
+            onClose={areaExport.cancel}
+            onRedraw={areaExport.redraw}
+            onSetScale={areaExport.setScale}
+            onSetDpi={areaExport.setDpi}
+            onExport={() => void areaExport.runExport()}
+          />
+          <div
+            className={
+              areaExportPanel.isResizing
+                ? "placemark-editor-resize-handle resizing"
+                : "placemark-editor-resize-handle"
+            }
+            onMouseDown={areaExportPanel.startResize}
           />
         </div>
       )}
