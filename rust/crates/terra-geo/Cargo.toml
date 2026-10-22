@@ -1,0 +1,16 @@
+[package]
+name = "terra-geo"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "f64 WGS84 geodesy, Web Mercator tiling, camera model, picking, culling and tessellation"
+
+[dependencies]
+terra-core = { workspace = true }
+glam = { workspace = true }
+serde = { workspace = true }
+earcutr = { workspace = true }
+
+[lints]
+workspace = true

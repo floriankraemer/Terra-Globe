@@ -1,0 +1,27 @@
+[package]
+name = "terra-platform"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Desktop adapters for the terra-core ports: SQLite, keychain, dialogs, HTTP, preferences"
+
+[dependencies]
+terra-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+rusqlite = { workspace = true }
+reqwest = { workspace = true }
+rustls = { workspace = true }
+tokio = { workspace = true }
+rfd = { workspace = true }
+directories = { workspace = true }
+uuid = { workspace = true }
+chrono = { workspace = true }
+tracing = { workspace = true }
+keyring = { workspace = true }
+
+
+[lints]
+workspace = true

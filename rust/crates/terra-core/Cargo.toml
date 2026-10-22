@@ -1,0 +1,15 @@
+[package]
+name = "terra-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Terra Globe domain model, ports and pure domain logic (no platform, GPU or UI dependencies)"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true

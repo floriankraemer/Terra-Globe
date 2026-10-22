@@ -1,0 +1,36 @@
+[package]
+name = "terra-app"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Terra Globe desktop application (eframe/egui + wgpu globe)"
+default-run = "terra-globe"
+
+[[bin]]
+name = "terra-globe"
+path = "src/main.rs"
+
+[dependencies]
+terra-core = { workspace = true }
+terra-geo = { workspace = true }
+terra-scene = { workspace = true }
+terra-render = { workspace = true }
+terra-platform = { workspace = true }
+egui = { workspace = true }
+eframe = { workspace = true }
+egui-wgpu = { workspace = true }
+egui_extras = { workspace = true }
+wgpu = { workspace = true }
+glam = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[dev-dependencies]
+egui_kittest = { workspace = true }
+
+[lints]
+workspace = true

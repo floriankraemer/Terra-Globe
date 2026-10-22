@@ -1,0 +1,68 @@
+name: Rust CI
+
+on:
+  push:
+    branches: [main, master]
+    paths: ["rust/**", ".github/workflows/rust-ci.yml"]
+  pull_request:
+    paths: ["rust/**", ".github/workflows/rust-ci.yml"]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - name: Install Linux system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libxkbcommon-dev libxcb-render0-dev libxcb-shape0-dev \
+            libxcb-xfixes0-dev libwayland-dev mesa-vulkan-drivers
+      - run: cargo install cargo-deny --locked
+      - run: cargo fmt --all --check
+        working-directory: rust
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+        working-directory: rust
+      - run: cargo deny check
+        working-directory: rust
+      - run: cargo test --workspace --all-targets
+        working-directory: rust
+        env:
+          WGPU_BACKEND: vulkan
+
+  windows-cross:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - run: sudo apt-get update && sudo apt-get install -y --no-install-recommends clang lld llvm nasm
+      - run: cargo install cargo-xwin --locked
+      - run: cargo xwin build --release -p terra-app --target x86_64-pc-windows-msvc
+        working-directory: rust
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+      - run: cargo test --workspace
+        working-directory: rust
+      - run: cargo build --release -p terra-app
+        working-directory: rust
