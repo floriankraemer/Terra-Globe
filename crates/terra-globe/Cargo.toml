@@ -1,0 +1,30 @@
+[package]
+name = "terra-globe"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "WGS84 globe renderer for Terra Globe: wgpu, tiles, camera, picking. No egui, no filesystem."
+
+[dependencies]
+terra-core = { workspace = true }
+terra-providers = { workspace = true }
+wgpu = { workspace = true }
+glam = { workspace = true }
+bytemuck = { workspace = true }
+image = { workspace = true }
+earcutr = "0.5"
+ehttp = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+serde = { workspace = true }
+
+[dev-dependencies]
+pollster = { workspace = true }
+proptest = "1.12"
+terra-testkit = { workspace = true }
+tiny_http = "0.12"
+
+[lints]
+workspace = true

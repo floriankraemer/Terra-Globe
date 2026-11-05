@@ -1,4 +1,6 @@
-.PHONY: help dev test lint build-web build-linux build-windows build-macos build-all clean
+.PHONY: help dev test lint build-web build-linux build-windows build-macos build-all clean \
+	rust-build rust-run rust-test rust-lint rust-deps rust-wasm rust-deny rust-check rust-snapshot \
+	rust-ui-test rust-dist rust-build-windows
 
 .DEFAULT_GOAL := help
 
@@ -47,7 +49,7 @@ build-linux: .docker/tauri-linux.stamp   ## Tauri Linux bundle (.AppImage/.deb) 
 	docker compose run --rm tauri-linux-build cargo tauri build
 
 build-windows: .docker/tauri-linux.stamp   ## Windows NSIS installer + raw .exe via cargo-xwin cross-compile (unsigned)
-	docker compose run --rm tauri-linux-build cargo tauri build --target x86_64-pc-windows-msvc --runner cargo-xwin
+	docker compose run --rm tauri-linux-build sh -c "rustup target add x86_64-pc-windows-msvc && cargo tauri build --target x86_64-pc-windows-msvc --runner cargo-xwin"
 	@mkdir -p dist-windows
 	docker run --rm -v terra-globe_tauri_target:/target -v "$$(pwd)/dist-windows:/out" alpine sh -c "\
 		cp /target/x86_64-pc-windows-msvc/release/bundle/nsis/*-setup.exe /out/TerraGlobe-Setup-x64.exe && \
@@ -65,3 +67,46 @@ build-all: build-linux build-windows build-macos
 clean:           ## tear down containers/volumes and local build output
 	docker compose down -v
 	rm -rf packages/*/dist src-tauri/target .docker
+
+# --- Rust port (crates/) -----------------------------------------------------
+
+rust-build:      ## build the Rust desktop binary (release)
+	cargo build --release -p terra-desktop
+
+rust-run:        ## run the Rust desktop app
+	cargo run -p terra-desktop
+
+rust-test:       ## run all Rust tests
+	cargo test --workspace
+
+rust-lint:       ## rustfmt + clippy (-D warnings)
+	cargo fmt --all --check
+	cargo clippy --workspace --all-targets -- -D warnings
+
+rust-deps:       ## enforce the one-way crate dependency rule
+	python3 scripts/check-rust-deps.py
+
+rust-wasm:       ## check the browser target still compiles
+	cargo check -p terra-web --target wasm32-unknown-unknown
+
+rust-deny:       ## licence and advisory check
+	cargo deny check --all-features
+
+rust-check: rust-lint rust-deps rust-test rust-wasm   ## everything CI runs for the Rust workspace
+
+rust-snapshot:   ## regenerate the globe render snapshot deliberately
+	UPDATE_SNAPSHOTS=1 cargo test -p terra-globe --test render
+
+rust-ui-test:    ## headless widget tests (egui_kittest)
+	cargo test -p terra-app --test ui_flow
+
+rust-dist:       ## validate the cargo-dist packaging config (plan only)
+	cargo dist plan
+
+rust-build-windows:  ## cross-build the Rust desktop app for Windows (cargo-xwin in Docker)
+	docker compose run --rm rust-windows-build
+	@mkdir -p dist-windows
+	docker run --rm -v terra-globe_rust_target:/target -v "$$(pwd)/dist-windows:/out" alpine sh -c "\
+		cp /target/x86_64-pc-windows-msvc/release/terra-globe.exe /out/TerraGlobe-rust-x64.exe && \
+		chown -R 1000:1000 /out"
+	@file dist-windows/TerraGlobe-rust-x64.exe

@@ -1,0 +1,37 @@
+[package]
+name = "terra-web"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Browser (wasm) entry point for Terra Globe."
+
+[dependencies]
+terra-app = { workspace = true }
+terra-providers = { workspace = true }
+terra-storage = { workspace = true }
+serde_json = { workspace = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+eframe = { workspace = true }
+wasm-bindgen = "0.2"
+terra-storage-indexeddb = { workspace = true }
+web-sys = { version = "0.3", features = [
+  "Blob",
+  "BlobPropertyBag",
+  "Document",
+  "HtmlAnchorElement",
+  "HtmlCanvasElement",
+  "Storage",
+  "Url",
+  "Window",
+] }
+js-sys = "0.3"
+console_error_panic_hook = "0.1"
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["std"] }
+wasm-bindgen-futures = "0.4"
+
+[lints]
+workspace = true

@@ -1,0 +1,32 @@
+[package]
+name = "terra-desktop"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Native Terra Globe desktop binary."
+
+[[bin]]
+name = "terra-globe"
+path = "src/main.rs"
+
+[dependencies]
+terra-app = { workspace = true }
+terra-storage = { workspace = true }
+terra-storage-sqlite = { workspace = true }
+terra-core = { workspace = true }
+terra-globe = { workspace = true }
+eframe = { workspace = true }
+egui = { workspace = true }
+wgpu = { workspace = true }
+pollster = { workspace = true }
+terra-providers = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+directories = { workspace = true }
+rfd = "0.17"
+keyring = "4"
+
+[lints]
+workspace = true

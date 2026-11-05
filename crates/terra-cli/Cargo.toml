@@ -1,0 +1,23 @@
+[package]
+name = "terra-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Command-line import/export/round-trip tool for Terra Globe data."
+
+[[bin]]
+name = "terra-kml"
+path = "src/main.rs"
+
+[dependencies]
+terra-core = { workspace = true }
+terra-kml = { workspace = true }
+terra-storage = { workspace = true }
+terra-storage-sqlite = { workspace = true }
+serde_json = { workspace = true }
+pollster = { workspace = true }
+
+[lints]
+workspace = true

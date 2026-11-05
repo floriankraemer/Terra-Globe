@@ -1,0 +1,63 @@
+# cargo-deny configuration.
+#
+# The project is GPLv3-licensed, so only GPLv3-compatible licences may be used.
+# The allow-list makes that explicit: anything not listed fails CI.
+
+[graph]
+all-features = true
+
+[advisories]
+version = 2
+yanked = "warn"
+ignore = [
+    # Unmaintained notices, not vulnerabilities. All three arrive transitively
+    # from eframe/egui on Linux (accesskit's zbus stack and winit's ttf-parser
+    # path). Re-check at every milestone; remove as soon as upstream updates.
+    { id = "RUSTSEC-2026-0192", reason = "ttf-parser via ab_glyph/sctk-adwaita (winit); no vulnerability, upstream-maintained replacement pending" },
+    { id = "RUSTSEC-2026-0371", reason = "zbus_names via accesskit_unix (Linux accessibility); no vulnerability" },
+    { id = "RUSTSEC-2026-0370", reason = "zvariant via accesskit_unix (Linux accessibility); no vulnerability" },
+    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive via accesskit_unix (Linux accessibility); no vulnerability" },
+]
+
+[licenses]
+version = 2
+allow = [
+    "GPL-3.0-only",
+    # MPL-2.0 (option-ext) is GPLv3-compatible via its secondary-licence clause.
+    "MPL-2.0",
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    # Permissive data licence for the bundled TLS root certificates
+    # (webpki-roots, via ureq/ehttp). No copyleft, GPLv3-compatible.
+    "CDLA-Permissive-2.0",
+    "OFL-1.1",
+    # Font licences bundled by epaint_default_fonts (Ubuntu font, DejaVu).
+    "Ubuntu-font-1.0",
+    # Boost licence, clipboard integration on Windows.
+    "BSL-1.0",
+]
+# Licence files for crates whose metadata is incomplete; keep this list empty
+# unless a crate is verified by hand.
+exceptions = []
+
+[bans]
+multiple-versions = "allow"
+# Workspace-inherited dependencies are reported by cargo metadata as `*`, which
+# would otherwise read as a wildcard dependency.
+wildcards = "deny"
+allow-wildcard-paths = true
+deny = [
+    # Cesium is the old renderer; the Rust port must not gain a dependency that
+    # drags the webview app back in.
+    { name = "cesium", reason = "the Rust port renders the globe with wgpu" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"

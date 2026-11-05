@@ -83,6 +83,25 @@ services:
     environment:
       - HOME=/tmp
 
+  rust-windows-build:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.rust-windows
+    # Runs as root: only writes to the rust_target/cargo/xwin cache volumes.
+    working_dir: /workspace
+    command: >
+      cargo xwin build
+      --release
+      --target x86_64-pc-windows-msvc
+      -p terra-desktop
+    volumes:
+      - .:/workspace
+      - rust_target:/workspace/target
+      - cargo_registry:/usr/local/cargo/registry
+      - xwin_cache:/root/.cache/cargo-xwin
+    environment:
+      - XWIN_ACCEPT_LICENSE=1
+
 volumes:
   web_node_modules:
   web_pkg_core_node_modules:
@@ -101,4 +120,6 @@ volumes:
   tauri_pkg_ui_node_modules:
   tauri_pkg_e2e_playwright_node_modules:
   tauri_target:
+  rust_target:
+  xwin_cache:
   cargo_registry:

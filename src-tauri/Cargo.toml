@@ -5,6 +5,10 @@ description = "Terra Globe desktop shell"
 edition = "2021"
 rust-version = "1.77"
 
+# Kept out of the root Rust workspace: this shell belongs to the frozen
+# TypeScript app and must keep building until it is deleted at M6.
+[workspace]
+
 [lib]
 name = "terra_globe_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]

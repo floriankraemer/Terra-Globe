@@ -1,0 +1,26 @@
+# Release packaging for the Rust desktop app.
+#
+# This is the cargo-dist configuration. Validate it with `dist plan` before
+# tagging: the file is maintained by hand, and cargo-dist's schema changes
+# between minor releases.
+#
+# `[dist]` configures release CI and the plain archives (tar.gz / zip).
+# cargo-dist has no macOS .app/dmg or Linux .deb/AppImage support, so those are
+# produced by the scripts in `scripts/` and documented in `docs/release.md`.
+
+[dist]
+cargo-dist-version = "0.32.0"
+ci = "github"
+# Validate before the first tagged release.
+dist = true
+installers = ["shell", "powershell", "msi"]
+targets = [
+  "x86_64-unknown-linux-gnu",
+  "aarch64-unknown-linux-gnu",
+  "x86_64-apple-darwin",
+  "aarch64-apple-darwin",
+  "x86_64-pc-windows-msvc",
+]
+# Only the desktop binary is distributed; the CLI is a development tool.
+packages = ["terra-desktop"]
+pr-run-mode = "plan"

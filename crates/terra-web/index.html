@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Terra Globe</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #05070c;
+        overflow: hidden;
+      }
+      canvas {
+        width: 100vw;
+        height: 100vh;
+        display: block;
+      }
+    </style>
+    <link data-trunk rel="rust" data-wasm-opt="z" />
+  </head>
+  <body>
+    <canvas id="terra-canvas"></canvas>
+  </body>
+</html>

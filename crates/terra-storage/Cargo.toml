@@ -1,0 +1,20 @@
+[package]
+name = "terra-storage"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "PlacesRepository port, shared contract tests and in-memory adapter for Terra Globe."
+
+[dependencies]
+terra-core = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+async-trait = { workspace = true }
+
+[dev-dependencies]
+pollster = { workspace = true }
+
+[lints]
+workspace = true

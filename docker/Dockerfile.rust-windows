@@ -1,0 +1,27 @@
+# Cross-compiles the Rust desktop app for Windows from Linux with cargo-xwin.
+#
+# The build itself runs as the compose command (not a build step) so the
+# artefact lands in the mounted `rust_target` volume, where `make
+# rust-build-windows` copies it out.
+
+FROM rust:1-bookworm
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        clang \
+        lld \
+        llvm \
+        cmake \
+        pkg-config \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN cargo install cargo-xwin --locked
+
+# The repository pins this toolchain in rust-toolchain.toml, so the Windows
+# target has to exist for it as well as for the image's default toolchain.
+RUN rustup toolchain install 1.97.1 --profile minimal \
+    && rustup target add --toolchain 1.97.1 x86_64-pc-windows-msvc \
+    && rustup target add x86_64-pc-windows-msvc
+
+ENV XWIN_ACCEPT_LICENSE=1
+WORKDIR /workspace

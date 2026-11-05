@@ -1,0 +1,502 @@
+{
+  "generatedBy": "tools/parity/extract-kml-fixtures.mjs",
+  "entries": [
+    {
+      "name": "e2e-sample",
+      "input": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<kml xmlns=\"http://www.opengis.net/kml/2.2\">\n  <Document>\n    <Folder id=\"auto-Folder-1\">\n      <name>My Places</name>\n      <Placemark id=\"auto-Placemark-1\">\n        <name>Brandenburg Gate</name>\n        <description>Berlin landmark</description>\n        <Point>\n          <coordinates>13.377704,52.516275,0</coordinates>\n        </Point>\n      </Placemark>\n    </Folder>\n  </Document>\n</kml>\n",
+      "stamped": true,
+      "parsed": {
+        "folders": [
+          {
+            "id": "<id>",
+            "parentId": null,
+            "name": "My Places",
+            "visibility": true,
+            "order": 0,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>"
+          }
+        ],
+        "placemarks": [
+          {
+            "id": "<id>",
+            "folderId": "auto-Folder-1",
+            "name": "Brandenburg Gate",
+            "description": "Berlin landmark",
+            "geometry": {
+              "type": "Point",
+              "coordinates": {
+                "lon": 13.377704,
+                "lat": 52.516275,
+                "altitude": 0
+              }
+            },
+            "styleId": null,
+            "visibility": true,
+            "order": 0,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>"
+          }
+        ],
+        "styles": [],
+        "screenOverlays": [],
+        "networkLinks": [],
+        "warnings": []
+      },
+      "serialized": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><kml xmlns=\"http://www.opengis.net/kml/2.2\" xmlns:gx=\"http://www.google.com/kml/ext/2.2\"><Document><Folder id=\"<id>\"><name>My Places</name><visibility>1</visibility><ExtendedData><Data name=\"terra-globe:order\"><value>0</value></Data><Data name=\"terra-globe:createdAt\"><value><ts></value></Data><Data name=\"terra-globe:updatedAt\"><value><ts></value></Data></ExtendedData><Placemark id=\"<id>\"><name>Brandenburg Gate</name><description>Berlin landmark</description><visibility>1</visibility><Point><coordinates>13.377704,52.516275,0</coordinates></Point><ExtendedData><Data name=\"terra-globe:createdAt\"><value><ts></value></Data><Data name=\"terra-globe:updatedAt\"><value><ts></value></Data></ExtendedData></Placemark></Folder></Document></kml>",
+      "warnings": []
+    },
+    {
+      "name": "e2e-mixed-geometry",
+      "input": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<kml xmlns=\"http://www.opengis.net/kml/2.2\">\n  <Document>\n    <name>Revier Bischhausen II</name>\n    <Folder id=\"auto-Folder-1\">\n      <name>Grenzen</name>\n      <Placemark id=\"auto-Placemark-1\">\n        <name>Aussengrenze</name>\n        <MultiGeometry>\n          <Polygon>\n            <outerBoundaryIs>\n              <LinearRing>\n                <coordinates>9.0,51.0,0 9.1,51.0,0 9.1,51.1,0 9.0,51.1,0 9.0,51.0,0</coordinates>\n              </LinearRing>\n            </outerBoundaryIs>\n          </Polygon>\n          <Polygon>\n            <outerBoundaryIs>\n              <LinearRing>\n                <coordinates>9.2,51.2,0 9.3,51.2,0 9.3,51.3,0 9.2,51.3,0 9.2,51.2,0</coordinates>\n              </LinearRing>\n            </outerBoundaryIs>\n          </Polygon>\n        </MultiGeometry>\n      </Placemark>\n      <Placemark id=\"auto-Placemark-2\">\n        <name>Wanderweg</name>\n        <LineString>\n          <coordinates>9.0,51.0,0 9.05,51.05,0 9.1,51.1,0</coordinates>\n        </LineString>\n      </Placemark>\n    </Folder>\n    <Placemark id=\"auto-Placemark-3\">\n      <name>Hochsitz</name>\n      <Point>\n        <coordinates>9.05,51.05,0</coordinates>\n      </Point>\n    </Placemark>\n  </Document>\n</kml>\n",
+      "stamped": true,
+      "parsed": {
+        "folders": [
+          {
+            "id": "<id>",
+            "parentId": null,
+            "name": "Grenzen",
+            "visibility": true,
+            "order": 0,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>"
+          }
+        ],
+        "placemarks": [
+          {
+            "id": "<id>",
+            "folderId": "auto-Folder-1",
+            "name": "Aussengrenze",
+            "geometry": {
+              "type": "Polygon",
+              "outerRing": [
+                {
+                  "lon": 9,
+                  "lat": 51,
+                  "altitude": 0
+                },
+                {
+                  "lon": 9.1,
+                  "lat": 51,
+                  "altitude": 0
+                },
+                {
+                  "lon": 9.1,
+                  "lat": 51.1,
+                  "altitude": 0
+                },
+                {
+                  "lon": 9,
+                  "lat": 51.1,
+                  "altitude": 0
+                },
+                {
+                  "lon": 9,
+                  "lat": 51,
+                  "altitude": 0
+                }
+              ]
+            },
+            "styleId": null,
+            "visibility": true,
+            "order": 0,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "multiGeometryGroup": "<group>"
+          },
+          {
+            "id": "<id>",
+            "folderId": "auto-Folder-1",
+            "name": "Aussengrenze (2)",
+            "geometry": {
+              "type": "Polygon",
+              "outerRing": [
+                {
+                  "lon": 9.2,
+                  "lat": 51.2,
+                  "altitude": 0
+                },
+                {
+                  "lon": 9.3,
+                  "lat": 51.2,
+                  "altitude": 0
+                },
+                {
+                  "lon": 9.3,
+                  "lat": 51.3,
+                  "altitude": 0
+                },
+                {
+                  "lon": 9.2,
+                  "lat": 51.3,
+                  "altitude": 0
+                },
+                {
+                  "lon": 9.2,
+                  "lat": 51.2,
+                  "altitude": 0
+                }
+              ]
+            },
+            "styleId": null,
+            "visibility": true,
+            "order": 0,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "multiGeometryGroup": "<group>"
+          },
+          {
+            "id": "<id>",
+            "folderId": "auto-Folder-1",
+            "name": "Wanderweg",
+            "geometry": {
+              "type": "LineString",
+              "path": [
+                {
+                  "lon": 9,
+                  "lat": 51,
+                  "altitude": 0
+                },
+                {
+                  "lon": 9.05,
+                  "lat": 51.05,
+                  "altitude": 0
+                },
+                {
+                  "lon": 9.1,
+                  "lat": 51.1,
+                  "altitude": 0
+                }
+              ]
+            },
+            "styleId": null,
+            "visibility": true,
+            "order": 0,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>"
+          },
+          {
+            "id": "<id>",
+            "folderId": null,
+            "name": "Hochsitz",
+            "geometry": {
+              "type": "Point",
+              "coordinates": {
+                "lon": 9.05,
+                "lat": 51.05,
+                "altitude": 0
+              }
+            },
+            "styleId": null,
+            "visibility": true,
+            "order": 0,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>"
+          }
+        ],
+        "styles": [],
+        "screenOverlays": [],
+        "networkLinks": [],
+        "warnings": []
+      },
+      "serialized": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><kml xmlns=\"http://www.opengis.net/kml/2.2\" xmlns:gx=\"http://www.google.com/kml/ext/2.2\"><Document><Folder id=\"<id>\"><name>Grenzen</name><visibility>1</visibility><ExtendedData><Data name=\"terra-globe:order\"><value>0</value></Data><Data name=\"terra-globe:createdAt\"><value><ts></value></Data><Data name=\"terra-globe:updatedAt\"><value><ts></value></Data></ExtendedData><Placemark id=\"<id>\"><name>Aussengrenze</name><visibility>1</visibility><MultiGeometry><Polygon><outerBoundaryIs><LinearRing><coordinates>9,51,0 9.1,51,0 9.1,51.1,0 9,51.1,0 9,51,0</coordinates></LinearRing></outerBoundaryIs></Polygon><Polygon><outerBoundaryIs><LinearRing><coordinates>9.2,51.2,0 9.3,51.2,0 9.3,51.3,0 9.2,51.3,0 9.2,51.2,0</coordinates></LinearRing></outerBoundaryIs></Polygon></MultiGeometry><ExtendedData><Data name=\"terra-globe:createdAt\"><value><ts></value></Data><Data name=\"terra-globe:updatedAt\"><value><ts></value></Data></ExtendedData></Placemark><Placemark id=\"<id>\"><name>Wanderweg</name><visibility>1</visibility><LineString><coordinates>9,51,0 9.05,51.05,0 9.1,51.1,0</coordinates></LineString><ExtendedData><Data name=\"terra-globe:createdAt\"><value><ts></value></Data><Data name=\"terra-globe:updatedAt\"><value><ts></value></Data></ExtendedData></Placemark></Folder><Placemark id=\"<id>\"><name>Hochsitz</name><visibility>1</visibility><Point><coordinates>9.05,51.05,0</coordinates></Point><ExtendedData><Data name=\"terra-globe:createdAt\"><value><ts></value></Data><Data name=\"terra-globe:updatedAt\"><value><ts></value></Data></ExtendedData></Placemark></Document></kml>",
+      "warnings": []
+    },
+    {
+      "name": "synthetic-all-features",
+      "input": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><kml xmlns=\"http://www.opengis.net/kml/2.2\" xmlns:gx=\"http://www.google.com/kml/ext/2.2\"><Document><StyleMap id=\"305534f8-938a-403a-a58f-ba621b55826e\"><Pair><key>normal</key><styleUrl>#305534f8-938a-403a-a58f-ba621b55826e-normal</styleUrl></Pair><Pair><key>highlight</key><styleUrl>#305534f8-938a-403a-a58f-ba621b55826e-highlight</styleUrl></Pair></StyleMap><Style id=\"305534f8-938a-403a-a58f-ba621b55826e-normal\"><LineStyle><color>ffcc6633</color><width>2</width></LineStyle><PolyStyle><color>993366cc</color><fill>0</fill><outline>1</outline></PolyStyle></Style><Style id=\"305534f8-938a-403a-a58f-ba621b55826e-highlight\"><LineStyle><color>ff0000ff</color><width>3</width></LineStyle><PolyStyle><color>6600ff00</color><fill>0</fill><outline>1</outline></PolyStyle></Style><Folder id=\"7182124f-1faa-4fb2-9c11-5cacee2b65b2\"><name>My Places</name><visibility>1</visibility><ExtendedData><Data name=\"terra-globe:order\"><value>0</value></Data><Data name=\"terra-globe:createdAt\"><value>2026-11-03T09:24:36.430Z</value></Data><Data name=\"terra-globe:updatedAt\"><value>2026-11-03T09:24:36.430Z</value></Data></ExtendedData><Folder id=\"22e3b49c-95f9-4f4d-b625-3afa75c3c145\"><name>Trips</name><description>Nested</description><visibility>1</visibility><ExtendedData><Data name=\"terra-globe:order\"><value>2</value></Data><Data name=\"terra-globe:createdAt\"><value>2026-11-03T09:24:36.430Z</value></Data><Data name=\"terra-globe:updatedAt\"><value>2026-11-03T09:24:36.430Z</value></Data></ExtendedData><Placemark id=\"a9b2e399-f08d-40b6-938f-8f7f2fd928f4\"><name>Rectangle</name><visibility>1</visibility><Polygon><outerBoundaryIs><LinearRing><coordinates>13.3,52.4 13.5,52.4 13.5,52.6 13.3,52.6 13.3,52.4</coordinates></LinearRing></outerBoundaryIs></Polygon><ExtendedData><Data name=\"terra-globe:shape\"><value>rectangle</value></Data><Data name=\"terra-globe:north\"><value>52.6</value></Data><Data name=\"terra-globe:south\"><value>52.4</value></Data><Data name=\"terra-globe:east\"><value>13.5</value></Data><Data name=\"terra-globe:west\"><value>13.3</value></Data><Data name=\"terra-globe:createdAt\"><value>2026-11-03T09:24:36.430Z</value></Data><Data name=\"terra-globe:updatedAt\"><value>2026-11-03T09:24:36.430Z</value></Data></ExtendedData></Placemark><Placemark id=\"28e8ddaf-f52b-4a8d-8d51-3acd0fba204b\"><name>Polygon</name><visibility>1</visibility><Polygon><extrude>1</extrude><tessellate>1</tessellate><outerBoundaryIs><LinearRing><coordinates>9,51 9.1,51 9.1,51.1 9,51</coordinates></LinearRing></outerBoundaryIs><innerBoundaryIs><LinearRing><coordinates>9.02,51.02 9.04,51.02 9.04,51.04 9.02,51.02</coordinates></LinearRing></innerBoundaryIs></Polygon><ExtendedData><Data name=\"terra-globe:createdAt\"><value>2026-11-03T09:24:36.431Z</value></Data><Data name=\"terra-globe:updatedAt\"><value>2026-11-03T09:24:36.431Z</value></Data></ExtendedData></Placemark><Placemark id=\"2fa09302-3b46-434f-8f9e-90da90d44046\"><name>Track</name><visibility>1</visibility><LineString><tessellate>1</tessellate><coordinates>9,51,100 9.05,51.02,140</coordinates></LineString><ExtendedData><Data name=\"terra-globe:createdAt\"><value>2026-11-03T09:24:36.431Z</value></Data><Data name=\"terra-globe:updatedAt\"><value>2026-11-03T09:24:36.431Z</value></Data></ExtendedData></Placemark></Folder><Placemark id=\"8b95e846-f69f-49d9-a93e-aebf69d15a5e\"><name>Berlin</name><description>Capital</description><Snippet>snippet</Snippet><address>Berlin, Germany</address><phoneNumber>(030) 1234</phoneNumber><TimeStamp><when>2024-01-01T00:00:00Z</when></TimeStamp><Camera><longitude>13.405</longitude><latitude>52.52</latitude><altitude>1000</altitude><heading>0</heading></Camera><Region><LatLonAltBox><north>53</north><south>52</south></LatLonAltBox><Lod><minLodPixels>128</minLodPixels></Lod></Region><visibility>1</visibility><styleUrl>#305534f8-938a-403a-a58f-ba621b55826e</styleUrl><Point><coordinates>13.405,52.52,34</coordinates></Point><ExtendedData><Data name=\"source\"><value>test</value></Data><Data name=\"terra-globe:createdAt\"><value>2026-11-03T09:24:36.430Z</value></Data><Data name=\"terra-globe:updatedAt\"><value>2026-11-03T09:24:36.430Z</value></Data></ExtendedData></Placemark><Placemark id=\"90c21335-f185-4abe-83b3-2a152101681c\"><name>Circle</name><visibility>1</visibility><Polygon><outerBoundaryIs><LinearRing><coordinates>13.4,52.51079185927102 13.401738030057558,52.51073988079004 13.403459309702187,52.51058444629504 13.405147250307149,52.51032705379144 13.406785585241872,52.50997018387374 13.408358526945378,52.50951727576806 13.409850919334453,52.50897269411933 13.411248384064638,52.50834168684609 13.412537459224048,52.50763033447321 13.413705729115692,52.50684549143552 13.414741943873235,52.50599471992264 13.415636127756441,52.505086216907905 13.416379675085235,52.50412873506946 13.416965432893804,52.50313149837044 13.417387769517346,52.50210411311619 13.41764262846248,52.50105647534921 13.417727567056684,52.4999986754772 13.417641779520503,52.49894090105554 13.417386104257748,52.497893338661505 13.416963015311566,52.49686607580628 13.416376598086666,52.495869003828666 13.415632509588853,52.49491172270382 13.414737923580763,52.494003448681575 13.413701461195908,52.49315292564005 13.412533107690702,52.49236834100393 13.41124411614472,52.49165724703264 13.40984689904174,52.491026488230744 13.408354908777481,52.49048213557454 13.406782508242964,52.49002942818249 13.405144832724597,52.48967272298621 13.40345764444235,52.489415452881666 13.401737181115452,52.48926009375963 13.4,52.48920814072898 13.398262818884552,52.48926009375963 13.396542355557653,52.489415452881666 13.394855167275406,52.48967272298621 13.393217491757039,52.49002942818249 13.391645091222523,52.49048213557454 13.390153100958262,52.491026488230744 13.388755883855284,52.49165724703264 13.387466892309304,52.49236834100393 13.386298538804096,52.49315292564005 13.38526207641924,52.494003448681575 13.38436749041115,52.49491172270382 13.383623401913336,52.495869003828666 13.383036984688436,52.49686607580628 13.382613895742255,52.497893338661505 13.382358220479501,52.49894090105554 13.382272432943319,52.4999986754772 13.382357371537523,52.50105647534921 13.382612230482657,52.50210411311619 13.383034567106199,52.50313149837044 13.38362032491477,52.50412873506946 13.384363872243561,52.505086216907905 13.385258056126766,52.50599471992264 13.38629427088431,52.50684549143552 13.387462540775957,52.50763033447321 13.388751615935364,52.50834168684609 13.39014908066555,52.50897269411933 13.391641473054623,52.50951727576806 13.39321441475813,52.50997018387374 13.394852749692854,52.51032705379144 13.396540690297817,52.51058444629504 13.398261969942444,52.51073988079004 13.4,52.51079185927102</coordinates></LinearRing></outerBoundaryIs></Polygon><ExtendedData><Data name=\"terra-globe:shape\"><value>circle</value></Data><Data name=\"terra-globe:centerLon\"><value>13.4</value></Data><Data name=\"terra-globe:centerLat\"><value>52.5</value></Data><Data name=\"terra-globe:radiusMeters\"><value>1200</value></Data><Data name=\"terra-globe:createdAt\"><value>2026-11-03T09:24:36.430Z</value></Data><Data name=\"terra-globe:updatedAt\"><value>2026-11-03T09:24:36.430Z</value></Data></ExtendedData></Placemark><ScreenOverlay id=\"2aebdd82-0599-4060-bcd2-d762cfeecf75\"><name>Legend</name><visibility>1</visibility><Icon><href>images/legend.png</href></Icon><overlayXY x=\"0\" y=\"1\" xunits=\"fraction\" yunits=\"fraction\"/><screenXY x=\"10\" y=\"10\" xunits=\"pixels\" yunits=\"pixels\"/><size x=\"120\" y=\"80\" xunits=\"pixels\" yunits=\"pixels\"/><rotation>0</rotation></ScreenOverlay></Folder><Placemark id=\"8f26b620-d214-4b7c-ae1f-24337d024cc0\"><name>Model</name><visibility>1</visibility><Model><Location><longitude>9</longitude><latitude>51</latitude><altitude>10</altitude></Location><Orientation><heading>45</heading><tilt>10</tilt><roll>5</roll></Orientation><Scale><x>2</x><y>2</y><z>2</z></Scale><Link><href>models/test.glb</href></Link></Model><ExtendedData><Data name=\"terra-globe:createdAt\"><value>2026-11-03T09:24:36.431Z</value></Data><Data name=\"terra-globe:updatedAt\"><value>2026-11-03T09:24:36.431Z</value></Data></ExtendedData></Placemark><GroundOverlay id=\"17181dce-827c-49dd-a8f4-a1661ab494db\"><name>Overlay</name><visibility>1</visibility><Icon><href>images/overlay.png</href></Icon><LatLonBox><north>52.6</north><south>52.4</south><east>13.5</east><west>13.3</west><rotation>15</rotation></LatLonBox><ExtendedData><Data name=\"terra-globe:createdAt\"><value>2026-11-03T09:24:36.431Z</value></Data><Data name=\"terra-globe:updatedAt\"><value>2026-11-03T09:24:36.431Z</value></Data></ExtendedData></GroundOverlay></Document></kml>",
+      "stamped": false,
+      "parsed": {
+        "folders": [
+          {
+            "id": "<id>",
+            "parentId": null,
+            "name": "My Places",
+            "visibility": true,
+            "order": 0,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>"
+          },
+          {
+            "id": "<id>",
+            "parentId": "7182124f-1faa-4fb2-9c11-5cacee2b65b2",
+            "name": "Trips",
+            "visibility": true,
+            "order": 2,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "description": "Nested"
+          }
+        ],
+        "placemarks": [
+          {
+            "id": "<id>",
+            "folderId": "22e3b49c-95f9-4f4d-b625-3afa75c3c145",
+            "name": "Rectangle",
+            "geometry": {
+              "type": "Rectangle",
+              "north": 52.6,
+              "south": 52.4,
+              "east": 13.5,
+              "west": 13.3
+            },
+            "styleId": null,
+            "visibility": true,
+            "order": 0,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>"
+          },
+          {
+            "id": "<id>",
+            "folderId": "22e3b49c-95f9-4f4d-b625-3afa75c3c145",
+            "name": "Polygon",
+            "geometry": {
+              "type": "Polygon",
+              "outerRing": [
+                {
+                  "lon": 9,
+                  "lat": 51
+                },
+                {
+                  "lon": 9.1,
+                  "lat": 51
+                },
+                {
+                  "lon": 9.1,
+                  "lat": 51.1
+                },
+                {
+                  "lon": 9,
+                  "lat": 51
+                }
+              ],
+              "innerRings": [
+                [
+                  {
+                    "lon": 9.02,
+                    "lat": 51.02
+                  },
+                  {
+                    "lon": 9.04,
+                    "lat": 51.02
+                  },
+                  {
+                    "lon": 9.04,
+                    "lat": 51.04
+                  },
+                  {
+                    "lon": 9.02,
+                    "lat": 51.02
+                  }
+                ]
+              ],
+              "tessellate": true,
+              "extrudeHeight": 0
+            },
+            "styleId": null,
+            "visibility": true,
+            "order": 0,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>"
+          },
+          {
+            "id": "<id>",
+            "folderId": "22e3b49c-95f9-4f4d-b625-3afa75c3c145",
+            "name": "Track",
+            "geometry": {
+              "type": "LineString",
+              "path": [
+                {
+                  "lon": 9,
+                  "lat": 51,
+                  "altitude": 100
+                },
+                {
+                  "lon": 9.05,
+                  "lat": 51.02,
+                  "altitude": 140
+                }
+              ],
+              "tessellate": true
+            },
+            "styleId": null,
+            "visibility": true,
+            "order": 0,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>"
+          },
+          {
+            "id": "<id>",
+            "folderId": "7182124f-1faa-4fb2-9c11-5cacee2b65b2",
+            "name": "Berlin",
+            "description": "Capital",
+            "geometry": {
+              "type": "Point",
+              "coordinates": {
+                "lon": 13.405,
+                "lat": 52.52,
+                "altitude": 34
+              }
+            },
+            "styleId": "305534f8-938a-403a-a58f-ba621b55826e",
+            "visibility": true,
+            "order": 0,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>",
+            "timeStamp": "2024-01-01T00:00:00Z",
+            "snippet": "snippet",
+            "address": "Berlin, Germany",
+            "phoneNumber": "(030) 1234",
+            "view": {
+              "kind": "Camera",
+              "params": {
+                "longitude": 13.405,
+                "latitude": 52.52,
+                "altitude": 1000,
+                "heading": 0
+              }
+            },
+            "region": {
+              "raw": {
+                "LatLonAltBox.north": 53,
+                "LatLonAltBox.south": 52,
+                "Lod.minLodPixels": 128
+              }
+            },
+            "extendedData": {
+              "source": "test"
+            }
+          },
+          {
+            "id": "<id>",
+            "folderId": "7182124f-1faa-4fb2-9c11-5cacee2b65b2",
+            "name": "Circle",
+            "geometry": {
+              "type": "Circle",
+              "center": {
+                "lon": 13.4,
+                "lat": 52.5
+              },
+              "radiusMeters": 1200
+            },
+            "styleId": null,
+            "visibility": true,
+            "order": 0,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>"
+          },
+          {
+            "id": "<id>",
+            "folderId": null,
+            "name": "Model",
+            "geometry": {
+              "type": "Model",
+              "position": {
+                "lon": 9,
+                "lat": 51,
+                "altitude": 10
+              },
+              "modelUri": "models/test.glb",
+              "scale": 2,
+              "heading": 45,
+              "tilt": 10,
+              "roll": 5
+            },
+            "styleId": null,
+            "visibility": true,
+            "order": 0,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>"
+          },
+          {
+            "id": "<id>",
+            "folderId": null,
+            "name": "Overlay",
+            "geometry": {
+              "type": "GroundOverlay",
+              "bounds": {
+                "north": 52.6,
+                "south": 52.4,
+                "east": 13.5,
+                "west": 13.3
+              },
+              "imageUrl": "images/overlay.png",
+              "rotation": 15
+            },
+            "styleId": null,
+            "visibility": true,
+            "order": 0,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>"
+          }
+        ],
+        "styles": [
+          {
+            "id": "<id>",
+            "outlineColor": "#3366cc",
+            "outlineWidth": 2,
+            "fillColor": "#cc6633",
+            "fillOpacity": 0.6,
+            "outlineEnabled": true,
+            "filled": false
+          },
+          {
+            "id": "<id>",
+            "outlineColor": "#ff0000",
+            "outlineWidth": 3,
+            "fillColor": "#00ff00",
+            "fillOpacity": 0.4,
+            "outlineEnabled": true,
+            "filled": false
+          },
+          {
+            "id": "<id>",
+            "outlineColor": "#3366cc",
+            "outlineWidth": 2,
+            "fillColor": "#cc6633",
+            "fillOpacity": 0.6,
+            "outlineEnabled": true,
+            "filled": false,
+            "highlight": {
+              "outlineColor": "#ff0000",
+              "outlineWidth": 3,
+              "fillColor": "#00ff00",
+              "fillOpacity": 0.4
+            }
+          }
+        ],
+        "screenOverlays": [
+          {
+            "id": "<id>",
+            "folderId": "7182124f-1faa-4fb2-9c11-5cacee2b65b2",
+            "name": "Legend",
+            "imageUrl": "images/legend.png",
+            "overlayXY": {
+              "x": 0,
+              "y": 1,
+              "xUnits": "fraction",
+              "yUnits": "fraction"
+            },
+            "screenXY": {
+              "x": 10,
+              "y": 10,
+              "xUnits": "pixels",
+              "yUnits": "pixels"
+            },
+            "sizeX": 120,
+            "sizeY": 80,
+            "rotation": 0,
+            "visibility": true,
+            "order": 0,
+            "createdAt": "<ts>",
+            "updatedAt": "<ts>"
+          }
+        ],
+        "networkLinks": [],
+        "warnings": []
+      },
+      "serialized": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><kml xmlns=\"http://www.opengis.net/kml/2.2\" xmlns:gx=\"http://www.google.com/kml/ext/2.2\"><Document><Style id=\"<id>\"><LineStyle><color>ffcc6633</color><width>2</width></LineStyle><PolyStyle><color>993366cc</color><fill>0</fill><outline>1</outline></PolyStyle></Style><Style id=\"<id>\"><LineStyle><color>ff0000ff</color><width>3</width></LineStyle><PolyStyle><color>6600ff00</color><fill>0</fill><outline>1</outline></PolyStyle></Style><StyleMap id=\"<id>\"><Pair><key>normal</key><styleUrl>#305534f8-938a-403a-a58f-ba621b55826e-normal</styleUrl></Pair><Pair><key>highlight</key><styleUrl>#305534f8-938a-403a-a58f-ba621b55826e-highlight</styleUrl></Pair></StyleMap><Style id=\"<id>\"><LineStyle><color>ffcc6633</color><width>2</width></LineStyle><PolyStyle><color>993366cc</color><fill>0</fill><outline>1</outline></PolyStyle></Style><Style id=\"<id>\"><LineStyle><color>ff0000ff</color><width>3</width></LineStyle><PolyStyle><color>6600ff00</color><fill>0</fill><outline>1</outline></PolyStyle></Style><Folder id=\"<id>\"><name>My Places</name><visibility>1</visibility><ExtendedData><Data name=\"terra-globe:order\"><value>0</value></Data><Data name=\"terra-globe:createdAt\"><value><ts></value></Data><Data name=\"terra-globe:updatedAt\"><value><ts></value></Data></ExtendedData><Folder id=\"<id>\"><name>Trips</name><description>Nested</description><visibility>1</visibility><ExtendedData><Data name=\"terra-globe:order\"><value>2</value></Data><Data name=\"terra-globe:createdAt\"><value><ts></value></Data><Data name=\"terra-globe:updatedAt\"><value><ts></value></Data></ExtendedData><Placemark id=\"<id>\"><name>Rectangle</name><visibility>1</visibility><Polygon><outerBoundaryIs><LinearRing><coordinates>13.3,52.4 13.5,52.4 13.5,52.6 13.3,52.6 13.3,52.4</coordinates></LinearRing></outerBoundaryIs></Polygon><ExtendedData><Data name=\"terra-globe:shape\"><value>rectangle</value></Data><Data name=\"terra-globe:north\"><value>52.6</value></Data><Data name=\"terra-globe:south\"><value>52.4</value></Data><Data name=\"terra-globe:east\"><value>13.5</value></Data><Data name=\"terra-globe:west\"><value>13.3</value></Data><Data name=\"terra-globe:createdAt\"><value><ts></value></Data><Data name=\"terra-globe:updatedAt\"><value><ts></value></Data></ExtendedData></Placemark><Placemark id=\"<id>\"><name>Polygon</name><visibility>1</visibility><Polygon><extrude>1</extrude><tessellate>1</tessellate><outerBoundaryIs><LinearRing><coordinates>9,51 9.1,51 9.1,51.1 9,51</coordinates></LinearRing></outerBoundaryIs><innerBoundaryIs><LinearRing><coordinates>9.02,51.02 9.04,51.02 9.04,51.04 9.02,51.02</coordinates></LinearRing></innerBoundaryIs></Polygon><ExtendedData><Data name=\"terra-globe:createdAt\"><value><ts></value></Data><Data name=\"terra-globe:updatedAt\"><value><ts></value></Data></ExtendedData></Placemark><Placemark id=\"<id>\"><name>Track</name><visibility>1</visibility><LineString><tessellate>1</tessellate><coordinates>9,51,100 9.05,51.02,140</coordinates></LineString><ExtendedData><Data name=\"terra-globe:createdAt\"><value><ts></value></Data><Data name=\"terra-globe:updatedAt\"><value><ts></value></Data></ExtendedData></Placemark></Folder><Placemark id=\"<id>\"><name>Berlin</name><description>Capital</description><Snippet>snippet</Snippet><address>Berlin, Germany</address><phoneNumber>(030) 1234</phoneNumber><TimeStamp><when>2024-01-01T00:00:00Z</when></TimeStamp><Camera><longitude>13.405</longitude><latitude>52.52</latitude><altitude>1000</altitude><heading>0</heading></Camera><Region><LatLonAltBox><north>53</north><south>52</south></LatLonAltBox><Lod><minLodPixels>128</minLodPixels></Lod></Region><visibility>1</visibility><styleUrl>#305534f8-938a-403a-a58f-ba621b55826e</styleUrl><Point><coordinates>13.405,52.52,34</coordinates></Point><ExtendedData><Data name=\"source\"><value>test</value></Data><Data name=\"terra-globe:createdAt\"><value><ts></value></Data><Data name=\"terra-globe:updatedAt\"><value><ts></value></Data></ExtendedData></Placemark><Placemark id=\"<id>\"><name>Circle</name><visibility>1</visibility><Polygon><outerBoundaryIs><LinearRing><coordinates>13.4,52.510791859 13.401738030,52.510739881 13.403459310,52.510584446 13.405147250,52.510327054 13.406785585,52.509970184 13.408358527,52.509517276 13.409850919,52.508972694 13.411248384,52.508341687 13.412537459,52.507630334 13.413705729,52.506845491 13.414741944,52.505994720 13.415636128,52.505086217 13.416379675,52.504128735 13.416965433,52.503131498 13.417387770,52.502104113 13.417642628,52.501056475 13.417727567,52.499998675 13.417641780,52.498940901 13.417386104,52.497893339 13.416963015,52.496866076 13.416376598,52.495869004 13.415632510,52.494911723 13.414737924,52.494003449 13.413701461,52.493152926 13.412533108,52.492368341 13.411244116,52.491657247 13.409846899,52.491026488 13.408354909,52.490482136 13.406782508,52.490029428 13.405144833,52.489672723 13.403457644,52.489415453 13.401737181,52.489260094 13.4,52.489208141 13.398262819,52.489260094 13.396542356,52.489415453 13.394855167,52.489672723 13.393217492,52.490029428 13.391645091,52.490482136 13.390153101,52.491026488 13.388755884,52.491657247 13.387466892,52.492368341 13.386298539,52.493152926 13.385262076,52.494003449 13.384367490,52.494911723 13.383623402,52.495869004 13.383036985,52.496866076 13.382613896,52.497893339 13.382358220,52.498940901 13.382272433,52.499998675 13.382357372,52.501056475 13.382612230,52.502104113 13.383034567,52.503131498 13.383620325,52.504128735 13.384363872,52.505086217 13.385258056,52.505994720 13.386294271,52.506845491 13.387462541,52.507630334 13.388751616,52.508341687 13.390149081,52.508972694 13.391641473,52.509517276 13.393214415,52.509970184 13.394852750,52.510327054 13.396540690,52.510584446 13.398261970,52.510739881 13.4,52.510791859</coordinates></LinearRing></outerBoundaryIs></Polygon><ExtendedData><Data name=\"terra-globe:shape\"><value>circle</value></Data><Data name=\"terra-globe:centerLon\"><value>13.4</value></Data><Data name=\"terra-globe:centerLat\"><value>52.5</value></Data><Data name=\"terra-globe:radiusMeters\"><value>1200</value></Data><Data name=\"terra-globe:createdAt\"><value><ts></value></Data><Data name=\"terra-globe:updatedAt\"><value><ts></value></Data></ExtendedData></Placemark><ScreenOverlay id=\"<id>\"><name>Legend</name><visibility>1</visibility><Icon><href>images/legend.png</href></Icon><overlayXY x=\"0\" y=\"1\" xunits=\"fraction\" yunits=\"fraction\"/><screenXY x=\"10\" y=\"10\" xunits=\"pixels\" yunits=\"pixels\"/><size x=\"120\" y=\"80\" xunits=\"pixels\" yunits=\"pixels\"/><rotation>0</rotation></ScreenOverlay></Folder><Placemark id=\"<id>\"><name>Model</name><visibility>1</visibility><Model><Location><longitude>9</longitude><latitude>51</latitude><altitude>10</altitude></Location><Orientation><heading>45</heading><tilt>10</tilt><roll>5</roll></Orientation><Scale><x>2</x><y>2</y><z>2</z></Scale><Link><href>models/test.glb</href></Link></Model><ExtendedData><Data name=\"terra-globe:createdAt\"><value><ts></value></Data><Data name=\"terra-globe:updatedAt\"><value><ts></value></Data></ExtendedData></Placemark><GroundOverlay id=\"<id>\"><name>Overlay</name><visibility>1</visibility><Icon><href>images/overlay.png</href></Icon><LatLonBox><north>52.6</north><south>52.4</south><east>13.5</east><west>13.3</west><rotation>15</rotation></LatLonBox><ExtendedData><Data name=\"terra-globe:createdAt\"><value><ts></value></Data><Data name=\"terra-globe:updatedAt\"><value><ts></value></Data></ExtendedData></GroundOverlay></Document></kml>",
+      "warnings": []
+    }
+  ]
+}

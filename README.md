@@ -3,10 +3,42 @@
 A Google Earth-style 3D globe application.
 Runs in the browser and as a native desktop app (Windows, macOS, Linux), sharing a single frontend codebase.
 
+> **Rewrite in progress.** The application is being rebuilt in Rust (`crates/`), with a purpose-built wgpu globe renderer and an egui UI.
+> The TypeScript/Tauri app in `packages/` and `src-tauri/` is frozen and remains the behavioural reference until it is removed at milestone M6.
+> Status and commands: [`docs/architecture-rust.md`](docs/architecture-rust.md); deviations: [`docs/parity-notes.md`](docs/parity-notes.md).
+
 Draw markers, circles, rectangles, polygons, and paths on a 3D globe.
 Organize them into folders.
 Import and export Google Earth KML/KMZ files.
 Store data locally (IndexedDB in the browser, SQLite on desktop) with a storage interface designed for future remote sync.
+
+## Rust port
+
+```bash
+cargo run -p terra-desktop        # or: make rust-run (binary: terra-globe)
+make rust-check                   # fmt, clippy, dependency rule, tests, wasm check
+cargo run -p terra-cli -- roundtrip path/to/map.kml   # import/export smoke tool
+cargo run -p terra-globe --example lod_probe          # print the tile selection per camera pose
+make rust-build-windows          # cross-build TerraGlobe-rust-x64.exe in Docker (cargo-xwin)
+```
+
+`examples/render_tiles.rs` renders a frame from a local tile cache for eyeballing imagery quality:
+
+```bash
+TERRA_TILE_CACHE=/tmp/terra-tiles TERRA_CAM_LAT=50 TERRA_CAM_LON=10 \
+  TERRA_CAM_DISTANCE=8000000 TERRA_ZOOM_TO=400000 \
+  cargo run -p terra-globe --example render_tiles
+```
+
+It serves `$TERRA_TILE_CACHE/<z>/<x>/<y>.png` over loopback (the normal fetch path), prints the tiles it is missing so you can populate the cache, and writes `$TERRA_TILE_OUT` (default `/tmp/terra-render.png`).
+
+The desktop app stores its library in `terra-globe.db` and its settings in `settings.json` under the platform data directory (`app.terraglobe.Terra Globe`), and provider keys in the OS keychain.
+Draw with the toolbar, fill in the editor on the right, and press **File → Save** to export KML/KMZ.
+**View** switches between the 3D globe, a 2D map and Columbus view.
+Release process: [`docs/release.md`](docs/release.md).
+
+Linux needs a Vulkan driver (Mesa works); the test suite runs headless on lavapipe.
+
 
 ## Features
 

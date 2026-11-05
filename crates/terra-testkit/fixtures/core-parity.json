@@ -1,0 +1,299 @@
+{
+  "generatedBy": "tools/parity/extract-fixtures.mjs",
+  "units": {
+    "distance": [
+      {
+        "meters": 0,
+        "system": "metric",
+        "expected": "0 m"
+      },
+      {
+        "meters": 1,
+        "system": "metric",
+        "expected": "1 m"
+      },
+      {
+        "meters": 12.4,
+        "system": "metric",
+        "expected": "12 m"
+      },
+      {
+        "meters": 999.4,
+        "system": "metric",
+        "expected": "999 m"
+      },
+      {
+        "meters": 999.6,
+        "system": "metric",
+        "expected": "1000 m"
+      },
+      {
+        "meters": 1000,
+        "system": "metric",
+        "expected": "1.00 km"
+      },
+      {
+        "meters": 1234.5,
+        "system": "metric",
+        "expected": "1.23 km"
+      },
+      {
+        "meters": 1609.344,
+        "system": "metric",
+        "expected": "1.61 km"
+      },
+      {
+        "meters": 1609.35,
+        "system": "metric",
+        "expected": "1.61 km"
+      },
+      {
+        "meters": 5000,
+        "system": "metric",
+        "expected": "5.00 km"
+      },
+      {
+        "meters": 1000000,
+        "system": "metric",
+        "expected": "1000.00 km"
+      },
+      {
+        "meters": 0,
+        "system": "imperial",
+        "expected": "0 ft"
+      },
+      {
+        "meters": 1,
+        "system": "imperial",
+        "expected": "3 ft"
+      },
+      {
+        "meters": 12.4,
+        "system": "imperial",
+        "expected": "41 ft"
+      },
+      {
+        "meters": 999.4,
+        "system": "imperial",
+        "expected": "3279 ft"
+      },
+      {
+        "meters": 999.6,
+        "system": "imperial",
+        "expected": "3280 ft"
+      },
+      {
+        "meters": 1000,
+        "system": "imperial",
+        "expected": "3281 ft"
+      },
+      {
+        "meters": 1234.5,
+        "system": "imperial",
+        "expected": "4050 ft"
+      },
+      {
+        "meters": 1609.344,
+        "system": "imperial",
+        "expected": "1.00 mi"
+      },
+      {
+        "meters": 1609.35,
+        "system": "imperial",
+        "expected": "1.00 mi"
+      },
+      {
+        "meters": 5000,
+        "system": "imperial",
+        "expected": "3.11 mi"
+      },
+      {
+        "meters": 1000000,
+        "system": "imperial",
+        "expected": "621.37 mi"
+      }
+    ],
+    "area": [
+      {
+        "squareMeters": 0,
+        "system": "metric",
+        "expected": "0 m²"
+      },
+      {
+        "squareMeters": 1,
+        "system": "metric",
+        "expected": "1 m²"
+      },
+      {
+        "squareMeters": 9999.4,
+        "system": "metric",
+        "expected": "9999 m²"
+      },
+      {
+        "squareMeters": 10000,
+        "system": "metric",
+        "expected": "1.00 ha"
+      },
+      {
+        "squareMeters": 12345.67,
+        "system": "metric",
+        "expected": "1.23 ha"
+      },
+      {
+        "squareMeters": 1000000,
+        "system": "metric",
+        "expected": "1.00 km²"
+      },
+      {
+        "squareMeters": 2500000000,
+        "system": "metric",
+        "expected": "2500.00 km²"
+      },
+      {
+        "squareMeters": 0,
+        "system": "imperial",
+        "expected": "0 sq ft"
+      },
+      {
+        "squareMeters": 1,
+        "system": "imperial",
+        "expected": "11 sq ft"
+      },
+      {
+        "squareMeters": 9999.4,
+        "system": "imperial",
+        "expected": "2.47 acres"
+      },
+      {
+        "squareMeters": 10000,
+        "system": "imperial",
+        "expected": "2.47 acres"
+      },
+      {
+        "squareMeters": 12345.67,
+        "system": "imperial",
+        "expected": "3.05 acres"
+      },
+      {
+        "squareMeters": 1000000,
+        "system": "imperial",
+        "expected": "247.11 acres"
+      },
+      {
+        "squareMeters": 2500000000,
+        "system": "imperial",
+        "expected": "965.26 sq mi"
+      }
+    ],
+    "duration": [
+      {
+        "seconds": 0,
+        "expected": "0 min"
+      },
+      {
+        "seconds": 30,
+        "expected": "1 min"
+      },
+      {
+        "seconds": 45,
+        "expected": "1 min"
+      },
+      {
+        "seconds": 90,
+        "expected": "2 min"
+      },
+      {
+        "seconds": 3600,
+        "expected": "1 h 0 min"
+      },
+      {
+        "seconds": 5400,
+        "expected": "1 h 30 min"
+      },
+      {
+        "seconds": 7260,
+        "expected": "2 h 1 min"
+      }
+    ],
+    "coordinate": [
+      {
+        "lat": 52.52,
+        "lon": 13.405,
+        "format": "decimal",
+        "expected": "52.52000, 13.40500"
+      },
+      {
+        "lat": -33.45,
+        "lon": -70.5,
+        "format": "decimal",
+        "expected": "-33.45000, -70.50000"
+      },
+      {
+        "lat": 0,
+        "lon": 0,
+        "format": "decimal",
+        "expected": "0.00000, 0.00000"
+      },
+      {
+        "lat": -0.000001,
+        "lon": 179.999999,
+        "format": "decimal",
+        "expected": "-0.00000, 180.00000"
+      },
+      {
+        "lat": 52.52,
+        "lon": 13.405,
+        "format": "dms",
+        "expected": "52°31'12.00\"N, 13°24'18.00\"E"
+      },
+      {
+        "lat": -33.45,
+        "lon": -70.5,
+        "format": "dms",
+        "expected": "33°27'0.00\"S, 70°30'0.00\"W"
+      },
+      {
+        "lat": 0,
+        "lon": 0,
+        "format": "dms",
+        "expected": "0°0'0.00\"N, 0°0'0.00\"E"
+      },
+      {
+        "lat": -0.000001,
+        "lon": 179.999999,
+        "format": "dms",
+        "expected": "0°0'0.00\"S, 179°59'60.00\"E"
+      }
+    ]
+  },
+  "geometryValidation": [
+    {
+      "kind": "point-lon-out-of-range",
+      "lon": 190,
+      "lat": 0,
+      "expectedError": "longitude must be in range [-180, 180], got 190"
+    },
+    {
+      "kind": "point-lat-out-of-range",
+      "lon": 0,
+      "lat": -91,
+      "expectedError": "latitude must be in range [-90, 90], got -91"
+    },
+    {
+      "kind": "circle-zero-radius",
+      "expectedError": "radius must be a positive number, got 0"
+    },
+    {
+      "kind": "rectangle-inverted",
+      "expectedError": "south (20) must be less than north (10)"
+    },
+    {
+      "kind": "polygon-too-few-points",
+      "expectedError": "outer ring must have at least 3 points, got 2"
+    },
+    {
+      "kind": "linestring-too-few-points",
+      "expectedError": "path must have at least 2 points, got 1"
+    }
+  ]
+}

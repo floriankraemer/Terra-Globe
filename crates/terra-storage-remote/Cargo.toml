@@ -1,0 +1,17 @@
+[package]
+name = "terra-storage-remote"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Placeholder remote PlacesRepository adapter, keeping the sync seam exercised."
+
+[dependencies]
+terra-core = { workspace = true }
+terra-storage = { workspace = true }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+
+[lints]
+workspace = true
