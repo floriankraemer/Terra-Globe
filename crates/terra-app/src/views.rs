@@ -1143,10 +1143,11 @@ fn globe_keyboard(data: &mut AppData, ui: &egui::Ui, response: &egui::Response) 
         return;
     }
 
-    let (shift, held, pressed, tapped, dt) = ui.input(|input| {
+    let (shift, alt, held, pressed, tapped, dt) = ui.input(|input| {
         let down = |key: Key| input.key_down(key);
         (
             input.modifiers.shift,
+            input.modifiers.alt,
             [
                 down(Key::ArrowLeft),
                 down(Key::ArrowRight),
@@ -1192,20 +1193,23 @@ fn globe_keyboard(data: &mut AppData, ui: &egui::Ui, response: &egui::Response) 
         data.globe.zoom_by(1.0 / ZOOM_STEP);
     }
 
-    // A single tap still has to turn or move a visible amount.
+    // A single tap still has to turn or move a visible amount, and Google
+    // Earth's Alt modifier makes every keyboard move slower.
     let tap_dt = if tapped { dt.max(1.0 / 12.0) } else { dt };
+    let slow = if alt { 0.25 } else { 1.0 };
     let mut busy = false;
     if shift {
         // Shift+left/right rotate the imagery, shift+up tilts towards top-down
         // and shift+down towards the horizon.
         if left || right {
             let direction = f64::from(i32::from(right) - i32::from(left));
-            data.globe.rotate_by(direction * ROTATE_RATE * tap_dt);
+            data.globe
+                .rotate_by(direction * ROTATE_RATE * tap_dt * slow);
             busy = true;
         }
         if up || down {
             let direction = f64::from(i32::from(up) - i32::from(down));
-            data.globe.tilt_by(direction * TILT_RATE * tap_dt);
+            data.globe.tilt_by(direction * TILT_RATE * tap_dt * slow);
             busy = true;
         }
     } else if left || right || up || down {
@@ -1214,7 +1218,7 @@ fn globe_keyboard(data: &mut AppData, ui: &egui::Ui, response: &egui::Response) 
         data.globe_key_hold = (data.globe_key_hold + dt as f32).min(1.5);
         let step_dt = tap_dt;
         let speed = PAN_RATE * f64::from(1.0 + 2.0 * data.globe_key_hold);
-        let step = data.globe.view_distance() * speed * step_dt;
+        let step = data.globe.view_distance() * speed * step_dt * slow;
         let forward = f64::from(i32::from(up) - i32::from(down)) * step;
         let sideways = f64::from(i32::from(right) - i32::from(left)) * step;
         data.globe.move_view(forward, sideways);

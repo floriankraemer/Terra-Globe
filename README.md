@@ -46,6 +46,7 @@ Navigation follows Google Earth: the wheel zooms towards the cursor, arrows move
 | Straight down | | `u` |
 | North up and straight down | | `r` |
 | Cancel a fly-to | | space |
+| Move more slowly | | hold Alt with any of the above |
 
 The globe view takes the keyboard when the pointer is over it or after a click.
 In the flat 2D view the map stays north-up; Columbus view rotates and tilts like
