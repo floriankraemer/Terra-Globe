@@ -32,6 +32,25 @@ TERRA_TILE_CACHE=/tmp/terra-tiles TERRA_CAM_LAT=50 TERRA_CAM_LON=10 \
 
 It serves `$TERRA_TILE_CACHE/<z>/<x>/<y>.png` over loopback (the normal fetch path), prints the tiles it is missing so you can populate the cache, and writes `$TERRA_TILE_OUT` (default `/tmp/terra-render.png`).
 
+### Navigation
+
+Navigation follows Google Earth: the wheel zooms towards the cursor, arrows move the view, shift rotates and tilts.
+
+| Action | Mouse | Keyboard |
+| --- | --- | --- |
+| Move over the globe | left-drag (the ground follows the cursor) | arrow keys, relative to the current heading |
+| Zoom | wheel, right-drag up/down, double-click in, right double-click out | `+` / `-`, Page Up / Page Down |
+| Rotate | shift+left-drag, middle-drag left/right, right-drag left/right | shift+left / shift+right |
+| Tilt | shift+left-drag up/down, middle-drag up/down | shift+up / shift+down, down = towards the horizon |
+| North up | | `n` |
+| Straight down | | `u` |
+| North up and straight down | | `r` |
+| Cancel a fly-to | | space |
+
+The globe view takes the keyboard when the pointer is over it or after a click.
+In the flat 2D view the map stays north-up; Columbus view rotates and tilts like
+the globe.
+
 The desktop app stores its library in `terra-globe.db` and its settings in `settings.json` under the platform data directory (`app.terraglobe.Terra Globe`), and provider keys in the OS keychain.
 Draw with the toolbar, fill in the editor on the right, and press **File → Save** to export KML/KMZ.
 **View** switches between the 3D globe, a 2D map and Columbus view.

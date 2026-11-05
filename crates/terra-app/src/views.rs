@@ -981,27 +981,66 @@ fn handle_globe_input(
     response: &egui::Response,
 ) {
     let pixels_per_point = f64::from(ui.ctx().pixels_per_point());
+    let cursor_pixel = ui
+        .input(|input| input.pointer.hover_pos())
+        .map(|pos| pixel_pos(pos, rect, pixels_per_point))
+        .unwrap_or((
+            f64::from(rect.width()) * pixels_per_point * 0.5,
+            f64::from(rect.height()) * pixels_per_point * 0.5,
+        ));
+    let (shift, secondary_down, middle_down, pointer_delta) = ui.input(|input| {
+        (
+            input.modifiers.shift,
+            input.pointer.button_down(egui::PointerButton::Secondary),
+            input.pointer.button_down(egui::PointerButton::Middle),
+            input.pointer.delta(),
+        )
+    });
 
-    if response.dragged() && !data.drawing.is_active() {
+    // Left drag moves the globe, the way Google Earth does. Shift turns the
+    // drag into tilt/rotate instead.
+    if response.dragged_by(egui::PointerButton::Primary) && !data.drawing.is_active() {
         let delta = response.drag_delta();
-        if data.globe.mode() == SceneMode::Scene2D {
-            data.globe
-                .pan_pixels((f64::from(delta.x), f64::from(delta.y)));
-        } else {
+        if shift {
             data.globe.orbit(f64::from(delta.x), f64::from(delta.y));
+        } else {
+            // The globe works in physical pixels; egui reports drags in points.
+            data.globe.pan_pixels(
+                cursor_pixel,
+                (
+                    f64::from(delta.x) * pixels_per_point,
+                    f64::from(delta.y) * pixels_per_point,
+                ),
+            );
         }
     }
 
     if response.hovered() {
-        let scroll = ui.ctx().input(|input| input.smooth_scroll_delta.y);
-        if scroll.abs() > 0.1 {
-            if let Some(pos) = ui.ctx().input(|input| input.pointer.hover_pos()) {
-                let factor = (-f64::from(scroll) * 0.002).exp();
+        // Right drag: up/down zooms towards the cursor, left/right rotates.
+        if secondary_down {
+            if pointer_delta.y.abs() > 0.0 {
                 data.globe
-                    .zoom_at(pixel_pos(pos, rect, pixels_per_point), factor);
+                    .zoom_at(cursor_pixel, (f64::from(pointer_delta.y) * 0.01).exp());
+            }
+            if pointer_delta.x.abs() > 0.0 {
+                data.globe.rotate_by(f64::from(pointer_delta.x) * 0.005);
             }
         }
-        if let Some(pos) = ui.ctx().input(|input| input.pointer.hover_pos()) {
+        // Middle drag tilts and rotates, like Google Earth's navigation pad.
+        if middle_down {
+            data.globe
+                .orbit(f64::from(pointer_delta.x), f64::from(pointer_delta.y));
+        }
+
+        let (scroll, pinch) = ui.input(|input| (input.smooth_scroll_delta.y, input.zoom_delta()));
+        if (pinch - 1.0).abs() > 0.01 {
+            data.globe.zoom_at(cursor_pixel, 1.0 / f64::from(pinch));
+        } else if scroll.abs() > 0.5 {
+            data.globe
+                .zoom_at(cursor_pixel, (-f64::from(scroll) * 0.003).exp());
+        }
+
+        if let Some(pos) = ui.input(|input| input.pointer.hover_pos()) {
             data.hovered = data
                 .globe
                 .pick_placemark(pixel_pos(pos, rect, pixels_per_point))
@@ -1011,7 +1050,10 @@ fn handle_globe_input(
         data.hovered = None;
     }
 
+    globe_keyboard(data, ui, response);
+
     if response.clicked() {
+        response.request_focus();
         let Some(pos) = response.interact_pointer_pos() else {
             return;
         };
@@ -1052,14 +1094,19 @@ fn handle_globe_input(
         }
     }
 
-    if response.double_clicked() {
-        if let Some(pos) = response.interact_pointer_pos() {
-            let pixel = pixel_pos(pos, rect, pixels_per_point);
-            let now = data.now_seconds();
-            if let Some(hit) = data.globe.pick(pick_screen(pixel)) {
-                let _ = hit;
-            }
-            if let Some(id) = data.globe.pick_placemark(pixel).map(|hit| hit.id) {
+    // Google Earth: double-click zooms towards the cursor, right double-click
+    // zooms away from it.
+    let adding = data.drawing.is_active() || data.ruler_adding || data.route_adding;
+    if response.double_clicked_by(egui::PointerButton::Secondary) {
+        data.globe.zoom_at(cursor_pixel, 2.5);
+    } else if response.double_clicked() && !adding {
+        let Some(pos) = response.interact_pointer_pos() else {
+            return;
+        };
+        let pixel = pixel_pos(pos, rect, pixels_per_point);
+        match data.globe.pick_placemark(pixel).map(|hit| hit.id) {
+            Some(id) => {
+                let now = data.now_seconds();
                 if let Some(geometry) = data
                     .store
                     .library()
@@ -1068,16 +1115,117 @@ fn handle_globe_input(
                 {
                     data.globe.fly_to_geometry(&geometry, now);
                 }
-            } else if let Some(point) = data.globe.pick(pixel) {
-                data.globe
-                    .fly_to(point.lon_deg, point.lat_deg, 200_000.0, now);
             }
+            None => data.globe.zoom_at(pixel, 0.5),
         }
     }
 }
 
-fn pick_screen(pixel: (f64, f64)) -> (f64, f64) {
-    pixel
+/// Rotation speed for shift+arrow, radians per second.
+const ROTATE_RATE: f64 = 0.9;
+/// Tilt speed for shift+arrow, radians per second.
+const TILT_RATE: f64 = 0.6;
+/// Pan speed as a fraction of the camera distance per second.
+const PAN_RATE: f64 = 0.4;
+/// One press of `+`/`-`/
+const ZOOM_STEP: f64 = 0.75;
+
+/// Google Earth's 3D-viewer keys: arrows move, shift+arrows rotate and tilt,
+/// `+`/`-`/Page Up/Page Down zoom, `n`/`u`/`r` reset the orientation and space
+/// stops a fly-to.
+fn globe_keyboard(data: &mut AppData, ui: &egui::Ui, response: &egui::Response) {
+    use egui::Key;
+    let editing_text = ui
+        .memory(|memory| memory.focused())
+        .is_some_and(|id| id != response.id);
+    if editing_text || !(response.has_focus() || response.hovered()) {
+        data.globe_key_hold = 0.0;
+        return;
+    }
+
+    let (shift, held, pressed, tapped, dt) = ui.input(|input| {
+        let down = |key: Key| input.key_down(key);
+        (
+            input.modifiers.shift,
+            [
+                down(Key::ArrowLeft),
+                down(Key::ArrowRight),
+                down(Key::ArrowUp),
+                down(Key::ArrowDown),
+            ],
+            (
+                input.key_pressed(Key::Plus) || input.key_pressed(Key::Equals),
+                input.key_pressed(Key::Minus),
+                input.key_pressed(Key::PageUp),
+                input.key_pressed(Key::PageDown),
+                input.key_pressed(Key::N),
+                input.key_pressed(Key::U),
+                input.key_pressed(Key::R),
+                input.key_pressed(Key::Space),
+            ),
+            input.key_pressed(Key::ArrowLeft)
+                || input.key_pressed(Key::ArrowRight)
+                || input.key_pressed(Key::ArrowUp)
+                || input.key_pressed(Key::ArrowDown),
+            f64::from(input.stable_dt).clamp(0.001, 0.1),
+        )
+    });
+    let [left, right, up, down] = held;
+    let (zoom_in, zoom_out, page_up, page_down, north, top_down, reset, stop) = pressed;
+
+    if north {
+        data.globe.set_north_up();
+    }
+    if top_down {
+        data.globe.set_top_down();
+    }
+    if reset {
+        data.globe.reset_view();
+    }
+    if stop {
+        data.globe.stop_motion();
+    }
+    if zoom_in || page_up {
+        data.globe.zoom_by(ZOOM_STEP);
+    }
+    if zoom_out || page_down {
+        data.globe.zoom_by(1.0 / ZOOM_STEP);
+    }
+
+    // A single tap still has to turn or move a visible amount.
+    let tap_dt = if tapped { dt.max(1.0 / 12.0) } else { dt };
+    let mut busy = false;
+    if shift {
+        // Shift+left/right rotate the imagery, shift+up tilts towards top-down
+        // and shift+down towards the horizon.
+        if left || right {
+            let direction = f64::from(i32::from(right) - i32::from(left));
+            data.globe.rotate_by(direction * ROTATE_RATE * tap_dt);
+            busy = true;
+        }
+        if up || down {
+            let direction = f64::from(i32::from(up) - i32::from(down));
+            data.globe.tilt_by(direction * TILT_RATE * tap_dt);
+            busy = true;
+        }
+    } else if left || right || up || down {
+        // Google Earth moves a fraction of the current altitude per second and
+        // speeds up while a key is held.
+        data.globe_key_hold = (data.globe_key_hold + dt as f32).min(1.5);
+        let step_dt = tap_dt;
+        let speed = PAN_RATE * f64::from(1.0 + 2.0 * data.globe_key_hold);
+        let step = data.globe.view_distance() * speed * step_dt;
+        let forward = f64::from(i32::from(up) - i32::from(down)) * step;
+        let sideways = f64::from(i32::from(right) - i32::from(left)) * step;
+        data.globe.move_view(forward, sideways);
+        busy = true;
+    } else {
+        data.globe_key_hold = 0.0;
+    }
+
+    if busy || zoom_in || zoom_out || page_up || page_down || reset {
+        ui.ctx().request_repaint();
+    }
 }
 
 fn register_texture(data: &mut AppData, render_state: Option<&egui_wgpu::RenderState>) {

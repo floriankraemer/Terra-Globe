@@ -395,20 +395,74 @@ impl FlatCamera {
         self.ray_plane_point(ndc, aspect)
     }
 
-    /// Pan by a screen delta (drag) in plane meters.
+    /// Pan by a screen delta (drag) in plane meters. The ground follows the
+    /// cursor, like Google Earth: dragging moves the map with the pointer.
     pub fn pan_pixels(&mut self, delta: (f64, f64), viewport: (u32, u32)) {
-        let meters_per_pixel = self.distance / f64::from(viewport.1.max(1));
+        let height = f64::from(viewport.1.max(1));
+        let (horizontal, vertical) = if self.is_orthographic() {
+            let per_pixel = self.distance / height;
+            (per_pixel, per_pixel)
+        } else {
+            // Ground scale at the centre of a perspective view. Screen-y is
+            // compressed by the tilt: the flatter the view, the more ground a
+            // vertical pixel covers.
+            let centre = DVec3::new(f64::from(self.center.x), f64::from(self.center.y), 0.0);
+            let distance = (self.eye_plane() - centre).length().max(1.0);
+            let per_pixel = distance * 2.0 * (std::f64::consts::FRAC_PI_4 / 2.0).tan() / height;
+            (per_pixel, per_pixel / self.pitch.sin().max(0.2))
+        };
         let (sin, cos) = self.heading.sin_cos();
-        let dx = -delta.0 * meters_per_pixel;
-        let dy = delta.1 * meters_per_pixel;
+        let dx = -delta.0 * horizontal;
+        let dy = delta.1 * vertical;
         self.center.x += (dx * cos - dy * sin) as f32;
         self.center.y += (dx * sin + dy * cos) as f32;
         self.clamp_center();
     }
 
+    /// Rotates the map. Positive `radians` turn the imagery to the right, the
+    /// same sense as dragging the map. The orthographic 2D view is north-up by
+    /// construction, so it ignores rotation.
+    pub fn rotate_by(&mut self, radians: f64) {
+        if self.is_orthographic() || !radians.is_finite() {
+            return;
+        }
+        self.heading = wrap_angle(self.heading + radians);
+    }
+
+    /// Tilts the perspective view. Positive `radians` raise the eye towards a
+    /// top-down view, negative tilt towards the horizon.
+    pub fn tilt_by(&mut self, radians: f64) {
+        if self.is_orthographic() || !radians.is_finite() {
+            return;
+        }
+        self.pitch = (self.pitch + radians).clamp(10f64.to_radians(), 89.5f64.to_radians());
+    }
+
+    pub fn set_heading(&mut self, radians: f64) {
+        if radians.is_finite() {
+            self.heading = wrap_angle(radians);
+        }
+    }
+
+    /// Google Earth's shift-drag: horizontal rotation plus tilt.
     pub fn orbit(&mut self, delta_x: f64, delta_y: f64) {
-        self.heading = wrap_angle(self.heading - delta_x * 0.005);
-        self.pitch = (self.pitch - delta_y * 0.005).clamp(10f64.to_radians(), 89.5f64.to_radians());
+        self.rotate_by(delta_x * 0.005);
+        self.tilt_by(-delta_y * 0.005);
+    }
+
+    /// Moves the view along the screen axes, in metres on the map. Positive
+    /// `forward` moves towards the top of the screen, positive `right` to the
+    /// right.
+    pub fn pan_view(&mut self, forward_m: f64, right_m: f64) {
+        if !forward_m.is_finite() || !right_m.is_finite() {
+            return;
+        }
+        let (sin, cos) = self.heading.sin_cos();
+        // Screen up and screen right in plane coordinates (see `pan_pixels`).
+        let up = Vec2::new(-sin as f32, cos as f32);
+        let right = Vec2::new(cos as f32, sin as f32);
+        self.center += up * forward_m as f32 + right * right_m as f32;
+        self.clamp_center();
     }
 
     pub fn zoom(&mut self, factor: f64) {

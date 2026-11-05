@@ -206,9 +206,158 @@ impl Camera {
         )
     }
 
+    /// Unit vector from the eye towards the target.
+    pub fn view_forward(&self) -> DVec3 {
+        (self.target_ecef() - self.eye_ecef()).normalize()
+    }
+
+    /// The point on the ellipsoid under a viewport pixel, if the ray hits it.
+    pub fn pick_surface(&self, pixel: (f64, f64), viewport: (u32, u32)) -> Option<DVec3> {
+        let (origin, direction) = self.ray_at(pixel, viewport);
+        crate::geo::ray_ellipsoid_point(origin, direction)
+    }
+
+    /// The two ground axes the screen maps to, as `(forward, right)` unit
+    /// vectors in the local east/north frame at the target.
+    ///
+    /// `forward` is the direction the camera looks (screen up), `right` is
+    /// screen right. Both stay well defined at any tilt because the horizontal
+    /// part of the view direction only depends on the heading.
+    fn ground_axes(&self) -> ((f64, f64), (f64, f64)) {
+        let (sin_h, cos_h) = self.heading.sin_cos();
+        ((-sin_h, cos_h), (cos_h, sin_h))
+    }
+
+    /// Rotates the view around the target. Positive `radians` turn the imagery
+    /// to the right, which is what dragging the globe to the right does.
+    pub fn rotate_by(&mut self, radians: f64) {
+        if radians.is_finite() {
+            self.heading = wrap_angle(self.heading + radians);
+        }
+    }
+
+    /// Tilts the view. Positive `radians` raise the eye towards a top-down
+    /// view, negative tilts towards the horizon.
+    pub fn tilt_by(&mut self, radians: f64) {
+        if radians.is_finite() {
+            self.pitch = (self.pitch + radians).clamp(MIN_PITCH, MAX_PITCH);
+            self.ensure_above_surface();
+        }
+    }
+
+    /// Google Earth's shift-drag: horizontal rotation plus tilt.
     pub fn orbit(&mut self, delta_x: f64, delta_y: f64) {
-        self.heading = wrap_angle(self.heading - delta_x * 0.005);
-        self.pitch = (self.pitch - delta_y * 0.005).clamp(MIN_PITCH, MAX_PITCH);
+        self.rotate_by(delta_x * 0.005);
+        // Dragging down brings the horizon down into view, i.e. tilts up.
+        self.tilt_by(-delta_y * 0.005);
+    }
+
+    pub fn set_heading(&mut self, radians: f64) {
+        if radians.is_finite() {
+            self.heading = wrap_angle(radians);
+        }
+    }
+
+    pub fn set_pitch(&mut self, radians: f64) {
+        if radians.is_finite() {
+            self.pitch = radians.clamp(MIN_PITCH, MAX_PITCH);
+            self.ensure_above_surface();
+        }
+    }
+
+    /// Stops a running fly-to.
+    pub fn stop(&mut self) {
+        self.animation = None;
+    }
+
+    /// Moves the view across the ground without changing its orientation or
+    /// altitude: the eye and the target translate together.
+    pub fn pan_ground(&mut self, east_m: f64, north_m: f64) {
+        if !east_m.is_finite() || !north_m.is_finite() {
+            return;
+        }
+        let lat = self.target_lat_deg.to_radians();
+        // Near the poles a metre of easting is many degrees of longitude; the
+        // floor keeps a pan from flinging the target around the pole.
+        let cos_lat = lat.cos().max(0.02);
+        let dlat = (north_m / crate::geo::WGS84_A).to_degrees();
+        let dlon = (east_m / (crate::geo::WGS84_A * cos_lat)).to_degrees();
+        self.target_lat_deg = (self.target_lat_deg + dlat).clamp(-89.5, 89.5);
+        self.target_lon_deg = wrap_angle((self.target_lon_deg + dlon).to_radians()).to_degrees();
+        self.ensure_above_surface();
+    }
+
+    /// Moves the view along the screen axes, in metres on the ground. Positive
+    /// `forward` moves towards the part of the globe the camera faces, positive
+    /// `right` moves to the right of the screen.
+    pub fn pan_view(&mut self, forward_m: f64, right_m: f64) {
+        let ((forward_east, forward_north), (right_east, right_north)) = self.ground_axes();
+        self.pan_ground(
+            forward_east * forward_m + right_east * right_m,
+            forward_north * forward_m + right_north * right_m,
+        );
+    }
+
+    /// Metres of ground per screen pixel at a pixel, as
+    /// `(horizontal, vertical)`.
+    ///
+    /// Screen-x is not foreshortened by tilt (it moves along a circle around the
+    /// eye), screen-y is: the more obliquely the surface is viewed, the more
+    /// ground one pixel of vertical movement covers.
+    pub fn surface_scale_at(&self, pixel: (f64, f64), viewport: (u32, u32)) -> (f64, f64) {
+        let screen_height = f64::from(viewport.1.max(1));
+        let eye = self.eye_ecef();
+        let (origin, direction) = self.ray_at(pixel, viewport);
+        let point = crate::geo::ray_ellipsoid_point(origin, direction)
+            .unwrap_or_else(|| self.target_ecef());
+        let distance = (point - eye).length().max(1.0);
+        let per_pixel = distance * 2.0 * (self.fov_y / 2.0).tan() / screen_height;
+        let incidence = direction
+            .normalize()
+            .dot(crate::geo::ellipsoid_normal(point))
+            .abs()
+            .max(0.15);
+        (per_pixel, per_pixel / incidence)
+    }
+
+    /// Drags the globe: the ground under `pixel` follows the cursor.
+    pub fn pan_pixels(&mut self, pixel: (f64, f64), viewport: (u32, u32), delta: (f64, f64)) {
+        if !delta.0.is_finite() || !delta.1.is_finite() {
+            return;
+        }
+        let (per_pixel_x, per_pixel_y) = self.surface_scale_at(pixel, viewport);
+        // Dragging down moves the view forward (up the screen), dragging right
+        // moves it to the left: the imagery stays under the cursor.
+        self.pan_view(delta.1 * per_pixel_y, -delta.0 * per_pixel_x);
+    }
+
+    /// Zooms towards the surface point under `pixel`, Google Earth style.
+    ///
+    /// The eye dollies along the ray through the cursor, so that point stays
+    /// where it is on screen and the view does not rotate at all. Moving the
+    /// target towards the anchor by `1 - factor` is exactly that dolly: with
+    /// `d' = d * factor`, the new eye is `eye + (1 - factor) * (anchor - eye)`.
+    pub fn dolly_at(&mut self, pixel: (f64, f64), viewport: (u32, u32), factor: f64) {
+        if !factor.is_finite() || factor <= 0.0 {
+            return;
+        }
+        let factor = factor.clamp(0.1, 10.0);
+        let anchor = self
+            .pick_surface(pixel, viewport)
+            .map(crate::geo::ecef_to_geodetic)
+            .filter(|anchor| anchor.height.abs() < 1.0e6);
+        if let Some(anchor) = anchor {
+            let dlon =
+                wrap_angle((anchor.lon_deg() - self.target_lon_deg).to_radians()).to_degrees();
+            let weight = 1.0 - factor;
+            self.target_lon_deg =
+                wrap_angle((self.target_lon_deg + dlon * weight).to_radians()).to_degrees();
+            self.target_lat_deg = (self.target_lat_deg
+                + (anchor.lat_deg() - self.target_lat_deg) * weight)
+                .clamp(-89.5, 89.5);
+        }
+        self.distance = (self.distance * factor).clamp(MIN_DISTANCE, MAX_DISTANCE);
+        self.ensure_above_surface();
     }
 
     /// Multiplies the distance; `factor < 1` zooms in.
@@ -376,6 +525,181 @@ mod tests {
         camera.heading = 3.0;
         camera.orbit(-2000.0, 0.0);
         assert!(camera.heading.abs() <= std::f64::consts::PI);
+    }
+
+    fn screen_x_of(camera: &Camera, point: crate::geo::Geodetic) -> f64 {
+        camera
+            .project(geodetic_to_ecef(point), (1280, 800))
+            .expect("point on screen")
+            .x
+    }
+
+    /// Google Earth's shift-drag grabs the scene: whatever is under the cursor
+    /// moves with it, so rotating to the right moves the imagery right.
+    #[test]
+    fn rotating_right_moves_the_imagery_right() {
+        let mut camera = Camera {
+            distance: 6_000_000.0,
+            pitch: 60f64.to_radians(),
+            ..Camera::default()
+        };
+        let north = Geodetic::from_degrees(camera.target_lon_deg, camera.target_lat_deg + 2.0, 0.0);
+        let before = screen_x_of(&camera, north);
+        camera.orbit(100.0, 0.0);
+        let after = screen_x_of(&camera, north);
+        assert!(
+            after > before,
+            "dragging right must move the scene right: {before} -> {after}"
+        );
+    }
+
+    #[test]
+    fn dragging_down_tilts_towards_the_horizon() {
+        let mut camera = Camera {
+            pitch: 60f64.to_radians(),
+            ..Camera::default()
+        };
+        camera.orbit(0.0, 100.0);
+        assert!(camera.pitch < 60f64.to_radians());
+    }
+
+    #[test]
+    fn arrow_keys_move_along_the_current_heading() {
+        let mut north_up = Camera {
+            heading: 0.0,
+            ..Camera::default()
+        };
+        let start = north_up.target_lat_deg;
+        north_up.pan_view(100_000.0, 0.0);
+        assert!(
+            north_up.target_lat_deg > start,
+            "forward must go north at heading 0"
+        );
+        assert!((north_up.target_lon_deg - 10.0).abs() < 1e-6);
+
+        // Facing west (heading 90 degrees in this camera's convention), forward
+        // has to go west, and right has to go north.
+        let mut west = Camera {
+            heading: std::f64::consts::FRAC_PI_2,
+            ..Camera::default()
+        };
+        let lat = west.target_lat_deg;
+        let lon = west.target_lon_deg;
+        west.pan_view(100_000.0, 0.0);
+        assert!(west.target_lon_deg < lon, "forward must go west");
+        assert!((west.target_lat_deg - lat).abs() < 1e-6);
+        west.pan_view(0.0, 100_000.0);
+        assert!(west.target_lat_deg > lat, "right must go north");
+    }
+
+    #[test]
+    fn arrow_keys_move_roughly_the_requested_distance() {
+        let mut camera = Camera {
+            target_lon_deg: 0.0,
+            target_lat_deg: 0.0,
+            ..Camera::default()
+        };
+        camera.pan_view(111_000.0, 0.0);
+        assert!(
+            (camera.target_lat_deg - 1.0).abs() < 0.01,
+            "111 km of northing is about one degree, got {}",
+            camera.target_lat_deg
+        );
+    }
+
+    #[test]
+    fn dragging_moves_the_ground_with_the_cursor() {
+        let mut camera = Camera {
+            distance: 2_000_000.0,
+            pitch: 45f64.to_radians(),
+            ..Camera::default()
+        };
+        let viewport = (1280, 800);
+        let grab = (900.0, 300.0);
+        let grabbed = camera
+            .pick_surface(grab, viewport)
+            .expect("the grab point is on the globe");
+        let drag = (120.0, 0.0);
+        camera.pan_pixels(grab, viewport, drag);
+        let moved = camera
+            .project(grabbed, viewport)
+            .expect("the grabbed point is still on screen");
+        // A grabbed point follows the cursor. North/south drags couple into the
+        // picture's x on a sphere, so only the horizontal grab is asserted to
+        // the pixel.
+        assert!(
+            (moved.x - (grab.0 + drag.0)).abs() < 15.0,
+            "grabbed point should follow the cursor from {grab:?} by {drag:?}, landed at {moved:?}"
+        );
+        // And the view moved the other way: the point now under the original
+        // pixel is the one that used to be west of the cursor.
+        let (east, _, _) = crate::geo::enu_axes(grabbed);
+        let under = camera
+            .pick_surface(grab, viewport)
+            .expect("still on the globe");
+        assert!((grabbed - under).dot(east) > 0.0);
+    }
+
+    /// The reported bug: the wheel must zoom, and zooming must not rotate the
+    /// view or shift the target when the cursor is in the middle.
+    #[test]
+    fn zooming_at_the_centre_changes_nothing_but_the_distance() {
+        let mut camera = Camera {
+            distance: 5_000_000.0,
+            pitch: 45f64.to_radians(),
+            heading: 0.7,
+            ..Camera::default()
+        };
+        let before = camera.pose();
+        camera.dolly_at((640.0, 400.0), (1280, 800), 0.9);
+        assert!((camera.distance - before.distance * 0.9).abs() < 1.0);
+        assert!((camera.pose().lon_deg - before.lon_deg).abs() < 1e-6);
+        assert!((camera.pose().lat_deg - before.lat_deg).abs() < 1e-6);
+        assert!((camera.heading - before.heading).abs() < 1e-9);
+        assert!((camera.pitch - before.pitch).abs() < 1e-9);
+    }
+
+    #[test]
+    fn zooming_keeps_the_point_under_the_cursor_in_place() {
+        let mut camera = Camera {
+            distance: 4_000_000.0,
+            pitch: 50f64.to_radians(),
+            ..Camera::default()
+        };
+        let viewport = (1280, 800);
+        let cursor = (980.0, 260.0);
+        let before = camera
+            .project(
+                camera.pick_surface(cursor, viewport).expect("on the globe"),
+                viewport,
+            )
+            .expect("visible");
+
+        for _ in 0..6 {
+            camera.dolly_at(cursor, viewport, 0.85);
+        }
+        let anchor = camera.pick_surface(cursor, viewport).expect("on the globe");
+        let after = camera.project(anchor, viewport).expect("visible");
+        assert!(
+            (after.x - before.x).abs() < 30.0 && (after.y - before.y).abs() < 30.0,
+            "the anchor drifted from {before:?} to {after:?}"
+        );
+        // Zooming in towards a corner must not rotate the view.
+        assert!((camera.pitch - 50f64.to_radians()).abs() < 1e-9);
+    }
+
+    #[test]
+    fn zooming_never_looks_wrong_at_the_antimeridian() {
+        let mut camera = Camera {
+            target_lon_deg: 179.5,
+            ..Camera::default()
+        };
+        camera.dolly_at((1100.0, 400.0), (1280, 800), 0.8);
+        assert!(
+            camera.target_lon_deg.abs() <= 180.0,
+            "{}",
+            camera.target_lon_deg
+        );
     }
 
     #[test]

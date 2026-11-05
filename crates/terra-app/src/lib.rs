@@ -112,6 +112,8 @@ pub struct AppData {
     pub cursor_world: Option<terra_core::GeoPoint>,
     pub drag_move: Option<DragMove>,
     pub frame_ms: f32,
+    /// How long the globe arrow keys have been held, for the speed ramp.
+    pub globe_key_hold: f32,
     pub show_stats: bool,
     pub start: Instant,
     pub last_camera_save: Instant,
@@ -191,6 +193,7 @@ impl AppData {
             cursor_world: None,
             drag_move: None,
             frame_ms: 0.0,
+            globe_key_hold: 0.0,
             show_stats: false,
             start: Instant::now(),
             last_camera_save: Instant::now(),

@@ -7,7 +7,7 @@ Each entry says whether it is intentional, temporary, or pending a decision.
 
 - **MSAA is 4× natively and 1× in the browser** (WebGL2 has no multisampled textures), so the wasm build still shows aliased silhouettes.
 - **No tile mipmaps.** Tiles are sampled linearly without mipmaps. LOD targets one texel per pixel, so this only shows up where imagery is minified (grazing angles at the limb, and coarse ancestor fallbacks); anisotropic filtering is the follow-up if that becomes visible.
-- **Camera gestures are orbit + zoom.** Drag orbits around the target; there is no separate pan/tilt modifier, keyboard control, or inertial easing yet (M3).
+- **Navigation follows Google Earth.** Left-drag moves the globe (the ground follows the cursor), the wheel zooms towards the cursor without rotating, right-drag zooms vertically and rotates horizontally, middle-drag and shift+left-drag tilt and rotate, and the arrow keys move along the current heading with shift+arrows for rotation and tilt; `n`/`u`/`r` reset north/tilt, space cancels a fly-to. Not implemented: Google Earth's Alt-to-slow modifier, the Ctrl+drag first-person look, and inertial easing.
 - **Zoom-at-cursor approximates the target move** by interpolating the target toward the picked point. It reads correctly at normal zoom levels but is not the exact "keep the point under the cursor" solution.
 - **No terrain.** The surface is the WGS84 ellipsoid, which matches the current app. `HeightProvider` is designed for later.
 - **No 3D models.** KML `<Model>` placemarks are stored and exported but not rendered yet (pending the M3 decision).

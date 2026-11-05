@@ -111,6 +111,9 @@ impl Globe {
             SceneMode::Scene2D => {
                 self.flat = FlatCamera::from_camera(&self.camera, mode);
                 self.flat.pitch = std::f64::consts::FRAC_PI_2;
+                // The orthographic path has no rotation, so a rotated 3D view
+                // would make picking and rendering disagree.
+                self.flat.heading = 0.0;
             }
             SceneMode::Columbus => {
                 self.flat = FlatCamera::from_camera(&self.camera, mode);
@@ -245,7 +248,8 @@ impl Globe {
         self.camera.fly_to(pose, 1.2, now_seconds);
     }
 
-    /// Drag rotation: orbit in 3D and Columbus, ignored in 2D (which pans).
+    /// Shift-drag / right-drag: rotate the view and tilt it. Ignored in the
+    /// orthographic 2D view, which is north-up by construction.
     pub fn orbit(&mut self, delta_x: f64, delta_y: f64) {
         match self.mode {
             SceneMode::Scene3D => self.camera.orbit(delta_x, delta_y),
@@ -254,31 +258,91 @@ impl Globe {
         }
     }
 
-    /// Drag pan for the flat modes; the 3D globe pans by orbiting.
-    pub fn pan_pixels(&mut self, delta: (f64, f64)) {
-        if self.mode.is_flat() {
-            self.flat.pan_pixels(delta, self.viewport);
+    /// Rotates the view. Positive radians turn the imagery to the right.
+    pub fn rotate_by(&mut self, radians: f64) {
+        match self.mode {
+            SceneMode::Scene3D => self.camera.rotate_by(radians),
+            SceneMode::Columbus => self.flat.rotate_by(radians),
+            SceneMode::Scene2D => {}
         }
     }
 
-    /// Zooms toward the cursor: the picked surface point moves towards the
-    /// centre of the screen while the distance shrinks, so the feature under the
-    /// pointer stays under the pointer.
+    /// Tilts the view. Positive radians raise the eye towards top-down.
+    pub fn tilt_by(&mut self, radians: f64) {
+        match self.mode {
+            SceneMode::Scene3D => self.camera.tilt_by(radians),
+            SceneMode::Columbus => self.flat.tilt_by(radians),
+            SceneMode::Scene2D => {}
+        }
+    }
+
+    /// Drags the map: the ground under `pixel` follows the cursor, in every
+    /// mode. 3D uses the pixel to work out the local ground scale.
+    pub fn pan_pixels(&mut self, pixel: (f64, f64), delta: (f64, f64)) {
+        if self.mode.is_flat() {
+            self.flat.pan_pixels(delta, self.viewport);
+        } else {
+            self.camera.pan_pixels(pixel, self.viewport, delta);
+        }
+    }
+
+    /// Moves the view along the screen axes, in metres on the ground. This is
+    /// what the arrow keys drive: `forward` is towards the top of the screen,
+    /// `right` towards the right edge, both relative to the current heading.
+    pub fn move_view(&mut self, forward_m: f64, right_m: f64) {
+        if self.mode.is_flat() {
+            self.flat.pan_view(forward_m, right_m);
+        } else {
+            self.camera.pan_view(forward_m, right_m);
+        }
+    }
+
+    /// Zooms towards the cursor, Google Earth style: the point under the
+    /// pointer stays put and the view does not rotate.
     pub fn zoom_at(&mut self, pixel: (f64, f64), factor: f64) {
         if self.mode.is_flat() {
             self.flat.zoom_at(pixel, self.viewport, factor);
-            return;
+        } else {
+            self.camera.dolly_at(pixel, self.viewport, factor);
         }
-        let Some(pick) = self.pick(pixel) else {
-            self.camera.zoom(factor);
-            return;
-        };
-        let weight = if factor < 1.0 { 0.35 } else { 0.15 };
-        // Interpolating the geographic target linearly is visually fine at the
-        // distances zoom-at-cursor is used; `fly_to` handles long hops.
-        self.camera.target_lon_deg += (pick.lon_deg - self.camera.target_lon_deg) * weight;
-        self.camera.target_lat_deg += (pick.lat_deg - self.camera.target_lat_deg) * weight;
-        self.camera.zoom(factor);
+    }
+
+    /// Zooms towards the middle of the screen.
+    pub fn zoom_by(&mut self, factor: f64) {
+        let centre = (
+            f64::from(self.viewport.0) * 0.5,
+            f64::from(self.viewport.1) * 0.5,
+        );
+        self.zoom_at(centre, factor);
+    }
+
+    /// Google Earth's `n`: put north at the top.
+    pub fn set_north_up(&mut self) {
+        match self.mode {
+            SceneMode::Scene3D => self.camera.set_heading(0.0),
+            SceneMode::Columbus => self.flat.set_heading(0.0),
+            SceneMode::Scene2D => {}
+        }
+    }
+
+    /// Google Earth's `u`: look straight down.
+    pub fn set_top_down(&mut self) {
+        match self.mode {
+            SceneMode::Scene3D => self.camera.set_pitch(std::f64::consts::FRAC_PI_2),
+            SceneMode::Columbus => self.flat.tilt_by(std::f64::consts::FRAC_PI_2),
+            SceneMode::Scene2D => {}
+        }
+    }
+
+    /// Google Earth's `r`: north-up and top-down in one step.
+    pub fn reset_view(&mut self) {
+        self.set_north_up();
+        self.set_top_down();
+    }
+
+    /// Space bar: cancel a running camera animation.
+    pub fn stop_motion(&mut self) {
+        self.camera.stop();
     }
 
     pub fn eye_ecef(&self) -> DVec3 {
