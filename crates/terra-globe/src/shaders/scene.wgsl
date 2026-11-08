@@ -5,7 +5,9 @@ struct Frame {
 };
 
 struct Item {
-    // Item centre relative to the camera eye, in meters.
+    // xyz: item centre relative to the camera eye, in meters.
+    // w: fraction of the eye distance the item is pulled towards the eye (0 =
+    // off), see `pull_to_eye`.
     translation: vec4<f32>,
 };
 
@@ -17,6 +19,18 @@ struct VertexOutput {
     @location(0) color: vec4<f32>,
 };
 
+// Slides a point along its view ray towards the eye: it lands on the same
+// pixel but nearer in depth. Over terrain the tile surface is a coarser model
+// than the heights lines and fills sample, so without this a slope between two
+// grid vertices can swallow them; the clearance it buys grows with distance,
+// as the surface's own error does. Capped, so a far-side shape cannot show
+// through the limb of a whole-globe view.
+fn pull_to_eye(world: vec3<f32>, factor: f32) -> vec3<f32> {
+    let distance = length(world);
+    let pull = min(distance * factor, 2000.0);
+    return world - world * (pull / max(distance, 1.0));
+}
+
 // ---- filled polygons -------------------------------------------------------
 
 struct FillInput {
@@ -27,7 +41,8 @@ struct FillInput {
 @vertex
 fn vs_fill(input: FillInput) -> VertexOutput {
     var output: VertexOutput;
-    output.clip = frame.view_projection * vec4<f32>(input.position + item.translation.xyz, 1.0);
+    let world = pull_to_eye(input.position + item.translation.xyz, item.translation.w);
+    output.clip = frame.view_projection * vec4<f32>(world, 1.0);
     output.color = input.color;
     return output;
 }
@@ -46,8 +61,10 @@ struct LineInput {
 @vertex
 fn vs_line(input: LineInput) -> VertexOutput {
     var output: VertexOutput;
-    let a = frame.view_projection * vec4<f32>(input.start + item.translation.xyz, 1.0);
-    let b = frame.view_projection * vec4<f32>(input.end + item.translation.xyz, 1.0);
+    let a = frame.view_projection
+        * vec4<f32>(pull_to_eye(input.start + item.translation.xyz, item.translation.w), 1.0);
+    let b = frame.view_projection
+        * vec4<f32>(pull_to_eye(input.end + item.translation.xyz, item.translation.w), 1.0);
 
     // Segments crossing the camera plane are dropped rather than appearing as
     // wedges across the screen.

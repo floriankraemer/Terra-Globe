@@ -21,7 +21,7 @@ use terra_core::now_iso8601;
 use terra_storage::{ImportBatch, PlacesRepository, StorageError};
 
 pub const DATABASE_FILE_NAME: &str = "terra-globe.db";
-pub const SCHEMA_VERSION: i64 = 2;
+pub const SCHEMA_VERSION: i64 = 3;
 
 /// Identical to `packages/storage-sqlite/src/schema.ts`.
 pub const SCHEMA_STATEMENTS: &[&str] = &[
@@ -33,6 +33,9 @@ pub const SCHEMA_STATEMENTS: &[&str] = &[
     "CREATE TABLE IF NOT EXISTS styles (id TEXT PRIMARY KEY, data TEXT NOT NULL)",
     "CREATE TABLE IF NOT EXISTS screen_overlays (id TEXT PRIMARY KEY, folder_id TEXT, data TEXT NOT NULL)",
     "CREATE INDEX IF NOT EXISTS idx_screen_overlays_folder_id ON screen_overlays(folder_id)",
+    // Version 3: binary assets. Additive and idempotent, so older databases
+    // gain the table on first open and older apps simply ignore it.
+    "CREATE TABLE IF NOT EXISTS assets (path TEXT PRIMARY KEY, data BLOB NOT NULL)",
 ];
 
 #[derive(Debug, thiserror::Error)]
@@ -482,6 +485,45 @@ impl PlacesRepository for SqlitePlacesRepository {
         transaction.commit().map_err(backend)?;
         Ok(())
     }
+
+    async fn put_asset(&self, path: &str, bytes: Vec<u8>) -> Result<(), StorageError> {
+        self.conn()
+            .execute(
+                "INSERT OR REPLACE INTO assets (path, data) VALUES (?1, ?2)",
+                params![path, bytes],
+            )
+            .map_err(backend)?;
+        Ok(())
+    }
+
+    async fn get_asset(&self, path: &str) -> Result<Option<Vec<u8>>, StorageError> {
+        self.conn()
+            .query_row("SELECT data FROM assets WHERE path = ?1", [path], |row| {
+                row.get(0)
+            })
+            .optional()
+            .map_err(backend)
+    }
+
+    async fn delete_asset(&self, path: &str) -> Result<(), StorageError> {
+        self.conn()
+            .execute("DELETE FROM assets WHERE path = ?1", [path])
+            .map_err(backend)?;
+        Ok(())
+    }
+
+    async fn list_assets(&self) -> Result<Vec<String>, StorageError> {
+        let connection = self.conn();
+        let mut statement = connection
+            .prepare("SELECT path FROM assets ORDER BY path")
+            .map_err(backend)?;
+        let paths = statement
+            .query_map([], |row| row.get(0))
+            .map_err(backend)?
+            .collect::<Result<Vec<String>, _>>()
+            .map_err(backend)?;
+        Ok(paths)
+    }
 }
 
 #[cfg(test)]
@@ -517,6 +559,46 @@ mod tests {
             })
             .expect("version row");
         assert_eq!(version, SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn migrate_adds_the_assets_table_to_a_version_2_database() {
+        let mut connection = rusqlite::Connection::open_in_memory().expect("in-memory db");
+        for statement in &SCHEMA_STATEMENTS[..SCHEMA_STATEMENTS.len() - 1] {
+            connection.execute_batch(statement).expect("v2 schema");
+        }
+        connection
+            .execute("INSERT INTO schema_migrations (version) VALUES (2)", [])
+            .unwrap();
+        connection
+            .execute("INSERT INTO styles (id, data) VALUES ('s', '{}')", [])
+            .unwrap();
+        migrate(&mut connection).expect("upgrade");
+        connection
+            .execute("INSERT INTO assets (path, data) VALUES ('a', x'00')", [])
+            .expect("assets table exists");
+        let styles: i64 = connection
+            .query_row("SELECT COUNT(*) FROM styles", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(styles, 1, "existing rows survive the upgrade");
+    }
+
+    #[test]
+    fn assets_survive_reopening_the_database_file() {
+        let dir = std::env::temp_dir().join(format!("terra-assets-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("t.db");
+        let _ = std::fs::remove_file(&path);
+        {
+            let repo = SqlitePlacesRepository::open(&path).unwrap();
+            pollster::block_on(repo.put_asset("images/a.png", vec![7, 7])).unwrap();
+        }
+        let repo = SqlitePlacesRepository::open(&path).unwrap();
+        assert_eq!(
+            pollster::block_on(repo.get_asset("images/a.png")).unwrap(),
+            Some(vec![7, 7])
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

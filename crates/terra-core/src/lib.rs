@@ -33,7 +33,7 @@ pub use domain::time::now_iso8601;
 pub use domain::translate::translate_geometry;
 pub use domain::visibility::{is_folder_visible, is_placemark_visible};
 pub use domain::{DomainError, Patch};
-pub use settings::{DEFAULT_LANGUAGE, Settings};
+pub use settings::{DEFAULT_LANGUAGE, OverlayLayerSetting, Settings};
 pub use units::{
     CoordinateFormat, UnitSystem, distance_unit_label, format_area, format_coordinate,
     format_distance, format_duration, meters_to_unit, unit_to_meters,

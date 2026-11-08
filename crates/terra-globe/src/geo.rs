@@ -46,12 +46,34 @@ impl Geodetic {
     }
 }
 
-/// Convenience conversion for domain points (which carry an optional altitude).
-pub fn geo_point_to_ecef(point: &terra_core::GeoPoint) -> DVec3 {
+/// Terrain height lookup `(lon_deg, lat_deg) -> meters`, `None` when no
+/// terrain model is loaded (or it has no data there).
+pub type GroundFn<'a> = dyn Fn(f64, f64) -> Option<f64> + 'a;
+
+/// The "no terrain loaded" lookup: everything is clamped to the ellipsoid.
+pub fn no_ground(_lon_deg: f64, _lat_deg: f64) -> Option<f64> {
+    None
+}
+
+/// Height above the ellipsoid at which a point is drawn. Without terrain data
+/// everything is clamped to the surface so nothing floats; with it, the KML
+/// altitude mode decides (missing mode = clampToGround).
+pub fn render_height(point: &terra_core::GeoPoint, ground: Option<f64>) -> f64 {
+    use terra_core::AltitudeMode::{Absolute, ClampToGround, RelativeToGround};
+    let Some(ground) = ground else { return 0.0 };
+    match point.altitude_mode.unwrap_or(ClampToGround) {
+        ClampToGround => ground,
+        RelativeToGround => ground + point.altitude.unwrap_or(0.0),
+        Absolute => point.altitude.unwrap_or(ground),
+    }
+}
+
+/// Convenience conversion for domain points, at their render height.
+pub fn geo_point_to_ecef(point: &terra_core::GeoPoint, ground: &GroundFn<'_>) -> DVec3 {
     geodetic_to_ecef(Geodetic::from_degrees(
         point.lon,
         point.lat,
-        point.altitude.unwrap_or(0.0),
+        render_height(point, ground(point.lon, point.lat)),
     ))
 }
 
@@ -163,6 +185,85 @@ pub fn ray_ellipsoid(origin: DVec3, direction: DVec3) -> Option<f64> {
     } else {
         None
     }
+}
+
+/// Both roots `(near, far)` of a ray against the ellipsoid grown by `height`
+/// metres (both semi-axes), in units of `direction`; `None` on a miss.
+pub fn ray_ellipsoid_span(origin: DVec3, direction: DVec3, height: f64) -> Option<(f64, f64)> {
+    let (a_axis, b_axis) = (WGS84_A + height, WGS84_B + height);
+    let origin = DVec3::new(origin.x / a_axis, origin.y / a_axis, origin.z / b_axis);
+    let direction = DVec3::new(
+        direction.x / a_axis,
+        direction.y / a_axis,
+        direction.z / b_axis,
+    );
+    let a = direction.length_squared();
+    if a <= f64::EPSILON {
+        return None;
+    }
+    let b = 2.0 * origin.dot(direction);
+    let c = origin.length_squared() - 1.0;
+    let discriminant = b * b - 4.0 * a * c;
+    if discriminant < 0.0 {
+        return None;
+    }
+    let root = discriminant.sqrt();
+    Some(((-b - root) / (2.0 * a), (-b + root) / (2.0 * a)))
+}
+
+/// Steps taken along a ray through the terrain shell. A summit narrower than
+/// the step can be missed at grazing angles; steeper views step in metres.
+const TERRAIN_RAY_STEPS: u32 = 512;
+
+/// First point where a ray meets the terrain surface `ground` describes
+/// (heights above the ellipsoid, `None` meaning the ellipsoid itself), or
+/// `None` when it flies past the globe.
+///
+/// The ray is marched through the shell between sea level and the highest
+/// possible summit, then the crossing is bisected. A ray that starts below
+/// the terrain returns its origin.
+pub fn ray_terrain(origin: DVec3, direction: DVec3, ground: &GroundFn<'_>) -> Option<DVec3> {
+    let length = direction.length();
+    if !length.is_finite() || length <= f64::EPSILON {
+        return None;
+    }
+    let direction = direction / length;
+    let (shell_in, shell_out) =
+        ray_ellipsoid_span(origin, direction, crate::terrain::MAX_TERRAIN_HEIGHT_M)?;
+    if shell_out < 0.0 {
+        return None;
+    }
+    let start = shell_in.max(0.0);
+    let (end, hits_sea) = match ray_ellipsoid_span(origin, direction, 0.0) {
+        Some((near, _)) if near >= start => (near, true),
+        _ => (shell_out, false),
+    };
+
+    let clearance = |t: f64| {
+        let geodetic = ecef_to_geodetic(origin + direction * t);
+        geodetic.height - ground(geodetic.lon_deg(), geodetic.lat_deg()).unwrap_or(0.0)
+    };
+    if clearance(start) <= 0.0 {
+        return Some(origin + direction * start);
+    }
+    let mut previous = start;
+    for step in 1..=TERRAIN_RAY_STEPS {
+        let t = start + (end - start) * f64::from(step) / f64::from(TERRAIN_RAY_STEPS);
+        if clearance(t) <= 0.0 {
+            let (mut above, mut below) = (previous, t);
+            for _ in 0..32 {
+                let middle = 0.5 * (above + below);
+                if clearance(middle) <= 0.0 {
+                    below = middle;
+                } else {
+                    above = middle;
+                }
+            }
+            return Some(origin + direction * below);
+        }
+        previous = t;
+    }
+    hits_sea.then(|| origin + direction * end)
 }
 
 /// Intersects the ellipsoid with a ray and returns the ECEF hit point.
@@ -348,6 +449,62 @@ pub fn tile_uv_rect(tile: TileId, ancestor: TileId) -> [f32; 4] {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use terra_core::{AltitudeMode, GeoPoint};
+
+    fn at(altitude: Option<f64>, mode: Option<AltitudeMode>) -> GeoPoint {
+        GeoPoint {
+            lon: 9.9,
+            lat: 51.1,
+            altitude,
+            altitude_mode: mode,
+        }
+    }
+
+    const MODES: [Option<AltitudeMode>; 4] = [
+        None,
+        Some(AltitudeMode::ClampToGround),
+        Some(AltitudeMode::RelativeToGround),
+        Some(AltitudeMode::Absolute),
+    ];
+
+    #[test]
+    fn without_terrain_every_mode_is_clamped_to_the_surface() {
+        for mode in MODES {
+            for altitude in [None, Some(492.5), Some(-30.0)] {
+                assert_eq!(render_height(&at(altitude, mode), None), 0.0);
+            }
+        }
+    }
+
+    #[test]
+    fn with_terrain_the_altitude_mode_decides() {
+        let ground = Some(200.0);
+        assert_eq!(render_height(&at(Some(492.5), None), ground), 200.0);
+        let clamp = Some(AltitudeMode::ClampToGround);
+        assert_eq!(render_height(&at(Some(492.5), clamp), ground), 200.0);
+        let relative = Some(AltitudeMode::RelativeToGround);
+        assert_eq!(render_height(&at(Some(50.0), relative), ground), 250.0);
+        assert_eq!(render_height(&at(Some(-30.0), relative), ground), 170.0);
+        assert_eq!(render_height(&at(None, relative), ground), 200.0);
+        let absolute = Some(AltitudeMode::Absolute);
+        assert_eq!(render_height(&at(Some(492.5), absolute), ground), 492.5);
+        assert_eq!(render_height(&at(Some(-30.0), absolute), ground), -30.0);
+        assert_eq!(render_height(&at(None, absolute), ground), 200.0);
+    }
+
+    #[test]
+    fn ecef_conversion_ignores_altitude_without_terrain() {
+        let high = at(Some(5000.0), None);
+        let low = at(None, None);
+        assert_eq!(
+            geo_point_to_ecef(&high, &no_ground),
+            geo_point_to_ecef(&low, &no_ground)
+        );
+        let lifted = geo_point_to_ecef(&at(Some(5000.0), Some(AltitudeMode::Absolute)), &|_, _| {
+            Some(100.0)
+        });
+        assert!((ecef_to_geodetic(lifted).height - 5000.0).abs() < 0.01);
+    }
 
     fn close(a: DVec3, b: DVec3, tolerance: f64) -> bool {
         (a - b).length() < tolerance
@@ -399,6 +556,48 @@ mod tests {
         let hit_geodetic = ecef_to_geodetic(hit);
         assert!((hit_geodetic.lon_deg() - 10.0).abs() < 1e-6);
         assert!((hit_geodetic.lat_deg() - 20.0).abs() < 1e-6);
+    }
+
+    fn height_of(point: DVec3) -> f64 {
+        ecef_to_geodetic(point).height
+    }
+
+    #[test]
+    fn terrain_ray_hits_a_plateau_instead_of_the_ellipsoid() {
+        let target = geodetic_to_ecef(Geodetic::from_degrees(10.0, 20.0, 0.0));
+        let eye = target.normalize() * (WGS84_A + 50_000.0);
+        let plateau = |_: f64, _: f64| Some(1_000.0);
+        let hit = ray_terrain(eye, target - eye, &plateau).expect("hits the plateau");
+        assert!(
+            (height_of(hit) - 1_000.0).abs() < 0.01,
+            "{}",
+            height_of(hit)
+        );
+        let sea = ray_terrain(eye, target - eye, &no_ground).expect("hits the sea level");
+        assert!(height_of(sea).abs() < 0.01);
+        assert!((hit - eye).length() < (sea - eye).length());
+    }
+
+    #[test]
+    fn terrain_ray_lands_on_a_mountain_between_the_eye_and_the_ellipsoid() {
+        // A 3 km cone of 20 km radius around (10, 20).
+        let cone = |lon: f64, lat: f64| {
+            let d = ((lon - 10.0).hypot(lat - 20.0)).to_radians() * WGS84_A;
+            Some((3_000.0 - d * 0.15).max(0.0))
+        };
+        let summit = geodetic_to_ecef(Geodetic::from_degrees(10.0, 20.0, 3_000.0));
+        let eye = geodetic_to_ecef(Geodetic::from_degrees(10.0, 20.0, 40_000.0));
+        let hit = ray_terrain(eye, summit - eye, &cone).expect("hits");
+        assert!((height_of(hit) - 3_000.0).abs() < 0.5, "{}", height_of(hit));
+    }
+
+    #[test]
+    fn terrain_ray_that_misses_the_globe_returns_none() {
+        let eye = DVec3::new(WGS84_A + 1_000_000.0, 0.0, 0.0);
+        let plateau = |_: f64, _: f64| Some(1_000.0);
+        assert!(ray_terrain(eye, DVec3::new(0.0, 1.0, 0.0), &plateau).is_none());
+        assert!(ray_terrain(eye, DVec3::ZERO, &plateau).is_none());
+        assert!(ray_terrain(eye, DVec3::new(1.0, 0.0, 0.0), &plateau).is_none());
     }
 
     #[test]

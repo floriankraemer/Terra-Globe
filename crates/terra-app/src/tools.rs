@@ -1,14 +1,20 @@
 //! Ruler, route planner and the background jobs that talk to providers.
 
+use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender};
 
 use terra_core::{
     EstimatedTravelMode, GeoPoint, Measurements, StraightLineRoute, estimate_straight_line_route,
     measurements,
 };
+use terra_globe::ImageRgba;
 #[cfg(not(target_arch = "wasm32"))]
 use terra_providers::RoutingPreset;
-use terra_providers::{GeocodeResult, RouteLeg, RoutingProfile};
+use terra_providers::http::HttpMethod;
+use terra_providers::{GeocodeResult, HttpClient, HttpRequest, RouteLeg, RoutingProfile};
+
+use crate::platform::FileSystem;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RouteMode {
@@ -137,8 +143,16 @@ pub fn estimate_route(waypoints: &[GeoPoint], mode: RouteMode) -> Option<Straigh
     Some(estimate_straight_line_route(waypoints, estimate))
 }
 
+/// Where a ground-overlay picture comes from, resolved on the UI thread so the
+/// job only has to fetch and decode.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ImageSource {
+    Bytes(Vec<u8>),
+    Url(String),
+    Path(PathBuf),
+}
+
 /// Work handed to a background thread so HTTP never blocks the UI.
-#[derive(Debug)]
 pub enum JobRequest {
     Geocode {
         preset: String,
@@ -151,10 +165,19 @@ pub enum JobRequest {
         waypoints: Vec<GeoPoint>,
         mode: RouteMode,
     },
+    LoadImage {
+        href: String,
+        source: ImageSource,
+        files: Arc<dyn FileSystem>,
+    },
 }
 
 #[derive(Debug)]
 pub enum JobResult {
+    Image {
+        href: String,
+        result: Result<Arc<ImageRgba>, String>,
+    },
     Geocode(Result<Vec<GeocodeResult>, String>),
     Route(Result<Vec<RouteLeg>, String>),
 }
@@ -188,6 +211,14 @@ impl JobRunner {
             let result = match request {
                 JobRequest::Geocode { .. } => JobResult::Geocode(Err(message)),
                 JobRequest::Route { .. } => JobResult::Route(Err(message)),
+                JobRequest::LoadImage {
+                    href,
+                    source,
+                    files,
+                } => JobResult::Image {
+                    result: load_image(source, files.as_ref()),
+                    href,
+                },
             };
             let _ = self.sender.send(result);
         }
@@ -207,6 +238,14 @@ impl JobRunner {
                         waypoints,
                         mode,
                     } => JobResult::Route(run_route(&preset, api_key, &waypoints, mode)),
+                    JobRequest::LoadImage {
+                        href,
+                        source,
+                        files,
+                    } => JobResult::Image {
+                        result: load_image(source, files.as_ref()),
+                        href,
+                    },
                 };
                 let _ = sender.send(result);
             });
@@ -220,6 +259,30 @@ impl JobRunner {
         }
         results
     }
+}
+
+/// Fetches and decodes a ground-overlay picture.
+pub fn load_image(source: ImageSource, files: &dyn FileSystem) -> Result<Arc<ImageRgba>, String> {
+    let bytes = match source {
+        ImageSource::Bytes(bytes) => bytes,
+        ImageSource::Path(path) => files.read(&path)?,
+        ImageSource::Url(url) => {
+            let request = HttpRequest {
+                method: HttpMethod::Get,
+                url,
+                headers: vec![("Accept".to_string(), "image/*".to_string())],
+                body: None,
+            };
+            let response = terra_providers::EhttpClient
+                .execute(request)
+                .map_err(|error| error.to_string())?;
+            if !(200..300).contains(&response.status) {
+                return Err(format!("HTTP status {}", response.status));
+            }
+            response.body
+        }
+    };
+    terra_globe::decode_image(&bytes).map(Arc::new)
 }
 
 #[cfg(not(target_arch = "wasm32"))]

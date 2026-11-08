@@ -10,6 +10,15 @@ use crate::flat::{FlatCamera, SURFACE_Z, lon_lat_to_plane};
 use crate::primitives::{densify_path, densify_ring};
 use crate::scene::Scene;
 
+/// Scale of the app's placemark markers relative to the original design. The
+/// app draws markers with it and picking sizes its hit radius from it, so the
+/// two cannot drift apart.
+pub const MARKER_SCALE: f32 = 1.8;
+
+/// Pixels from a point placemark's anchor that still count as a hit. Sized to
+/// the marker scale (the old 14 px times it) so the visible marker edge selects.
+pub const POINT_HIT_RADIUS_PX: f64 = 14.0 * MARKER_SCALE as f64;
+
 type Projector<'a> = dyn Fn(&GeoPoint) -> Option<ScreenPoint> + 'a;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -21,14 +30,6 @@ pub struct PickHit {
     pub distance_px: f64,
 }
 
-fn ecef_of(point: &GeoPoint) -> glam::DVec3 {
-    crate::geo::geodetic_to_ecef(crate::geo::Geodetic::from_degrees(
-        point.lon,
-        point.lat,
-        point.altitude.unwrap_or(0.0),
-    ))
-}
-
 /// Picks the closest placemark within its hit tolerance, preferring the nearest
 /// to the camera when two overlap.
 pub fn pick(
@@ -36,9 +37,10 @@ pub fn pick(
     camera: &Camera,
     viewport: (u32, u32),
     pixel: (f64, f64),
+    ground: &crate::geo::GroundFn<'_>,
 ) -> Option<PickHit> {
     pick_with(scene, pixel, &|point| {
-        camera.project(ecef_of(point), viewport)
+        camera.project(crate::geo::geo_point_to_ecef(point, ground), viewport)
     })
 }
 
@@ -97,7 +99,7 @@ pub fn pick_id(
     viewport: (u32, u32),
     pixel: (f64, f64),
 ) -> Option<String> {
-    pick(scene, camera, viewport, pixel).map(|hit| hit.id)
+    pick(scene, camera, viewport, pixel, &crate::geo::no_ground).map(|hit| hit.id)
 }
 
 fn hit_distance(
@@ -114,7 +116,7 @@ fn hit_distance(
         } => {
             let screen = project(coordinates)?;
             let distance = ((screen.x - pixel.0).powi(2) + (screen.y - pixel.1).powi(2)).sqrt();
-            (distance <= 14.0).then_some((distance, screen))
+            (distance <= POINT_HIT_RADIUS_PX).then_some((distance, screen))
         }
         PlacemarkGeometry::LineString { path, .. } => {
             hit_polyline(&densify_path(path), project, pixel, tolerance)
@@ -297,7 +299,17 @@ fn rectangle_ring(north: f64, south: f64, east: f64, west: f64) -> Vec<GeoPoint>
 mod tests {
     use super::*;
     use crate::camera::Camera;
+    use crate::geo::no_ground;
     use terra_core::{NewStyle, PlacemarkGeometry, create_style};
+
+    /// Raw (unclamped) position, to show where a floating point would be.
+    fn ecef_of(point: &GeoPoint) -> glam::DVec3 {
+        crate::geo::geodetic_to_ecef(crate::geo::Geodetic::from_degrees(
+            point.lon,
+            point.lat,
+            point.altitude.unwrap_or(0.0),
+        ))
+    }
 
     fn style() -> terra_core::Style {
         create_style(NewStyle {
@@ -346,9 +358,48 @@ mod tests {
             &camera,
             (1280, 800),
             (screen.x + 3.0, screen.y + 2.0),
+            &no_ground,
         );
         assert_eq!(hit.map(|hit| hit.id), Some("p1".to_string()));
-        assert!(pick(&scene, &camera, (1280, 800), (screen.x + 100.0, screen.y)).is_none());
+        assert!(
+            pick(
+                &scene,
+                &camera,
+                (1280, 800),
+                (screen.x + 100.0, screen.y),
+                &no_ground
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn picks_a_clamped_high_altitude_point_where_it_is_drawn() {
+        let camera = Camera::default();
+        let mut point = core_point(camera.target_geodetic());
+        point.altitude = Some(50_000.0);
+        let scene = scene_with(PlacemarkGeometry::point(point).expect("point"));
+        let drawn = camera
+            .project(
+                crate::geo::geo_point_to_ecef(&point, &no_ground),
+                (1280, 800),
+            )
+            .expect("projected");
+        let hit = pick(&scene, &camera, (1280, 800), (drawn.x, drawn.y), &no_ground);
+        assert_eq!(hit.map(|hit| hit.id), Some("p1".to_string()));
+        let floating = camera
+            .project(ecef_of(&point), (1280, 800))
+            .expect("floating");
+        assert!(
+            pick(
+                &scene,
+                &camera,
+                (1280, 800),
+                (floating.x, floating.y - 80.0),
+                &no_ground
+            )
+            .is_none()
+        );
     }
 
     #[test]
@@ -360,8 +411,17 @@ mod tests {
         let screen = camera
             .project(ecef_of(&center), (1280, 800))
             .expect("projected");
-        assert!(pick(&scene, &camera, (1280, 800), (screen.x, screen.y)).is_some());
-        assert!(pick(&scene, &camera, (1280, 800), (10.0, 10.0)).is_none());
+        assert!(
+            pick(
+                &scene,
+                &camera,
+                (1280, 800),
+                (screen.x, screen.y),
+                &no_ground
+            )
+            .is_some()
+        );
+        assert!(pick(&scene, &camera, (1280, 800), (10.0, 10.0), &no_ground).is_none());
     }
 
     #[test]
@@ -383,7 +443,7 @@ mod tests {
         let end = camera.project(ecef_of(&east), (1280, 800)).expect("end");
         let middle = ((start.x + end.x) / 2.0, (start.y + end.y) / 2.0);
         assert!(
-            pick(&scene, &camera, (1280, 800), middle).is_some(),
+            pick(&scene, &camera, (1280, 800), middle, &no_ground).is_some(),
             "line should be pickable along its length"
         );
     }
@@ -409,6 +469,43 @@ mod tests {
         assert_eq!(
             nearest_on_segment((15.0, 0.0), (0.0, 0.0), (10.0, 0.0)),
             (10.0, 0.0)
+        );
+    }
+
+    #[test]
+    fn picks_a_marker_where_terrain_lifts_it() {
+        let camera = Camera {
+            distance: 20_000.0,
+            pitch: 40f64.to_radians(),
+            ..Camera::default()
+        };
+        let point = core_point(camera.target_geodetic());
+        let scene = scene_with(PlacemarkGeometry::point(point).expect("point"));
+        let mountain = |_: f64, _: f64| Some(3_000.0);
+        let lifted = camera
+            .project(
+                crate::geo::geo_point_to_ecef(&point, &mountain),
+                (1280, 800),
+            )
+            .expect("projected");
+        let hit = pick(
+            &scene,
+            &camera,
+            (1280, 800),
+            (lifted.x, lifted.y),
+            &mountain,
+        );
+        assert_eq!(hit.map(|hit| hit.id), Some("p1".to_string()));
+        // The same pixel misses the marker when the terrain is not known.
+        assert!(
+            pick(
+                &scene,
+                &camera,
+                (1280, 800),
+                (lifted.x, lifted.y),
+                &no_ground
+            )
+            .is_none()
         );
     }
 }

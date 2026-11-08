@@ -7,6 +7,9 @@ pub const SURFACE: egui::Color32 = egui::Color32::from_rgb(24, 27, 34);
 pub const SURFACE_RAISED: egui::Color32 = egui::Color32::from_rgb(31, 35, 44);
 pub const TEXT: egui::Color32 = egui::Color32::from_rgb(226, 230, 238);
 pub const TEXT_MUTED: egui::Color32 = egui::Color32::from_rgb(150, 158, 172);
+/// Tree rows: hover fill and selection fill (the accent blended into the surface).
+pub const ROW_HOVER: egui::Color32 = egui::Color32::from_rgb(41, 46, 58);
+pub const ROW_SELECTED: egui::Color32 = egui::Color32::from_rgb(58, 74, 107);
 pub const DANGER: egui::Color32 = egui::Color32::from_rgb(232, 93, 86);
 pub const SPACE: egui::Color32 = egui::Color32::from_rgb(5, 7, 12);
 

@@ -10,6 +10,7 @@
 use indexed_db_futures::database::Database;
 use indexed_db_futures::prelude::*;
 use indexed_db_futures::transaction::TransactionMode;
+use indexed_db_futures::typed_array::Uint8Array;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use terra_core::domain::folder::{Folder, FolderPatch, NewFolder, create_folder};
@@ -25,6 +26,8 @@ const STORE_FOLDERS: &str = "folders";
 const STORE_PLACEMARKS: &str = "placemarks";
 const STORE_STYLES: &str = "styles";
 const STORE_OVERLAYS: &str = "screenOverlays";
+/// Out-of-line keys: the normalised path; values are `Uint8Array`s.
+const STORE_ASSETS: &str = "assets";
 
 fn backend(error: impl std::fmt::Display) -> StorageError {
     StorageError::Backend(format!("indexeddb: {error}"))
@@ -43,10 +46,10 @@ pub struct IndexedDbPlacesRepository {
 }
 
 impl IndexedDbPlacesRepository {
-    /// Opens (and upgrades) the database. Version 2 matches the web app.
+    /// Opens (and upgrades) the database. Version 3 adds the `assets` store.
     pub async fn open() -> Result<Self, StorageError> {
         let db = Database::open(DB_NAME)
-            .with_version(2u8)
+            .with_version(3u8)
             .with_on_upgrade_needed_fut(|event, db| async move {
                 if event.old_version() < 1.0 {
                     for store in [STORE_FOLDERS, STORE_PLACEMARKS, STORE_STYLES] {
@@ -59,6 +62,9 @@ impl IndexedDbPlacesRepository {
                     db.create_object_store(STORE_OVERLAYS)
                         .with_key_path("id".into())
                         .build()?;
+                }
+                if event.old_version() < 3.0 {
+                    db.create_object_store(STORE_ASSETS).build()?;
                 }
                 Ok(())
             })
@@ -351,5 +357,61 @@ impl PlacesRepository for IndexedDbPlacesRepository {
         self.put_many(STORE_OVERLAYS, &batch.screen_overlays)
             .await?;
         Ok(())
+    }
+
+    async fn put_asset(&self, path: &str, bytes: Vec<u8>) -> Result<(), StorageError> {
+        let transaction = self
+            .db
+            .transaction(STORE_ASSETS)
+            .with_mode(TransactionMode::Readwrite)
+            .build()
+            .map_err(backend)?;
+        let object_store = transaction.object_store(STORE_ASSETS).map_err(backend)?;
+        object_store
+            .put(Uint8Array::from(bytes))
+            .with_key(path.to_string())
+            .await
+            .map_err(backend)?;
+        transaction.commit().await.map_err(backend)?;
+        Ok(())
+    }
+
+    async fn get_asset(&self, path: &str) -> Result<Option<Vec<u8>>, StorageError> {
+        let transaction = self
+            .db
+            .transaction(STORE_ASSETS)
+            .with_mode(TransactionMode::Readonly)
+            .build()
+            .map_err(backend)?;
+        let object_store = transaction.object_store(STORE_ASSETS).map_err(backend)?;
+        let value: Option<Uint8Array> = object_store
+            .get(path.to_string())
+            .primitive()
+            .map_err(backend)?
+            .await
+            .map_err(backend)?;
+        Ok(value.map(|array| array.as_ref().to_vec()))
+    }
+
+    async fn delete_asset(&self, path: &str) -> Result<(), StorageError> {
+        self.delete(STORE_ASSETS, path).await
+    }
+
+    async fn list_assets(&self) -> Result<Vec<String>, StorageError> {
+        let transaction = self
+            .db
+            .transaction(STORE_ASSETS)
+            .with_mode(TransactionMode::Readonly)
+            .build()
+            .map_err(backend)?;
+        let object_store = transaction.object_store(STORE_ASSETS).map_err(backend)?;
+        let mut paths = object_store
+            .get_all_keys::<String>()
+            .await
+            .map_err(backend)?
+            .collect::<Result<Vec<String>, _>>()
+            .map_err(backend)?;
+        paths.sort();
+        Ok(paths)
     }
 }

@@ -211,3 +211,207 @@ fn zooming_requests_more_tiles_than_the_first_paint() {
         "zooming did not request new tiles (before {after_first}, after {after_zoom})"
     );
 }
+
+type CachedTile = (String, u8, u32, u32);
+
+#[derive(Default)]
+struct MemoryCache {
+    tiles: std::sync::Mutex<std::collections::HashMap<CachedTile, Vec<u8>>>,
+}
+
+impl terra_globe::imagery::TileCache for MemoryCache {
+    fn get(&self, source: &TileSource, id: terra_globe::TileId) -> Option<Vec<u8>> {
+        self.tiles
+            .lock()
+            .ok()?
+            .get(&(source.url.clone(), id.z, id.x, id.y))
+            .cloned()
+    }
+
+    fn put(&self, source: &TileSource, id: terra_globe::TileId, bytes: &[u8]) {
+        if let Ok(mut tiles) = self.tiles.lock() {
+            tiles.insert((source.url.clone(), id.z, id.x, id.y), bytes.to_vec());
+        }
+    }
+}
+
+#[test]
+fn a_second_session_is_served_from_the_tile_cache() {
+    let server = spawn_tile_server();
+    let cache = Arc::new(MemoryCache::default());
+
+    let Some(mut first) = headless_globe(&server) else {
+        eprintln!("no GPU adapter; skipping cache test");
+        return;
+    };
+    first.set_tile_cache(cache.clone());
+    assert!(pump(&mut first, Duration::from_secs(10), |globe| {
+        !globe.renderer.ready_texture_levels().is_empty()
+    }));
+    assert!(
+        pump(&mut first, Duration::from_secs(20), |globe| {
+            let stats = globe.renderer.stats();
+            stats.requests_in_flight == 0 && stats.requests_queued == 0
+        }),
+        "first session never went idle"
+    );
+    let after_first = server.requests.load(Ordering::Relaxed);
+
+    let Some(mut second) = headless_globe(&server) else {
+        return;
+    };
+    second.set_tile_cache(cache);
+    assert!(
+        pump(&mut second, Duration::from_secs(10), |globe| {
+            !globe.renderer.ready_texture_levels().is_empty()
+        }),
+        "the cached tiles never reached the second session"
+    );
+    assert_eq!(
+        server.requests.load(Ordering::Relaxed),
+        after_first,
+        "a fresh session re-downloaded tiles that were already cached"
+    );
+}
+
+fn layer_source(server: &TileServer, id: &str) -> TileSource {
+    let mut source = TileSource::open_street_map();
+    source.id = id.to_string();
+    source.url = server.url.clone();
+    source
+}
+
+fn settle(globe: &mut Globe) {
+    assert!(
+        pump(globe, Duration::from_secs(30), |globe| {
+            !globe.is_loading_imagery()
+        }),
+        "imagery never went idle"
+    );
+}
+
+#[test]
+fn overlay_layers_stream_independently_and_are_not_refetched_when_restyled() {
+    let basemap = spawn_tile_server();
+    let layer_server = spawn_tile_server();
+    let Some(mut globe) = headless_globe(&basemap) else {
+        eprintln!("no GPU adapter; skipping overlay streaming test");
+        return;
+    };
+
+    globe.set_tile_overlays(vec![terra_globe::TileOverlay {
+        source: layer_source(&layer_server, "seamarks"),
+        opacity: 1.0,
+    }]);
+    assert!(
+        pump(&mut globe, Duration::from_secs(10), |globe| {
+            globe
+                .renderer
+                .has_overlay_texture("seamarks", terra_globe::geo::TileId::root())
+        }),
+        "overlay tile never arrived (server saw {} requests)",
+        layer_server.requests.load(Ordering::Relaxed)
+    );
+    settle(&mut globe);
+    let requested = layer_server.requests.load(Ordering::Relaxed);
+    assert!(requested > 0);
+
+    globe.set_tile_overlays(vec![terra_globe::TileOverlay {
+        source: layer_source(&layer_server, "seamarks"),
+        opacity: 0.3,
+    }]);
+    pump(&mut globe, Duration::from_secs(1), |_| false);
+    assert_eq!(
+        layer_server.requests.load(Ordering::Relaxed),
+        requested,
+        "an opacity change must not download anything"
+    );
+
+    // Hidden layers keep their imagery but stop asking for more.
+    globe.set_tile_overlays(vec![terra_globe::TileOverlay {
+        source: layer_source(&layer_server, "seamarks"),
+        opacity: 0.0,
+    }]);
+    globe.camera.distance = 200_000.0;
+    pump(&mut globe, Duration::from_secs(1), |_| false);
+    assert_eq!(layer_server.requests.load(Ordering::Relaxed), requested);
+
+    globe.set_tile_overlays(Vec::new());
+    assert!(
+        !globe
+            .renderer
+            .has_overlay_texture("seamarks", terra_globe::geo::TileId::root()),
+        "a removed layer must free its textures"
+    );
+    let after_removal = layer_server.requests.load(Ordering::Relaxed);
+    pump(&mut globe, Duration::from_secs(1), |_| false);
+    assert_eq!(layer_server.requests.load(Ordering::Relaxed), after_removal);
+}
+
+#[test]
+fn overlay_layers_follow_the_camera_to_deeper_levels() {
+    let basemap = spawn_tile_server();
+    let layer_server = spawn_tile_server();
+    let Some(mut globe) = headless_globe(&basemap) else {
+        return;
+    };
+    globe.set_tile_overlays(vec![terra_globe::TileOverlay {
+        source: layer_source(&layer_server, "deep"),
+        opacity: 1.0,
+    }]);
+    globe.camera.distance = 40_000.0;
+    globe.camera.pitch = 60f64.to_radians();
+    settle(&mut globe);
+    assert!(
+        layer_server.requests.load(Ordering::Relaxed) > 4,
+        "a close-up view needs several overlay tiles, got {}",
+        layer_server.requests.load(Ordering::Relaxed)
+    );
+}
+
+#[derive(Default)]
+struct RecordingCache(std::sync::Mutex<Vec<String>>);
+
+impl terra_globe::TileCache for RecordingCache {
+    fn get(&self, source: &TileSource, _id: terra_globe::geo::TileId) -> Option<Vec<u8>> {
+        if let Ok(mut seen) = self.0.lock() {
+            seen.push(source.id.clone());
+        }
+        None
+    }
+
+    fn put(&self, _source: &TileSource, _id: terra_globe::geo::TileId, _bytes: &[u8]) {}
+}
+
+#[test]
+fn overlay_layers_share_the_tile_cache_set_before_or_after_them() {
+    let basemap = spawn_tile_server();
+    let layer_server = spawn_tile_server();
+    let Some(mut globe) = headless_globe(&basemap) else {
+        return;
+    };
+    let cache = Arc::new(RecordingCache::default());
+    globe.set_tile_overlays(vec![terra_globe::TileOverlay {
+        source: layer_source(&layer_server, "early"),
+        opacity: 1.0,
+    }]);
+    globe.set_tile_cache(cache.clone());
+    globe.set_tile_overlays(vec![
+        terra_globe::TileOverlay {
+            source: layer_source(&layer_server, "early"),
+            opacity: 1.0,
+        },
+        terra_globe::TileOverlay {
+            source: layer_source(&layer_server, "late"),
+            opacity: 1.0,
+        },
+    ]);
+    pump(&mut globe, Duration::from_secs(3), |_| false);
+    let seen = cache.0.lock().expect("lock").clone();
+    for id in ["early", "late"] {
+        assert!(
+            seen.iter().any(|seen| seen == id),
+            "{id} skipped the cache: {seen:?}"
+        );
+    }
+}

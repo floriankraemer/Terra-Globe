@@ -438,6 +438,9 @@ impl FlatCamera {
         self.pitch = (self.pitch + radians).clamp(10f64.to_radians(), 89.5f64.to_radians());
     }
 
+    /// Looking around the eye is a 3D-globe gesture; the flat views ignore it.
+    pub fn look_by(&mut self, _d_heading: f64, _d_pitch: f64) {}
+
     pub fn set_heading(&mut self, radians: f64) {
         if radians.is_finite() {
             self.heading = wrap_angle(radians);

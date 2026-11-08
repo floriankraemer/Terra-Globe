@@ -99,6 +99,9 @@ pub enum PlacemarkGeometry {
         image_url: String,
         #[serde(skip_serializing_if = "Option::is_none")]
         rotation: Option<f64>,
+        /// `0.0..=1.0`; `None` is fully opaque. KML stores it as the alpha of `<color>`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        opacity: Option<f64>,
     },
     #[serde(rename = "Model")]
     Model {
@@ -246,15 +249,23 @@ impl PlacemarkGeometry {
         bounds: RectangleBounds,
         image_url: String,
         rotation: Option<f64>,
+        opacity: Option<f64>,
     ) -> Result<Self, DomainError> {
         bounds.validate()?;
         if image_url.trim().is_empty() {
             return Err(DomainError::EmptyImageUrl);
         }
+        if let Some(rotation) = rotation {
+            assert_in_range(rotation, f64::MIN, f64::MAX, "rotation")?;
+        }
+        if let Some(opacity) = opacity {
+            assert_in_range(opacity, 0.0, 1.0, "opacity")?;
+        }
         Ok(Self::GroundOverlay {
             bounds,
             image_url,
             rotation,
+            opacity,
         })
     }
 
@@ -322,4 +333,48 @@ fn assert_valid_ring(ring: &[GeoPoint], label: &'static str) -> Result<(), Domai
         point.validate()?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn bounds() -> RectangleBounds {
+        RectangleBounds::new(10.0, 0.0, 10.0, 0.0).expect("valid bounds")
+    }
+
+    #[test]
+    fn ground_overlay_accepts_opacity_in_unit_range() {
+        for opacity in [0.0, 0.5, 1.0] {
+            let geometry =
+                PlacemarkGeometry::ground_overlay(bounds(), "a.png".into(), None, Some(opacity));
+            assert!(geometry.is_ok(), "{opacity}");
+        }
+    }
+
+    #[test]
+    fn ground_overlay_rejects_bad_opacity_and_rotation() {
+        for opacity in [-0.1, 1.5, f64::NAN] {
+            assert!(
+                PlacemarkGeometry::ground_overlay(bounds(), "a.png".into(), None, Some(opacity))
+                    .is_err(),
+                "{opacity}"
+            );
+        }
+        assert!(
+            PlacemarkGeometry::ground_overlay(bounds(), "a.png".into(), Some(f64::NAN), None)
+                .is_err()
+        );
+        assert!(PlacemarkGeometry::ground_overlay(bounds(), " ".into(), None, None).is_err());
+    }
+
+    #[test]
+    fn ground_overlay_without_opacity_deserializes_from_old_data() {
+        let json = r#"{"type":"GroundOverlay","bounds":{"north":1.0,"south":0.0,"east":1.0,"west":0.0},"imageUrl":"a.png"}"#;
+        let geometry: PlacemarkGeometry = serde_json::from_str(json).expect("parses");
+        assert!(matches!(
+            geometry,
+            PlacemarkGeometry::GroundOverlay { opacity: None, .. }
+        ));
+    }
 }

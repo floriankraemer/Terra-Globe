@@ -11,7 +11,7 @@ use terra_app::{AppData, AppDeps};
 use terra_globe::Globe;
 use terra_globe::imagery::TileProvider;
 use terra_providers::InMemorySecretStore;
-use terra_storage::InMemoryPlacesRepository;
+use terra_storage::{InMemoryPlacesRepository, PlacesRepository};
 
 pub const DOCUMENT: &str = r#"<kml><Document><Folder id="f1"><name>Places</name><Placemark id="p1"><name>Berlin</name><Point><coordinates>13.405,52.52,0</coordinates></Point></Placemark></Folder></Document></kml>"#;
 
@@ -25,6 +25,43 @@ pub fn make_sized(
     size: egui::Vec2,
     document: Option<&str>,
 ) -> Option<(Harness<'static>, Rc<RefCell<AppData>>)> {
+    let app = make_app(size, document, PersistedState::default())?;
+    Some((app.harness, app.data))
+}
+
+/// A running app plus the injected ports, for tests that inspect what was persisted.
+#[allow(dead_code)]
+pub struct App {
+    pub harness: Harness<'static>,
+    pub data: Rc<RefCell<AppData>>,
+    pub files: Arc<MemoryFileSystem>,
+    pub settings: Arc<InMemorySettingsStore>,
+    pub repository: Arc<dyn PlacesRepository>,
+}
+
+pub fn make_app(
+    size: egui::Vec2,
+    document: Option<&str>,
+    persisted: PersistedState,
+) -> Option<App> {
+    make_app_with(
+        size,
+        document,
+        persisted,
+        Arc::new(InMemoryPlacesRepository::new()),
+        None,
+    )
+}
+
+/// Like [`make_app`] over a given repository and, optionally, file system, so a
+/// test can "restart" the app: a new `AppData` over the same stored data.
+pub fn make_app_with(
+    size: egui::Vec2,
+    document: Option<&str>,
+    persisted: PersistedState,
+    repository: Arc<dyn PlacesRepository>,
+    files: Option<Arc<MemoryFileSystem>>,
+) -> Option<App> {
     let instance = wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle());
     let adapter =
         pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions::default()))
@@ -37,23 +74,24 @@ pub fn make_sized(
         TileProvider::new(terra_providers::TileSource::open_street_map()),
         (800, 500),
     );
-    let files = MemoryFileSystem::default();
+    let files = files.unwrap_or_default();
     if let Some(doc) = document {
         files
             .write(PathBuf::from("/tmp/ui.kml").as_path(), doc.as_bytes())
             .ok()?;
     }
-    let files = Arc::new(files);
-    let settings = Arc::new(InMemorySettingsStore::default()) as Arc<dyn SettingsStore>;
+    let settings = Arc::new(InMemorySettingsStore::default());
+    settings.save(&persisted);
     let mut data = AppData::from_parts(
         AppDeps {
-            repository: Arc::new(InMemoryPlacesRepository::new()),
-            settings,
-            files,
+            repository: repository.clone(),
+            settings: settings.clone() as Arc<dyn SettingsStore>,
+            files: files.clone(),
             secrets: Arc::new(InMemorySecretStore::new()),
+            tile_cache: None,
         },
         globe,
-        PersistedState::default(),
+        persisted,
     )
     .ok()?;
     if document.is_some() {
@@ -74,5 +112,11 @@ pub fn make_sized(
             terra_app::views::app_ui(&mut data, &mut i18n, ui, None);
         });
     harness.run_steps(2);
-    Some((harness, data))
+    Some(App {
+        harness,
+        data,
+        files,
+        settings,
+        repository,
+    })
 }
