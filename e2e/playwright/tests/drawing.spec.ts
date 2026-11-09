@@ -34,8 +34,9 @@ test("drawing a polygon accumulates vertices until Finish is clicked", async ({ 
 
   await page
     .getByRole("toolbar", { name: "Drawing tools" })
-    .getByRole("combobox", { name: "Geometry" })
-    .selectOption("polygon");
+    .getByRole("button", { name: /^Geometry:/ })
+    .click();
+  await page.getByRole("menuitemradio", { name: "Polygon" }).click();
   const box = await canvas.boundingBox();
   if (!box) throw new Error("canvas has no bounding box");
 
@@ -47,16 +48,16 @@ test("drawing a polygon accumulates vertices until Finish is clicked", async ({ 
   await expect(
     page
       .getByRole("toolbar", { name: "Drawing tools" })
-      .getByRole("combobox", { name: "Geometry" }),
-  ).toHaveValue("polygon");
+      .getByRole("button", { name: /^Geometry:/ }),
+  ).toHaveText("Geometry: Polygon");
 
   await page.getByRole("button", { name: "Finish" }).click();
 
   await expect(
     page
       .getByRole("toolbar", { name: "Drawing tools" })
-      .getByRole("combobox", { name: "Geometry" }),
-  ).toHaveValue("");
+      .getByRole("button", { name: /^Geometry:/ }),
+  ).toHaveText("Geometry: Select shape");
   await expect(page.getByRole("button", { name: "Finish" })).not.toBeVisible();
 });
 
@@ -70,8 +71,9 @@ test("drawing a line accumulates vertices until Finish is clicked, and persists 
 
   await page
     .getByRole("toolbar", { name: "Drawing tools" })
-    .getByRole("combobox", { name: "Geometry" })
-    .selectOption("line");
+    .getByRole("button", { name: /^Geometry:/ })
+    .click();
+  await page.getByRole("menuitemradio", { name: "Line" }).click();
   const box = await canvas.boundingBox();
   if (!box) throw new Error("canvas has no bounding box");
 
@@ -83,16 +85,16 @@ test("drawing a line accumulates vertices until Finish is clicked, and persists 
   await expect(
     page
       .getByRole("toolbar", { name: "Drawing tools" })
-      .getByRole("combobox", { name: "Geometry" }),
-  ).toHaveValue("line");
+      .getByRole("button", { name: /^Geometry:/ }),
+  ).toHaveText("Geometry: Line");
 
   await page.getByRole("button", { name: "Finish" }).click();
 
   await expect(
     page
       .getByRole("toolbar", { name: "Drawing tools" })
-      .getByRole("combobox", { name: "Geometry" }),
-  ).toHaveValue("");
+      .getByRole("button", { name: /^Geometry:/ }),
+  ).toHaveText("Geometry: Select shape");
   await expect(page.getByRole("button", { name: "Finish" })).not.toBeVisible();
   await expect(page.locator(".places-panel").getByText("LineString 1")).toBeVisible({
     timeout: 15_000,
@@ -107,8 +109,9 @@ test("Cancel discards an in-progress shape", async ({ page }) => {
 
   await page
     .getByRole("toolbar", { name: "Drawing tools" })
-    .getByRole("combobox", { name: "Geometry" })
-    .selectOption("rectangle");
+    .getByRole("button", { name: /^Geometry:/ })
+    .click();
+  await page.getByRole("menuitemradio", { name: "Rectangle" }).click();
   const box = await canvas.boundingBox();
   if (!box) throw new Error("canvas has no bounding box");
   await page.mouse.click(box.x + box.width / 2 - 20, box.y + box.height / 2);
@@ -118,7 +121,7 @@ test("Cancel discards an in-progress shape", async ({ page }) => {
   await expect(
     page
       .getByRole("toolbar", { name: "Drawing tools" })
-      .getByRole("combobox", { name: "Geometry" }),
-  ).toHaveValue("");
+      .getByRole("button", { name: /^Geometry:/ }),
+  ).toHaveText("Geometry: Select shape");
   await expect(page.getByRole("button", { name: "Cancel" })).not.toBeVisible();
 });
