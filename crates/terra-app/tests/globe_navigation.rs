@@ -313,3 +313,238 @@ fn dragging_pans_and_shift_dragging_rotates() {
         "shift+drag must not pan"
     );
 }
+
+mod nav_controls {
+    use super::*;
+    use std::cell::RefCell;
+    use std::rc::Rc;
+    use terra_app::AppData;
+    use terra_app::views::nav_controls::{NavLayout, last_layout, north_marker};
+    use terra_globe::{DrawTool, SceneMode};
+
+    type Data = Rc<RefCell<AppData>>;
+
+    fn nav(harness: &Harness) -> NavLayout {
+        last_layout(&harness.ctx).expect("the globe view has rendered")
+    }
+
+    fn setup() -> Option<(Harness<'static>, Data)> {
+        let (mut harness, data) = make_sized(WINDOW, None)?;
+        // Panels settle over a few frames; the globe rect moves until then.
+        harness.run_steps(15);
+        Some((harness, data))
+    }
+
+    fn click(harness: &mut Harness, at: egui::Pos2) {
+        harness.hover_at(at);
+        harness.run_steps(2);
+        harness.drag_at(at);
+        harness.run_steps(2);
+        harness.drop_at(at);
+        harness.run_steps(2);
+    }
+
+    fn hold(harness: &mut Harness, at: egui::Pos2, frames: usize) {
+        harness.hover_at(at);
+        harness.run_steps(2);
+        harness.drag_at(at);
+        harness.run_steps(frames);
+        harness.drop_at(at);
+        harness.run_steps(2);
+    }
+
+    #[test]
+    fn controls_do_not_cover_the_test_point() {
+        let Some((harness, _)) = setup() else { return };
+        let l = nav(&harness);
+        for r in [l.compass, l.move_pad, l.zoom] {
+            assert!(!r.contains(GLOBE));
+        }
+    }
+
+    #[test]
+    fn plus_and_minus_zoom_in_and_out() {
+        let Some((mut harness, data)) = setup() else {
+            return;
+        };
+        let l = nav(&harness);
+        let d0 = pose(&harness, &data).distance;
+        click(&mut harness, l.zoom_in.center());
+        let d1 = pose(&harness, &data).distance;
+        assert!(d1 < d0 * 0.9, "+ must zoom in: {d0} -> {d1}");
+        click(&mut harness, l.zoom_out.center());
+        click(&mut harness, l.zoom_out.center());
+        let d2 = pose(&harness, &data).distance;
+        assert!(d2 > d1 * 1.1, "- must zoom out: {d1} -> {d2}");
+    }
+
+    #[test]
+    fn zoom_knob_zooms_while_held_and_stops_on_release() {
+        let Some((mut harness, data)) = setup() else {
+            return;
+        };
+        let l = nav(&harness);
+        let d0 = pose(&harness, &data).distance;
+        let c = l.zoom_track.center();
+        let up = egui::pos2(c.x, l.zoom_track.top() + 4.0);
+        hold(&mut harness, up, 10);
+        let d1 = pose(&harness, &data).distance;
+        assert!(d1 < d0 * 0.95, "knob up must zoom in: {d0} -> {d1}");
+        harness.run_steps(10);
+        let d2 = pose(&harness, &data).distance;
+        assert!(
+            (d2 - d1).abs() < 1e-6 * d1,
+            "released knob must stop: {d1} -> {d2}"
+        );
+
+        let down = egui::pos2(c.x, l.zoom_track.bottom() - 4.0);
+        hold(&mut harness, down, 10);
+        assert!(pose(&harness, &data).distance > d2 * 1.05);
+    }
+
+    #[test]
+    fn dragging_the_ring_rotates_and_n_restores_north() {
+        let Some((mut harness, data)) = setup() else {
+            return;
+        };
+        let l = nav(&harness);
+        let c = l.compass.center();
+        let start = egui::pos2(c.x, c.y - 42.0);
+        harness.hover_at(start);
+        harness.run_steps(2);
+        harness.drag_at(start);
+        harness.run_steps(2);
+        for p in [
+            egui::pos2(c.x + 30.0, c.y - 30.0),
+            egui::pos2(c.x + 42.0, c.y),
+        ] {
+            harness.event(egui::Event::PointerMoved(p));
+            harness.run_steps(2);
+        }
+        harness.drop_at(egui::pos2(c.x + 42.0, c.y));
+        harness.run_steps(2);
+        let h = pose(&harness, &data).heading;
+        assert!(h < -0.5, "clockwise drag must carry N clockwise: {h}");
+
+        click(&mut harness, north_marker(l.compass, h));
+        assert!(
+            pose(&harness, &data).heading.abs() < 1e-6,
+            "N must face north"
+        );
+    }
+
+    #[test]
+    fn move_joystick_up_moves_north_without_zooming() {
+        let Some((mut harness, data)) = setup() else {
+            return;
+        };
+        let l = nav(&harness);
+        let before = pose(&harness, &data);
+        let c = l.move_pad.center();
+        hold(&mut harness, egui::pos2(c.x, c.y - 28.0), 8);
+        let after = pose(&harness, &data);
+        assert!(
+            after.lat_deg > before.lat_deg + 0.01,
+            "{before:?} -> {after:?}"
+        );
+        assert!((after.distance - before.distance).abs() < 1.0);
+        assert!((after.heading - before.heading).abs() < 1e-9);
+    }
+
+    #[test]
+    fn look_joystick_turns_about_a_fixed_eye() {
+        let Some((mut harness, data)) = setup() else {
+            return;
+        };
+        let close = CameraPose {
+            distance: 500_000.0,
+            ..pose(&harness, &data)
+        };
+        data.borrow_mut().globe.apply_pose(close);
+        harness.run_steps(2);
+        let l = nav(&harness);
+        let eye = data.borrow().globe.camera.eye_ecef();
+        let before = pose(&harness, &data);
+        let c = l.look.center();
+        hold(&mut harness, egui::pos2(c.x + 24.0, c.y), 10);
+        let after = pose(&harness, &data);
+        assert!(
+            after.heading > before.heading + 0.02,
+            "{before:?} -> {after:?}"
+        );
+        let moved = (data.borrow().globe.camera.eye_ecef() - eye).length();
+        assert!(moved < 1.0, "the eye must stay put, moved {moved} m");
+    }
+
+    #[test]
+    fn clicking_the_controls_does_not_place_markers() {
+        let Some((mut harness, data)) = setup() else {
+            return;
+        };
+        data.borrow_mut().drawing.start(DrawTool::Marker);
+        let l = nav(&harness);
+        let before = data.borrow().store.library().placemarks.len();
+        for p in [
+            l.zoom_in.center(),
+            l.move_pad.center(),
+            l.look.center(),
+            egui::pos2(l.compass.center().x, l.compass.top() + 6.0),
+        ] {
+            click(&mut harness, p);
+        }
+        assert_eq!(data.borrow().store.library().placemarks.len(), before);
+        assert!(data.borrow().drawing.is_active());
+
+        // Control: the same click on the globe does add a point.
+        click(&mut harness, GLOBE);
+        assert_eq!(
+            data.borrow().store.library().placemarks.len(),
+            before + 1,
+            "a click on the globe must reach the drawing tool"
+        );
+    }
+
+    #[test]
+    fn dragging_outside_the_controls_still_pans() {
+        let Some((mut harness, data)) = setup() else {
+            return;
+        };
+        hover_globe(&mut harness);
+        let before = pose(&harness, &data);
+        harness.drag_at(GLOBE);
+        harness.run_steps(2);
+        harness.event(egui::Event::PointerMoved(egui::pos2(
+            GLOBE.x + 150.0,
+            GLOBE.y,
+        )));
+        harness.run_steps(2);
+        harness.drop_at(egui::pos2(GLOBE.x + 150.0, GLOBE.y));
+        harness.run_steps(2);
+        assert!(pose(&harness, &data).lon_deg < before.lon_deg - 0.01);
+    }
+
+    #[test]
+    fn look_and_rotate_do_nothing_in_2d_but_zoom_and_move_work() {
+        let Some((mut harness, data)) = setup() else {
+            return;
+        };
+        data.borrow_mut().set_scene_mode(SceneMode::Scene2D);
+        harness.run_steps(3);
+        let l = nav(&harness);
+        let before = pose(&harness, &data);
+        let c = l.look.center();
+        hold(&mut harness, egui::pos2(c.x + 24.0, c.y), 6);
+        let rc = l.compass.center();
+        click(&mut harness, egui::pos2(rc.x, rc.y - 42.0));
+        let same = pose(&harness, &data);
+        assert!((same.heading - before.heading).abs() < 1e-9);
+        assert!((same.lon_deg - before.lon_deg).abs() < 1e-9);
+        assert!((same.lat_deg - before.lat_deg).abs() < 1e-9);
+
+        click(&mut harness, l.zoom_in.center());
+        assert!(pose(&harness, &data).distance < same.distance);
+        let m = l.move_pad.center();
+        hold(&mut harness, egui::pos2(m.x, m.y - 28.0), 6);
+        assert!(pose(&harness, &data).lat_deg > same.lat_deg);
+    }
+}

@@ -14,7 +14,7 @@ thiserror = { workspace = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 async-trait = { workspace = true }
-indexed_db_futures = { version = "0.6", features = ["serde", "async-upgrade"] }
+indexed_db_futures = { version = "0.6", features = ["serde", "async-upgrade", "typed-arrays"] }
 serde = { workspace = true }
 wasm-bindgen = "0.2"
 

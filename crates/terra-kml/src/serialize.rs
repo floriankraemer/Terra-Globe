@@ -281,6 +281,7 @@ fn render_ground_overlay(placemark: &Placemark) -> Result<String, KmlError> {
         bounds,
         image_url,
         rotation,
+        opacity,
     } = &placemark.geometry
     else {
         return Err(KmlError::InvalidInput(
@@ -294,6 +295,14 @@ fn render_ground_overlay(placemark: &Placemark) -> Result<String, KmlError> {
         .unwrap_or_default();
     let rotation = rotation
         .map(|rotation| format!("<rotation>{}</rotation>", format_number(rotation)))
+        .unwrap_or_default();
+    let color = opacity
+        .map(|opacity| {
+            format!(
+                "<color>{}</color>",
+                crate::color::css_color_to_kml_color("#ffffff", opacity.clamp(0.0, 1.0))
+            )
+        })
         .unwrap_or_default();
     let bounds_xml = format!(
         "<LatLonBox><north>{}</north><south>{}</south><east>{}</east><west>{}</west>{rotation}</LatLonBox>",
@@ -318,7 +327,7 @@ fn render_ground_overlay(placemark: &Placemark) -> Result<String, KmlError> {
     ));
 
     Ok(format!(
-        "<GroundOverlay id=\"{}\"><name>{}</name>{description}{}<visibility>{}</visibility><Icon><href>{}</href></Icon>{bounds_xml}{}</GroundOverlay>",
+        "<GroundOverlay id=\"{}\"><name>{}</name>{description}{}<visibility>{}</visibility>{color}<Icon><href>{}</href></Icon>{bounds_xml}{}</GroundOverlay>",
         escape_xml(&placemark.id),
         escape_xml(&placemark.name),
         render_feature_extras(placemark),

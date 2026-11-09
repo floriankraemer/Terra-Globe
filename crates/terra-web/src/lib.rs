@@ -37,6 +37,7 @@ pub fn start() {
             settings: std::sync::Arc::new(browser_adapters::BrowserSettingsStore),
             files: std::sync::Arc::new(browser_adapters::BrowserFiles),
             secrets: std::sync::Arc::new(browser_adapters::BrowserSecretStore),
+            tile_cache: None,
         };
 
         eframe::WebRunner::new()
@@ -135,6 +136,10 @@ mod browser_adapters {
         }
 
         fn pick_open(&self) -> Option<PathBuf> {
+            None
+        }
+
+        fn pick_open_image(&self) -> Option<PathBuf> {
             None
         }
 

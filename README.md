@@ -52,7 +52,7 @@ The globe view takes the keyboard when the pointer is over it or after a click.
 In the flat 2D view the map stays north-up; Columbus view rotates and tilts like
 the globe.
 
-The desktop app stores its library in `terra-globe.db` and its settings in `settings.json` under the platform data directory (`app.terraglobe.Terra Globe`), and provider keys in the OS keychain.
+The desktop app stores its library in `terra-globe.db` and its settings in `settings.json` under the platform data directory (`app.terraglobe.Terra Globe`), downloaded tiles in `tiles/` (512 MB budget), and provider keys in the OS keychain.
 Draw with the toolbar, fill in the editor on the right, and press **File → Save** to export KML/KMZ.
 **View** switches between the 3D globe, a 2D map and Columbus view.
 Release process: [`docs/release.md`](docs/release.md).

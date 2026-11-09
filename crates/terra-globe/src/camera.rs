@@ -3,7 +3,7 @@
 
 use glam::{DVec3, Mat4, Vec3, Vec4};
 
-use crate::geo::{Geodetic, ecef_to_geodetic, enu_axes, geodetic_to_ecef};
+use crate::geo::{Geodetic, GroundFn, ecef_to_geodetic, enu_axes, geodetic_to_ecef};
 
 /// Where a projected point landed on screen.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -36,6 +36,10 @@ const MIN_DISTANCE: f64 = 8.0;
 const MAX_DISTANCE: f64 = 40_000_000.0;
 const MIN_PITCH: f64 = 10f64.to_radians();
 const MAX_PITCH: f64 = 89.5f64.to_radians();
+/// Below this distance to the target, zooming re-seats the pivot on the terrain.
+const TERRAIN_DOLLY_MAX_DISTANCE: f64 = 300_000.0;
+/// How far the eye stays above the terrain beneath it, in meters.
+pub const EYE_CLEARANCE_M: f64 = 3.0;
 
 #[derive(Debug, Clone)]
 pub struct Camera {
@@ -50,6 +54,10 @@ pub struct Camera {
     /// Vertical field of view.
     pub fov_y: f64,
     pub near: f64,
+    /// Height of the target above the ellipsoid, in meters. Zero on the
+    /// ellipsoid; with terrain the target sits on the ground, so orbiting and
+    /// zooming pivot around the surface the user is looking at.
+    pub target_height: f64,
     pub(crate) animation: Option<CameraAnimation>,
 }
 
@@ -63,6 +71,7 @@ impl Default for Camera {
             pitch: 45f64.to_radians(),
             fov_y: 45f64.to_radians(),
             near: 1.0,
+            target_height: 0.0,
             animation: None,
         }
     }
@@ -70,7 +79,7 @@ impl Default for Camera {
 
 impl Camera {
     pub fn target_geodetic(&self) -> Geodetic {
-        Geodetic::from_degrees(self.target_lon_deg, self.target_lat_deg, 0.0)
+        Geodetic::from_degrees(self.target_lon_deg, self.target_lat_deg, self.target_height)
     }
 
     pub fn target_ecef(&self) -> DVec3 {
@@ -213,8 +222,21 @@ impl Camera {
 
     /// The point on the ellipsoid under a viewport pixel, if the ray hits it.
     pub fn pick_surface(&self, pixel: (f64, f64), viewport: (u32, u32)) -> Option<DVec3> {
+        self.pick_surface_on(pixel, viewport, None)
+    }
+
+    /// [`Self::pick_surface`] against terrain when a ground lookup is given.
+    pub fn pick_surface_on(
+        &self,
+        pixel: (f64, f64),
+        viewport: (u32, u32),
+        ground: Option<&GroundFn<'_>>,
+    ) -> Option<DVec3> {
         let (origin, direction) = self.ray_at(pixel, viewport);
-        crate::geo::ray_ellipsoid_point(origin, direction)
+        match ground {
+            Some(ground) => crate::geo::ray_terrain(origin, direction, ground),
+            None => crate::geo::ray_ellipsoid_point(origin, direction),
+        }
     }
 
     /// The two ground axes the screen maps to, as `(forward, right)` unit
@@ -242,6 +264,108 @@ impl Camera {
         if radians.is_finite() {
             self.pitch = (self.pitch + radians).clamp(MIN_PITCH, MAX_PITCH);
             self.ensure_above_surface();
+        }
+    }
+
+    /// The camera that has its eye at `eye`, looks along `direction`, and
+    /// pivots on whatever surface that line meets first (terrain when a ground
+    /// lookup is given). The view does not change, only what it is anchored
+    /// to. `None` when the line misses the globe or the result would break the
+    /// pitch or distance limits.
+    fn reframed(
+        &self,
+        eye: DVec3,
+        direction: DVec3,
+        ground: Option<&GroundFn<'_>>,
+    ) -> Option<Camera> {
+        let hit = match ground {
+            Some(ground) => crate::geo::ray_terrain(eye, direction, ground)?,
+            None => crate::geo::ray_ellipsoid_point(eye, direction)?,
+        };
+        let target = ecef_to_geodetic(hit);
+        let target_height = if ground.is_some() { target.height } else { 0.0 };
+        let target_ecef = geodetic_to_ecef(Geodetic {
+            height: target_height,
+            ..target
+        });
+        let (t_east, t_north, t_up) = enu_axes(target_ecef);
+        let offset = eye - target_ecef;
+        let distance = offset.length();
+        let pitch = (offset.dot(t_up) / distance).clamp(-1.0, 1.0).asin();
+        let valid = (MIN_PITCH..=MAX_PITCH).contains(&pitch)
+            && (MIN_DISTANCE..=MAX_DISTANCE).contains(&distance);
+        valid.then(|| Camera {
+            target_lon_deg: target.lon_deg(),
+            target_lat_deg: target.lat_deg(),
+            distance,
+            heading: offset.dot(t_east).atan2(-offset.dot(t_north)),
+            pitch,
+            target_height,
+            ..self.clone()
+        })
+    }
+
+    /// Google Earth's "look around": turns the view about the eye, which stays
+    /// put, instead of about the target. Same signs as `rotate_by`/`tilt_by`:
+    /// positive `d_heading` adds to `heading`, positive `d_pitch` looks further
+    /// down. The pitch part is shortened so the view ray still hits the globe
+    /// and the pitch stays within its limits.
+    pub fn look_by(&mut self, d_heading: f64, d_pitch: f64) {
+        self.look_by_on(d_heading, d_pitch, None);
+    }
+
+    /// [`Self::look_by`] where the view ray lands on terrain, when a ground
+    /// lookup is given, instead of on the ellipsoid.
+    pub fn look_by_on(&mut self, d_heading: f64, d_pitch: f64, ground: Option<&GroundFn<'_>>) {
+        if !d_heading.is_finite() || !d_pitch.is_finite() {
+            return;
+        }
+        self.animation = None;
+        if d_heading == 0.0 && d_pitch == 0.0 {
+            return;
+        }
+        let eye = self.eye_ecef();
+        let (east, north, up) = enu_axes(eye);
+        let forward = self.view_forward();
+        let azimuth = forward.dot(east).atan2(forward.dot(north));
+        let elevation = forward.dot(up).clamp(-1.0, 1.0).asin();
+
+        let build = |azimuth: f64, elevation: f64| -> Option<Camera> {
+            let (sin_el, cos_el) = elevation.sin_cos();
+            let (sin_az, cos_az) = azimuth.sin_cos();
+            let direction = east * (cos_el * sin_az) + north * (cos_el * cos_az) + up * sin_el;
+            self.reframed(eye, direction, ground)
+        };
+
+        // Turning about the local up leaves the elevation alone, so it only
+        // fails near a pitch limit, where the heading change is skipped.
+        let new_azimuth = if build(azimuth - d_heading, elevation).is_some() {
+            azimuth - d_heading
+        } else {
+            azimuth
+        };
+        // The current view is valid, so shrinking the pitch step towards zero
+        // always finds the furthest valid elevation. Clamping at straight down
+        // or up stops the look from flipping over to the far side.
+        let half_pi = std::f64::consts::FRAC_PI_2;
+        let at = |s: f64| (elevation - d_pitch * s).clamp(-half_pi, half_pi);
+        let mut best = build(new_azimuth, at(1.0));
+        if best.is_none() {
+            best = build(new_azimuth, elevation);
+            let (mut valid_s, mut invalid_s) = (0.0, 1.0);
+            for _ in 0..50 {
+                let mid = 0.5 * (valid_s + invalid_s);
+                match build(new_azimuth, at(mid)) {
+                    Some(camera) => {
+                        valid_s = mid;
+                        best = Some(camera);
+                    }
+                    None => invalid_s = mid,
+                }
+            }
+        }
+        if let Some(camera) = best {
+            *self = camera;
         }
     }
 
@@ -305,10 +429,20 @@ impl Camera {
     /// eye), screen-y is: the more obliquely the surface is viewed, the more
     /// ground one pixel of vertical movement covers.
     pub fn surface_scale_at(&self, pixel: (f64, f64), viewport: (u32, u32)) -> (f64, f64) {
+        self.surface_scale_at_on(pixel, viewport, None)
+    }
+
+    pub fn surface_scale_at_on(
+        &self,
+        pixel: (f64, f64),
+        viewport: (u32, u32),
+        ground: Option<&GroundFn<'_>>,
+    ) -> (f64, f64) {
         let screen_height = f64::from(viewport.1.max(1));
         let eye = self.eye_ecef();
-        let (origin, direction) = self.ray_at(pixel, viewport);
-        let point = crate::geo::ray_ellipsoid_point(origin, direction)
+        let (_, direction) = self.ray_at(pixel, viewport);
+        let point = self
+            .pick_surface_on(pixel, viewport, ground)
             .unwrap_or_else(|| self.target_ecef());
         let distance = (point - eye).length().max(1.0);
         let per_pixel = distance * 2.0 * (self.fov_y / 2.0).tan() / screen_height;
@@ -322,10 +456,20 @@ impl Camera {
 
     /// Drags the globe: the ground under `pixel` follows the cursor.
     pub fn pan_pixels(&mut self, pixel: (f64, f64), viewport: (u32, u32), delta: (f64, f64)) {
+        self.pan_pixels_on(pixel, viewport, delta, None);
+    }
+
+    pub fn pan_pixels_on(
+        &mut self,
+        pixel: (f64, f64),
+        viewport: (u32, u32),
+        delta: (f64, f64),
+        ground: Option<&GroundFn<'_>>,
+    ) {
         if !delta.0.is_finite() || !delta.1.is_finite() {
             return;
         }
-        let (per_pixel_x, per_pixel_y) = self.surface_scale_at(pixel, viewport);
+        let (per_pixel_x, per_pixel_y) = self.surface_scale_at_on(pixel, viewport, ground);
         // Dragging down moves the view forward (up the screen), dragging right
         // moves it to the left: the imagery stays under the cursor.
         self.pan_view(delta.1 * per_pixel_y, -delta.0 * per_pixel_x);
@@ -338,12 +482,43 @@ impl Camera {
     /// target towards the anchor by `1 - factor` is exactly that dolly: with
     /// `d' = d * factor`, the new eye is `eye + (1 - factor) * (anchor - eye)`.
     pub fn dolly_at(&mut self, pixel: (f64, f64), viewport: (u32, u32), factor: f64) {
+        self.dolly_at_on(pixel, viewport, factor, None);
+    }
+
+    /// [`Self::dolly_at`] anchored on terrain when a ground lookup is given,
+    /// so zooming towards a mountain top converges on the top, not on the
+    /// sea level under it.
+    pub fn dolly_at_on(
+        &mut self,
+        pixel: (f64, f64),
+        viewport: (u32, u32),
+        factor: f64,
+        ground: Option<&GroundFn<'_>>,
+    ) {
         if !factor.is_finite() || factor <= 0.0 {
             return;
         }
         let factor = factor.clamp(0.1, 10.0);
+        // Far out, relief is invisible and the plain dolly keeps heading and
+        // pitch exactly; re-seating the pivot would turn the view a little.
+        let near = self.distance < TERRAIN_DOLLY_MAX_DISTANCE;
+        if let Some(ground) = ground.filter(|_| near) {
+            // The eye moves along the cursor ray, so the ground under the
+            // cursor stays under it; the pivot is then re-seated on whatever
+            // the view centre looks at, which leaves the eye exactly where
+            // the dolly put it.
+            if let Some(anchor) = self.pick_surface_on(pixel, viewport, Some(ground)) {
+                let eye = self.eye_ecef();
+                let new_eye = eye + (anchor - eye) * (1.0 - factor);
+                if let Some(camera) = self.reframed(new_eye, self.view_forward(), Some(ground)) {
+                    *self = camera;
+                    self.ensure_above_surface_on(Some(ground));
+                    return;
+                }
+            }
+        }
         let anchor = self
-            .pick_surface(pixel, viewport)
+            .pick_surface_on(pixel, viewport, ground)
             .map(crate::geo::ecef_to_geodetic)
             .filter(|anchor| anchor.height.abs() < 1.0e6);
         if let Some(anchor) = anchor {
@@ -357,7 +532,7 @@ impl Camera {
                 .clamp(-89.5, 89.5);
         }
         self.distance = (self.distance * factor).clamp(MIN_DISTANCE, MAX_DISTANCE);
-        self.ensure_above_surface();
+        self.ensure_above_surface_on(ground);
     }
 
     /// Multiplies the distance; `factor < 1` zooms in.
@@ -371,15 +546,37 @@ impl Camera {
 
     /// Keeps the eye above the ellipsoid after pitch/zoom changes.
     pub fn ensure_above_surface(&mut self) {
-        for _ in 0..8 {
-            let height = self.eye_height();
-            if height >= 1.0 {
-                return;
+        self.ensure_above_surface_on(None);
+    }
+
+    /// Keeps the eye above the ground under it, plus [`EYE_CLEARANCE_M`], when
+    /// a ground lookup is given; the ellipsoid otherwise. The eye moves away
+    /// from the target along its view line; if that cannot clear a ridge the
+    /// view is tipped towards top-down, which always can.
+    pub fn ensure_above_surface_on(&mut self, ground: Option<&GroundFn<'_>>) {
+        let (rounds, growth) = if ground.is_some() {
+            (40, 1.1)
+        } else {
+            (8, 1.05)
+        };
+        for attempt in 0..2 {
+            for _ in 0..rounds {
+                let eye = ecef_to_geodetic(self.eye_ecef());
+                let floor = ground
+                    .and_then(|ground| ground(eye.lon_deg(), eye.lat_deg()))
+                    .map_or(1.0, |height| (height + EYE_CLEARANCE_M).max(1.0));
+                if eye.height >= floor {
+                    return;
+                }
+                self.distance = (self.distance * growth).clamp(MIN_DISTANCE, MAX_DISTANCE);
+                if (self.distance - MAX_DISTANCE).abs() < f64::EPSILON {
+                    break;
+                }
             }
-            self.distance = (self.distance * 1.05).clamp(MIN_DISTANCE, MAX_DISTANCE);
-            if (self.distance - MAX_DISTANCE).abs() < f64::EPSILON {
+            if ground.is_none() || attempt == 1 {
                 break;
             }
+            self.pitch = MAX_PITCH;
         }
     }
 
@@ -774,5 +971,276 @@ mod tests {
             "north pole should be visible above lat {}",
             MERCATOR_MAX_LAT_DEG
         );
+    }
+
+    fn looker(lat: f64, heading: f64, pitch_deg: f64) -> Camera {
+        Camera {
+            target_lat_deg: lat,
+            distance: 3_000_000.0,
+            heading,
+            pitch: pitch_deg.to_radians(),
+            ..Camera::default()
+        }
+    }
+
+    fn assert_sane(camera: &Camera, eye: DVec3) {
+        for v in [
+            camera.target_lon_deg,
+            camera.target_lat_deg,
+            camera.distance,
+            camera.heading,
+            camera.pitch,
+        ] {
+            assert!(v.is_finite(), "{camera:?}");
+        }
+        assert!((camera.eye_ecef() - eye).length() < 0.01, "eye moved");
+        assert!((MIN_PITCH - 1e-9..=MAX_PITCH + 1e-9).contains(&camera.pitch));
+        let height = ecef_to_geodetic(camera.target_ecef()).height;
+        assert!(height.abs() < 1e-3);
+    }
+
+    #[test]
+    fn looking_keeps_the_eye_in_place() {
+        for (dh, dp) in [
+            (0.3, 0.0),
+            (-0.3, 0.0),
+            (0.0, 0.1),
+            (0.2, 0.05),
+            (-0.4, -0.02),
+        ] {
+            let mut camera = looker(35.0, 0.4, 50.0);
+            let eye = camera.eye_ecef();
+            camera.look_by(dh, dp);
+            assert_sane(&camera, eye);
+        }
+    }
+
+    #[test]
+    fn horizontal_look_changes_heading_by_the_delta() {
+        let mut camera = looker(10.0, 0.0, 45.0);
+        camera.look_by(0.2, 0.0);
+        assert!((camera.heading - 0.2).abs() < 0.02, "{}", camera.heading);
+        camera.look_by(-0.4, 0.0);
+        assert!((camera.heading + 0.2).abs() < 0.04, "{}", camera.heading);
+    }
+
+    #[test]
+    fn small_looks_accumulate_like_one_big_look() {
+        let mut once = looker(35.0, 0.4, 50.0);
+        let mut steps = once.clone();
+        once.look_by(0.4, 0.04);
+        for _ in 0..40 {
+            steps.look_by(0.01, 0.001);
+        }
+        assert!((once.heading - steps.heading).abs() < 0.01);
+        assert!((once.pitch - steps.pitch).abs() < 0.01);
+        assert!((once.target_ecef() - steps.target_ecef()).length() < 20_000.0);
+    }
+
+    #[test]
+    fn looking_up_past_the_horizon_clamps() {
+        let mut camera = looker(35.0, 0.4, 50.0);
+        let eye = camera.eye_ecef();
+        camera.look_by(0.0, -3.0);
+        assert_sane(&camera, eye);
+        assert!(camera.pitch < 50f64.to_radians());
+    }
+
+    #[test]
+    fn zero_look_is_identity_and_stops_animation() {
+        let mut camera = looker(35.0, 0.4, 50.0);
+        let before = camera.pose();
+        camera.fly_to(
+            CameraPose {
+                distance: 1e6,
+                ..before
+            },
+            1.0,
+            0.0,
+        );
+        camera.look_by(0.0, 0.0);
+        assert_eq!(camera.pose(), before);
+        assert!(!camera.is_animating());
+    }
+
+    #[test]
+    fn looking_works_near_the_poles() {
+        for lat in [89.9, -89.9] {
+            let mut camera = looker(lat, 0.3, 50.0);
+            let eye = camera.eye_ecef();
+            camera.look_by(0.5, 0.05);
+            assert_sane(&camera, eye);
+        }
+    }
+
+    #[test]
+    fn extreme_and_non_finite_deltas_are_safe() {
+        for (dh, dp) in [(10.0, 10.0), (-10.0, -10.0), (10.0, -10.0), (-10.0, 10.0)] {
+            let mut camera = looker(35.0, 0.4, 50.0);
+            let eye = camera.eye_ecef();
+            camera.look_by(dh, dp);
+            assert_sane(&camera, eye);
+        }
+        let mut camera = looker(35.0, 0.4, 50.0);
+        let before = camera.pose();
+        camera.look_by(f64::NAN, f64::INFINITY);
+        assert_eq!(camera.pose(), before);
+    }
+
+    #[test]
+    fn looking_further_past_a_pitch_limit_does_nothing() {
+        let mut camera = looker(35.0, 0.4, 89.5);
+        let before = camera.pose();
+        camera.look_by(0.0, 0.1);
+        assert!((camera.pitch - before.pitch).abs() < 1e-6);
+        assert!((camera.heading - before.heading).abs() < 1e-6);
+        assert!((camera.distance - before.distance).abs() < 1.0);
+        let mut camera = looker(35.0, 0.4, 10.0);
+        let before = camera.pose();
+        camera.look_by(0.0, -0.1);
+        assert!((camera.pitch - before.pitch).abs() < 1e-6);
+        assert!((camera.eye_ecef() - looker(35.0, 0.4, 10.0).eye_ecef()).length() < 0.01);
+    }
+
+    fn plateau(_: f64, _: f64) -> Option<f64> {
+        Some(1_000.0)
+    }
+
+    /// A 3 km cone at (10.02, 20.0), 4 km radius, on flat ground.
+    fn cone(lon: f64, lat: f64) -> Option<f64> {
+        let d = ((lon - 10.02) * 20f64.to_radians().cos())
+            .hypot(lat - 20.0)
+            .to_radians()
+            * crate::geo::WGS84_A;
+        Some((3_000.0 - d * 0.75).max(0.0))
+    }
+
+    #[test]
+    fn the_eye_is_lifted_above_terrain_and_the_ellipsoid_case_is_untouched() {
+        let low = Camera {
+            distance: 500.0,
+            pitch: 20f64.to_radians(),
+            ..Camera::default()
+        };
+        let mut on_plateau = low.clone();
+        on_plateau.ensure_above_surface_on(Some(&plateau));
+        assert!(
+            on_plateau.eye_height() >= 1_000.0 + EYE_CLEARANCE_M,
+            "eye at {} m",
+            on_plateau.eye_height()
+        );
+        let mut ellipsoid = low.clone();
+        ellipsoid.ensure_above_surface_on(None);
+        assert_eq!(ellipsoid.distance, low.distance);
+        // Unknown ground (no data) behaves like the ellipsoid.
+        let mut unknown = low.clone();
+        unknown.ensure_above_surface_on(Some(&|_, _| None));
+        assert_eq!(unknown.distance, low.distance);
+    }
+
+    #[test]
+    fn a_ridge_between_the_target_and_the_eye_still_leaves_the_eye_clear() {
+        // Target in a valley, eye looking across a 2 km wall behind it.
+        let wall = |lon: f64, _: f64| Some(if lon > 10.004 { 2_000.0 } else { 0.0 });
+        let mut camera = Camera {
+            target_lon_deg: 10.0,
+            target_lat_deg: 20.0,
+            distance: 900.0,
+            heading: 270f64.to_radians(),
+            pitch: 12f64.to_radians(),
+            ..Camera::default()
+        };
+        camera.ensure_above_surface_on(Some(&wall));
+        let eye = ecef_to_geodetic(camera.eye_ecef());
+        let ground = wall(eye.lon_deg(), eye.lat_deg()).expect("known");
+        assert!(
+            eye.height >= ground + EYE_CLEARANCE_M,
+            "{} vs {ground}",
+            eye.height
+        );
+    }
+
+    #[test]
+    fn zooming_onto_a_summit_closes_in_on_the_summit_and_keeps_it_under_the_cursor() {
+        let viewport = (1280, 800);
+        let mut camera = Camera {
+            target_lon_deg: 10.0,
+            target_lat_deg: 20.0,
+            distance: 20_000.0,
+            pitch: 45f64.to_radians(),
+            ..Camera::default()
+        };
+        let summit = geodetic_to_ecef(Geodetic::from_degrees(10.02, 20.0, 3_000.0));
+        let start = camera
+            .project(summit, viewport)
+            .expect("summit is on screen");
+        let start_range = (summit - camera.eye_ecef()).length();
+        for _ in 0..6 {
+            let pixel = camera
+                .project(summit, viewport)
+                .expect("summit stays on screen");
+            camera.dolly_at_on((pixel.x, pixel.y + 4.0), viewport, 0.6, Some(&cone));
+        }
+        let range = (summit - camera.eye_ecef()).length();
+        assert!(
+            range < start_range * 0.6f64.powi(6) * 1.15,
+            "range {range} of {start_range}"
+        );
+        let after = camera.project(summit, viewport).expect("still on screen");
+        assert!(
+            (after.x - start.x).abs() < 25.0 && (after.y - start.y).abs() < 25.0,
+            "the summit drifted from {start:?} to {after:?}"
+        );
+        // The pivot sits on the terrain, wherever the view centre lands.
+        let ground = cone(camera.target_lon_deg, camera.target_lat_deg).expect("ground");
+        assert!((camera.target_height - ground).abs() < 2.0);
+        let eye = ecef_to_geodetic(camera.eye_ecef());
+        let below = cone(eye.lon_deg(), eye.lat_deg()).expect("ground");
+        assert!(eye.height >= below + EYE_CLEARANCE_M - 0.01);
+    }
+
+    #[test]
+    fn picking_hits_the_summit_before_the_ellipsoid_behind_it() {
+        let viewport = (1280, 800);
+        let camera = Camera {
+            target_lon_deg: 10.0,
+            target_lat_deg: 20.0,
+            distance: 20_000.0,
+            pitch: 35f64.to_radians(),
+            ..Camera::default()
+        };
+        let summit = geodetic_to_ecef(Geodetic::from_degrees(10.02, 20.0, 3_000.0));
+        let pixel = camera.project(summit, viewport).expect("on screen");
+        // The cone is steeper than the view ray, so only the apex itself is
+        // touched exactly at the projected pixel; a little below hits its flank.
+        let hit = camera
+            .pick_surface_on((pixel.x, pixel.y + 4.0), viewport, Some(&cone))
+            .expect("hits");
+        let height = ecef_to_geodetic(hit).height;
+        assert!(
+            height > 2_900.0,
+            "hit the mountain top, not the ground: {height}"
+        );
+        let flat = camera
+            .pick_surface_on((pixel.x, pixel.y + 4.0), viewport, None)
+            .expect("ellipsoid hit");
+        assert!(ecef_to_geodetic(flat).height.abs() < 1.0);
+        assert!((hit - flat).length() > 1_000.0, "different surfaces");
+    }
+
+    #[test]
+    fn looking_around_keeps_the_eye_put_over_terrain() {
+        let mut camera = Camera {
+            target_lon_deg: 10.0,
+            target_lat_deg: 20.0,
+            target_height: 1_000.0,
+            distance: 3_000.0,
+            pitch: 40f64.to_radians(),
+            ..Camera::default()
+        };
+        let eye = camera.eye_ecef();
+        camera.look_by_on(0.2, 0.05, Some(&plateau));
+        assert!((camera.eye_ecef() - eye).length() < 0.5);
+        assert!((camera.target_height - 1_000.0).abs() < 1.0);
     }
 }

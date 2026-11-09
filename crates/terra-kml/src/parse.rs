@@ -400,10 +400,11 @@ fn parse_ground_overlay(
     };
 
     let extended_data = parse_extended_data(node);
+    let opacity = overlay_opacity(node, &name, warnings);
     let geometry = terra_core::RectangleBounds::new(north, south, east, west)
         .map_err(|error| error.to_string())
         .and_then(|bounds| {
-            PlacemarkGeometry::ground_overlay(bounds, href, box_node.child_f64("rotation"))
+            PlacemarkGeometry::ground_overlay(bounds, href, box_node.child_f64("rotation"), opacity)
                 .map_err(|error| error.to_string())
         });
     let geometry = match geometry {
@@ -441,6 +442,21 @@ fn parse_ground_overlay(
             Vec::new()
         }
     }
+}
+
+/// Alpha of the overlay's `<color>` (`aabbggrr`) as `0.0..=1.0`. A malformed
+/// colour is ignored with a warning rather than hiding the whole overlay.
+fn overlay_opacity(node: &Element, name: &str, warnings: &mut Vec<String>) -> Option<f64> {
+    let color = node.child_text("color")?;
+    let valid = color.len() == 8 && color.chars().all(|c| c.is_ascii_hexdigit());
+    if !valid {
+        warnings.push(format!(
+            "Ignored malformed <color> \"{color}\" on GroundOverlay \"{name}\"."
+        ));
+        return None;
+    }
+    let alpha = u8::from_str_radix(&color[..2], 16).ok()?;
+    Some(f64::from(alpha) / 255.0)
 }
 
 fn parse_photo_overlay(

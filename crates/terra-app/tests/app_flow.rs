@@ -66,6 +66,7 @@ fn harness(files: MemoryFileSystem) -> Option<Harness> {
             settings,
             files: files.clone(),
             secrets: Arc::new(InMemorySecretStore::new()),
+            tile_cache: None,
         },
         globe,
         PersistedState::default(),
@@ -250,4 +251,45 @@ fn errors_are_typed_not_stringly() {
     // Guards the AppError surface the UI relies on for messages.
     let error = AppError::Message("boom".to_string());
     assert_eq!(error.to_string(), "boom");
+}
+
+const GOOGLE_EARTH_RING: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2"><Document><Placemark id="g1"><name>Ring</name><LineString><tessellate>1</tessellate><coordinates>9.9396,51.1446,492.5 9.9496,51.1446,492.5 9.9496,51.1546,492.5</coordinates></LineString></Placemark></Document></kml>"#;
+
+#[test]
+fn imported_altitude_is_kept_but_not_drawn_without_terrain() {
+    let Some(mut harness) = harness(MemoryFileSystem::with_file(
+        "/tmp/ring.kml",
+        GOOGLE_EARTH_RING.as_bytes().to_vec(),
+    )) else {
+        eprintln!("no GPU adapter; skipping");
+        return;
+    };
+    harness.data.open_path(PathBuf::from("/tmp/ring.kml"));
+
+    let (_, scene) = harness.data.build_scene();
+    let entry = scene.entries.first().expect("ring in scene");
+    let terra_core::PlacemarkGeometry::LineString { path, .. } = &entry.geometry else {
+        panic!("expected a line string");
+    };
+    assert!(path.iter().all(|p| p.altitude == Some(492.5)));
+    assert!(path.iter().all(|p| p.altitude_mode.is_none()));
+
+    let (_, line) = terra_globe::primitives::build_meshes(
+        &entry.geometry,
+        &entry.style,
+        false,
+        terra_globe::SceneMode::Scene3D,
+        &terra_globe::no_ground,
+    );
+    let line = line.expect("outline");
+    for vertex in &line.vertices {
+        let local = glam::DVec3::new(
+            f64::from(vertex.start[0]),
+            f64::from(vertex.start[1]),
+            f64::from(vertex.start[2]),
+        );
+        let height = terra_globe::ecef_to_geodetic(line.center + local).height;
+        assert!(height.abs() < 10.0, "ring floats at {height} m");
+    }
 }

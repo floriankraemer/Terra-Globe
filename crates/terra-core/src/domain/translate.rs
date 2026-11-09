@@ -55,6 +55,7 @@ pub fn translate_geometry(
             bounds,
             image_url,
             rotation,
+            opacity,
         } => PlacemarkGeometry::GroundOverlay {
             bounds: crate::RectangleBounds {
                 north: bounds.north + delta_lat,
@@ -64,6 +65,7 @@ pub fn translate_geometry(
             },
             image_url: image_url.clone(),
             rotation: *rotation,
+            opacity: *opacity,
         },
         PlacemarkGeometry::Polygon {
             outer_ring,

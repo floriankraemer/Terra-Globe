@@ -382,15 +382,29 @@ impl StateStore {
         geometry: PlacemarkGeometry,
         folder: Option<String>,
     ) -> AppResult<Placemark> {
+        self.create_named_placemark(geometry, folder, None)
+    }
+
+    pub fn create_named_placemark(
+        &mut self,
+        geometry: PlacemarkGeometry,
+        folder: Option<String>,
+        name: Option<String>,
+    ) -> AppResult<Placemark> {
         self.mutate(|state| {
-            let name = state.library.default_placemark_name(&geometry);
+            let name = name
+                .filter(|name| !name.trim().is_empty())
+                .unwrap_or_else(|| state.library.default_placemark_name(&geometry));
             let style = create_style(NewStyle {
                 outline_color: "#3388ff".into(),
                 outline_width: 2.0,
                 fill_color: "#3388ff".into(),
                 fill_opacity: 0.35,
                 outline_enabled: None,
-                filled: Some(!matches!(geometry, PlacemarkGeometry::Point { .. })),
+                filled: Some(!matches!(
+                    geometry,
+                    PlacemarkGeometry::Point { .. } | PlacemarkGeometry::GroundOverlay { .. }
+                )),
                 icon_url: None,
                 icon_scale: None,
                 marker_icon: None,

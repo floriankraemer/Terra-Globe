@@ -83,6 +83,8 @@ pub trait FileSystem: Send + Sync {
     fn write(&self, path: &Path, bytes: &[u8]) -> Result<(), String>;
     /// Blocking native dialog; shells without dialogs return `None`.
     fn pick_open(&self) -> Option<PathBuf>;
+    /// Blocking native dialog filtered to raster images for ground overlays.
+    fn pick_open_image(&self) -> Option<PathBuf>;
     fn pick_save(&self, suggested_name: &str) -> Option<PathBuf>;
 }
 
@@ -91,6 +93,7 @@ pub trait FileSystem: Send + Sync {
 pub struct MemoryFileSystem {
     files: Mutex<std::collections::BTreeMap<PathBuf, Vec<u8>>>,
     open: Mutex<Option<PathBuf>>,
+    image: Mutex<Option<PathBuf>>,
     save: Mutex<Option<PathBuf>>,
 }
 
@@ -107,6 +110,12 @@ impl MemoryFileSystem {
 
     pub fn set_picked_open(&self, path: Option<PathBuf>) {
         if let Ok(mut slot) = self.open.lock() {
+            *slot = path;
+        }
+    }
+
+    pub fn set_picked_image(&self, path: Option<PathBuf>) {
+        if let Ok(mut slot) = self.image.lock() {
             *slot = path;
         }
     }
@@ -142,6 +151,10 @@ impl FileSystem for MemoryFileSystem {
 
     fn pick_open(&self) -> Option<PathBuf> {
         self.open.lock().ok().and_then(|slot| slot.clone())
+    }
+
+    fn pick_open_image(&self) -> Option<PathBuf> {
+        self.image.lock().ok().and_then(|slot| slot.clone())
     }
 
     fn pick_save(&self, _suggested_name: &str) -> Option<PathBuf> {

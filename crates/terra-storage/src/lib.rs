@@ -76,6 +76,16 @@ pub trait PlacesRepository {
     async fn delete_screen_overlay(&self, id: &str) -> Result<(), StorageError>;
 
     async fn import_batch(&self, batch: ImportBatch) -> Result<(), StorageError>;
+
+    /// Binary assets (overlay images) keyed by a document-relative path such as
+    /// `images/map-1a2b.png`. Callers pass paths already normalised (no leading
+    /// `./` or `/`); adapters store them verbatim. Empty blobs are allowed.
+    async fn put_asset(&self, path: &str, bytes: Vec<u8>) -> Result<(), StorageError>;
+    async fn get_asset(&self, path: &str) -> Result<Option<Vec<u8>>, StorageError>;
+    /// Deleting a missing asset is a no-op.
+    async fn delete_asset(&self, path: &str) -> Result<(), StorageError>;
+    /// Sorted ascending.
+    async fn list_assets(&self) -> Result<Vec<String>, StorageError>;
 }
 
 #[derive(Debug, Default)]
@@ -84,6 +94,7 @@ struct MemoryState {
     placemarks: HashMap<String, Placemark>,
     styles: HashMap<String, Style>,
     overlays: HashMap<String, ScreenOverlay>,
+    assets: HashMap<String, Vec<u8>>,
 }
 
 /// Test double and the reference behaviour for the contract suite.
@@ -321,6 +332,26 @@ impl PlacesRepository for InMemoryPlacesRepository {
         }
         Ok(())
     }
+
+    async fn put_asset(&self, path: &str, bytes: Vec<u8>) -> Result<(), StorageError> {
+        self.write().assets.insert(path.to_string(), bytes);
+        Ok(())
+    }
+
+    async fn get_asset(&self, path: &str) -> Result<Option<Vec<u8>>, StorageError> {
+        Ok(self.read().assets.get(path).cloned())
+    }
+
+    async fn delete_asset(&self, path: &str) -> Result<(), StorageError> {
+        self.write().assets.remove(path);
+        Ok(())
+    }
+
+    async fn list_assets(&self) -> Result<Vec<String>, StorageError> {
+        let mut paths: Vec<String> = self.read().assets.keys().cloned().collect();
+        paths.sort();
+        Ok(paths)
+    }
 }
 
 /// Reads the whole library: the export path, the undo/redo snapshot source and
@@ -371,6 +402,56 @@ pub mod contract {
         update_semantics(repo).await;
         styles_and_overlays(repo).await;
         batch_import(repo).await;
+        assets(repo).await;
+    }
+
+    async fn assets(repo: &dyn PlacesRepository) {
+        assert_eq!(repo.get_asset("images/missing.png").await.unwrap(), None);
+        repo.delete_asset("images/missing.png")
+            .await
+            .expect("deleting a missing asset is a no-op");
+
+        repo.put_asset("images/a.png", vec![1, 2, 3]).await.unwrap();
+        repo.put_asset("files/b.jpg", vec![9]).await.unwrap();
+        assert_eq!(
+            repo.get_asset("images/a.png").await.unwrap(),
+            Some(vec![1, 2, 3])
+        );
+
+        repo.put_asset("images/a.png", vec![4, 5]).await.unwrap();
+        assert_eq!(
+            repo.get_asset("images/a.png").await.unwrap(),
+            Some(vec![4, 5])
+        );
+
+        assert_eq!(
+            repo.list_assets().await.unwrap(),
+            vec!["files/b.jpg".to_string(), "images/a.png".to_string()]
+        );
+
+        repo.put_asset("images/empty.bin", Vec::new())
+            .await
+            .unwrap();
+        assert_eq!(
+            repo.get_asset("images/empty.bin").await.unwrap(),
+            Some(Vec::new())
+        );
+
+        let big: Vec<u8> = (0..5 * 1024 * 1024).map(|i| (i % 251) as u8).collect();
+        repo.put_asset("images/big.bin", big.clone()).await.unwrap();
+        assert!(repo.get_asset("images/big.bin").await.unwrap() == Some(big));
+
+        repo.delete_asset("images/a.png").await.unwrap();
+        assert_eq!(repo.get_asset("images/a.png").await.unwrap(), None);
+        assert_eq!(
+            repo.get_asset("files/b.jpg").await.unwrap(),
+            Some(vec![9]),
+            "deleting one asset leaves the others"
+        );
+        for path in repo.list_assets().await.unwrap() {
+            repo.delete_asset(&path).await.unwrap();
+        }
+        assert!(repo.list_assets().await.unwrap().is_empty());
     }
 
     async fn folder_and_placemark_lifecycle(repo: &dyn PlacesRepository) {

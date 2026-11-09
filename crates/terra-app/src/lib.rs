@@ -10,13 +10,16 @@ pub mod theme;
 pub mod tools;
 pub mod views;
 
-use std::path::PathBuf;
+use std::collections::{BTreeMap, HashMap};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
 use eframe::egui;
-use terra_core::{Settings, is_folder_visible};
-use terra_globe::imagery::TileProvider;
+use terra_core::{
+    OverlayLayerSetting, PlacemarkGeometry, RectangleBounds, Settings, is_folder_visible,
+};
+use terra_globe::imagery::{ImageOverlay, ImageRgba, TileOverlay, TileProvider};
 use terra_globe::{Camera, Globe, Scene, SceneEntry, SceneMode};
 use terra_providers::{SecretStore, TileSource};
 use web_time::Instant;
@@ -24,7 +27,11 @@ use web_time::Instant;
 use crate::i18n::I18n;
 use crate::platform::{FileSystem, PersistedState, SettingsStore};
 use crate::state::StateStore;
-use crate::tools::{JobRunner, RouteState, RulerState};
+use crate::tools::{ImageSource, JobRunner, RouteState, RulerState};
+
+/// Whether this build can show 3D terrain. The elevation tiles come from a
+/// server that sends no CORS headers, so a browser cannot fetch them.
+pub const TERRAIN_SUPPORTED: bool = cfg!(not(target_arch = "wasm32"));
 
 /// Everything the UI needs, injected by the shell.
 pub struct AppDeps {
@@ -32,6 +39,8 @@ pub struct AppDeps {
     pub settings: Arc<dyn SettingsStore>,
     pub files: Arc<dyn FileSystem>,
     pub secrets: Arc<dyn SecretStore>,
+    /// Optional persistent tile store; the desktop shell keeps tiles on disk.
+    pub tile_cache: Option<Arc<dyn terra_globe::imagery::TileCache>>,
 }
 
 #[derive(Debug, Clone)]
@@ -71,6 +80,68 @@ pub struct GeocodeState {
     pub error: Option<String>,
 }
 
+/// Text buffers for a ground overlay, so half-typed or invalid input never
+/// reaches the library; validated and committed with Save.
+#[derive(Debug, Clone, PartialEq)]
+pub struct OverlayEditor {
+    pub north: String,
+    pub south: String,
+    pub east: String,
+    pub west: String,
+    pub rotation: String,
+    pub opacity: f64,
+    pub href: String,
+    pub error: Option<String>,
+}
+
+impl OverlayEditor {
+    pub fn from_geometry(geometry: &PlacemarkGeometry) -> Option<Self> {
+        let PlacemarkGeometry::GroundOverlay {
+            bounds,
+            image_url,
+            rotation,
+            opacity,
+        } = geometry
+        else {
+            return None;
+        };
+        Some(Self {
+            north: bounds.north.to_string(),
+            south: bounds.south.to_string(),
+            east: bounds.east.to_string(),
+            west: bounds.west.to_string(),
+            rotation: rotation.unwrap_or(0.0).to_string(),
+            opacity: opacity.unwrap_or(1.0),
+            href: image_url.clone(),
+            error: None,
+        })
+    }
+
+    /// The geometry these buffers describe, or why they are not valid.
+    pub fn to_geometry(&self) -> Result<PlacemarkGeometry, String> {
+        let number = |label: &str, text: &str| {
+            text.trim()
+                .parse::<f64>()
+                .map_err(|_| format!("{label} must be a number"))
+        };
+        let bounds = RectangleBounds::new(
+            number("north", &self.north)?,
+            number("south", &self.south)?,
+            number("east", &self.east)?,
+            number("west", &self.west)?,
+        )
+        .map_err(|error| error.to_string())?;
+        let rotation = number("rotation", &self.rotation)?;
+        PlacemarkGeometry::ground_overlay(
+            bounds,
+            self.href.trim().to_string(),
+            (rotation != 0.0).then_some(rotation),
+            (self.opacity < 1.0).then_some(self.opacity),
+        )
+        .map_err(|error| error.to_string())
+    }
+}
+
 /// Edit buffers for the selected placemark; committed with Save.
 #[derive(Debug, Clone)]
 pub struct EditorState {
@@ -81,6 +152,14 @@ pub struct EditorState {
     pub style: terra_core::Style,
     pub rings_enabled: bool,
     pub ring_spacing_meters: f64,
+    pub overlay: Option<OverlayEditor>,
+}
+
+#[derive(Clone)]
+pub enum ImageState {
+    Loading,
+    Ready(Arc<ImageRgba>),
+    Failed,
 }
 
 pub struct AppData {
@@ -106,6 +185,8 @@ pub struct AppData {
     pub search: String,
     pub selected_folder: Option<String>,
     pub renaming: Option<(String, String)>,
+    /// The name prompt was opened for a folder that was just created, not for a rename.
+    pub renaming_new_folder: bool,
     pub file_path: Option<PathBuf>,
     pub scene_revision: u64,
     pub last_preview: Option<terra_core::PlacemarkGeometry>,
@@ -119,6 +200,14 @@ pub struct AppData {
     pub last_camera_save: Instant,
     pub error_banner: Option<String>,
     pub settings_draft: SettingsDraft,
+    /// Layer row whose opacity slider is open in the Layers panel.
+    pub selected_layer: Option<String>,
+    /// Read-through cache of the repository's asset store (the source of truth),
+    /// keyed by normalized path.
+    pub assets: HashMap<String, Vec<u8>>,
+    /// Ground-overlay pictures by href, so overlays sharing a picture share one load.
+    pub images: HashMap<String, ImageState>,
+    applied_images: Vec<ImageOverlay>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -151,6 +240,9 @@ impl AppData {
         mut globe: Globe,
         persisted: PersistedState,
     ) -> Result<Self, String> {
+        if let Some(cache) = &deps.tile_cache {
+            globe.set_tile_cache(cache.clone());
+        }
         if let Some(camera) = persisted.camera {
             let mut restored = Camera::default();
             restored.target_lon_deg = camera.lon_deg;
@@ -162,9 +254,9 @@ impl AppData {
         }
         globe.set_mode(scene_mode_from_setting(&persisted.settings.scene_mode));
         let store = StateStore::load(deps.repository.clone()).map_err(|error| error.to_string())?;
-        let settings = persisted.settings.clone();
+        let settings = persisted.settings.clone().normalized();
 
-        Ok(Self {
+        let mut data = Self {
             deps,
             store,
             settings,
@@ -187,6 +279,7 @@ impl AppData {
             search: String::new(),
             selected_folder: None,
             renaming: None,
+            renaming_new_folder: false,
             file_path: None,
             scene_revision: 0,
             last_preview: None,
@@ -199,7 +292,15 @@ impl AppData {
             last_camera_save: Instant::now(),
             error_banner: None,
             settings_draft: SettingsDraft::default(),
-        })
+            selected_layer: None,
+            assets: HashMap::new(),
+            images: HashMap::new(),
+            applied_images: Vec::new(),
+        };
+        data.apply_layers();
+        data.apply_terrain();
+        data.collect_unreferenced_assets();
+        Ok(data)
     }
 
     pub fn now_seconds(&self) -> f64 {
@@ -246,6 +347,7 @@ impl AppData {
             visible: placemark.visibility,
             rings_enabled: false,
             ring_spacing_meters: 100.0,
+            overlay: OverlayEditor::from_geometry(&placemark.geometry),
             style,
         });
     }
@@ -417,12 +519,17 @@ impl AppData {
                 return;
             }
         };
+        let mut entries = Vec::new();
         let document = if path.extension().and_then(|value| value.to_str()) == Some("kmz") {
             match terra_kml::read_kmz(&bytes) {
-                Ok(entries) => entries
-                    .iter()
-                    .find(|entry| entry.name.ends_with(".kml"))
-                    .and_then(|entry| String::from_utf8(entry.bytes.clone()).ok()),
+                Ok(read) => {
+                    let document = read
+                        .iter()
+                        .find(|entry| entry.name.ends_with(".kml"))
+                        .and_then(|entry| String::from_utf8(entry.bytes.clone()).ok());
+                    entries = read;
+                    document
+                }
                 Err(error) => {
                     self.notify_error(error.to_string());
                     return;
@@ -438,6 +545,10 @@ impl AppData {
         match terra_kml::parse_kml(&document) {
             Ok(parsed) => {
                 let warnings = parsed.warnings.len();
+                if let Err(error) = self.keep_assets(&parsed, entries) {
+                    self.notify_error(format!("could not store the document's images: {error}"));
+                    return;
+                }
                 match self.store.import(parsed) {
                     Ok(count) => {
                         self.file_path = Some(path);
@@ -459,7 +570,12 @@ impl AppData {
     }
 
     pub fn export_to(&mut self, path: PathBuf, kmz: bool) {
-        let batch = self.store.export_batch();
+        let mut batch = self.store.export_batch();
+        let assets = if kmz {
+            self.embed_overlay_images(&mut batch.placemarks)
+        } else {
+            Vec::new()
+        };
         let kml = match terra_kml::serialize_kml(&terra_kml::SerializeKmlInput {
             folders: &batch.folders,
             placemarks: &batch.placemarks,
@@ -473,7 +589,7 @@ impl AppData {
             }
         };
         let bytes = if kmz {
-            match terra_kml::write_kmz(&kml, &[]) {
+            match terra_kml::write_kmz(&kml, &assets) {
                 Ok(bytes) => bytes,
                 Err(error) => {
                     self.notify_error(error.to_string());
@@ -541,6 +657,15 @@ impl AppData {
     pub fn handle_jobs(&mut self) {
         for result in self.jobs.poll() {
             match result {
+                crate::tools::JobResult::Image { href, result } => match result {
+                    Ok(image) => {
+                        self.images.insert(href, ImageState::Ready(image));
+                    }
+                    Err(error) => {
+                        self.notify_error(format!("could not load image {href}: {error}"));
+                        self.images.insert(href, ImageState::Failed);
+                    }
+                },
                 crate::tools::JobResult::Geocode(result) => {
                     self.geocode.pending = false;
                     match result {
@@ -614,12 +739,478 @@ impl AppData {
     }
 
     pub fn tile_source(&self) -> TileSource {
-        if self.settings.tile_source_id == "opentopomap" {
-            TileSource::open_topo_map()
-        } else {
-            TileSource::open_street_map()
+        tile_source_for(&self.settings.tile_source_id)
+    }
+
+    pub fn set_basemap(&mut self, id: &str) {
+        if self.settings.tile_source_id == id
+            || !terra_providers::builtin_tile_sources()
+                .iter()
+                .any(|source| source.id == id)
+        {
+            return;
+        }
+        self.settings.tile_source_id = id.to_string();
+        self.globe.set_provider(tile_provider(&self.settings));
+        self.persist_settings();
+    }
+
+    /// Enabled flag and opacity of an overlay preset; presets the user never
+    /// touched are off and fully opaque.
+    pub fn layer_state(&self, id: &str) -> (bool, f32) {
+        self.settings
+            .overlay_layers
+            .iter()
+            .find(|layer| layer.id == id)
+            .map_or((false, 1.0), |layer| (layer.enabled, layer.opacity))
+    }
+
+    pub fn set_layer_enabled(&mut self, id: &str, enabled: bool) {
+        let (_, opacity) = self.layer_state(id);
+        self.update_layer(id, enabled, opacity);
+    }
+
+    pub fn set_layer_opacity(&mut self, id: &str, opacity: f32) {
+        let (enabled, _) = self.layer_state(id);
+        self.update_layer(id, enabled, opacity);
+    }
+
+    fn update_layer(&mut self, id: &str, enabled: bool, opacity: f32) {
+        if terra_providers::overlay_preset(id).is_none() {
+            return;
+        }
+        let entry = OverlayLayerSetting {
+            id: id.to_string(),
+            enabled,
+            opacity,
+        };
+        match self
+            .settings
+            .overlay_layers
+            .iter_mut()
+            .find(|layer| layer.id == id)
+        {
+            Some(layer) => *layer = entry,
+            None => self.settings.overlay_layers.push(entry),
+        }
+        self.settings = std::mem::take(&mut self.settings).normalized();
+        self.apply_layers();
+        self.persist_settings();
+    }
+
+    /// Switches the 3D terrain on or off and remembers the choice.
+    pub fn set_terrain_enabled(&mut self, enabled: bool) {
+        if self.settings.terrain_enabled == enabled {
+            return;
+        }
+        self.settings.terrain_enabled = enabled;
+        self.apply_terrain();
+        self.persist_settings();
+    }
+
+    /// Hands the terrain setting to the globe. The browser build never turns it
+    /// on, whatever the setting says: its elevation source is not reachable.
+    pub fn apply_terrain(&mut self) {
+        self.globe
+            .set_terrain_enabled(self.settings.terrain_enabled && TERRAIN_SUPPORTED);
+    }
+
+    /// Pushes the enabled overlay presets to the globe in catalog order.
+    pub fn apply_layers(&mut self) {
+        self.globe.set_tile_overlays(tile_overlays(&self.settings));
+    }
+
+    /// Persists the archive entries that ground overlays of `parsed` point at.
+    /// Other entries (icons, models, stray files) are not stored. Runs before
+    /// the import so a storage failure leaves no half-imported document.
+    fn keep_assets(
+        &mut self,
+        parsed: &terra_kml::ParseKmlResult,
+        entries: Vec<terra_kml::KmzEntry>,
+    ) -> Result<(), String> {
+        let referenced = overlay_hrefs(parsed.placemarks.iter());
+        for entry in entries {
+            let path = terra_kml::normalize_asset_path(&entry.name);
+            if !referenced.contains(&path) {
+                continue;
+            }
+            pollster::block_on(
+                self.store
+                    .repository()
+                    .put_asset(&path, entry.bytes.clone()),
+            )
+            .map_err(|error| error.to_string())?;
+            self.assets.insert(path, entry.bytes);
+        }
+        self.images
+            .retain(|_, state| !matches!(state, ImageState::Failed));
+        Ok(())
+    }
+
+    /// Deletes stored assets no placemark or screen overlay points at. Runs
+    /// once at startup, when no undo history can still need them.
+    fn collect_unreferenced_assets(&mut self) {
+        let library = self.store.library();
+        let mut referenced = overlay_hrefs(library.placemarks.iter());
+        referenced.extend(
+            library
+                .overlays
+                .iter()
+                .map(|overlay| terra_kml::normalize_asset_path(&overlay.image_url)),
+        );
+        let repository = self.store.repository().clone();
+        let result = pollster::block_on(async {
+            for path in repository.list_assets().await? {
+                if !referenced.contains(&path) {
+                    repository.delete_asset(&path).await?;
+                }
+            }
+            Ok::<(), terra_storage::StorageError>(())
+        });
+        if let Err(error) = result {
+            self.notify_error(format!("could not clean up stored images: {error}"));
         }
     }
+
+    /// Where the picture for `href` comes from: the asset store (through the
+    /// cache), then next to the open document, then an absolute path, URL or
+    /// data URL.
+    fn image_source(&mut self, href: &str) -> Result<ImageSource, String> {
+        if let Some(decoded) = terra_kml::decode_data_url(href) {
+            return Ok(ImageSource::Bytes(decoded.bytes));
+        }
+        if href.starts_with("http://") || href.starts_with("https://") {
+            return Ok(ImageSource::Url(href.to_string()));
+        }
+        let key = terra_kml::normalize_asset_path(href);
+        if let Some(bytes) = self.assets.get(&key) {
+            return Ok(ImageSource::Bytes(bytes.clone()));
+        }
+        // ponytail: blocking read on the UI thread (the repo future is not Send);
+        // fine for SQLite, move into the job if a slow backend needs it.
+        let stored = pollster::block_on(self.store.repository().get_asset(&key))
+            .map_err(|error| error.to_string())?;
+        if let Some(bytes) = stored {
+            self.assets.insert(key, bytes.clone());
+            return Ok(ImageSource::Bytes(bytes));
+        }
+        let path = PathBuf::from(href);
+        if path.is_relative() {
+            if let Some(parent) = self.file_path.as_deref().and_then(Path::parent) {
+                return Ok(ImageSource::Path(parent.join(path)));
+            }
+        }
+        Ok(ImageSource::Path(path))
+    }
+
+    /// Starts loading pictures of visible ground overlays and hands the loaded
+    /// ones to the globe whenever the set changes.
+    pub fn sync_images(&mut self) {
+        let library = self.store.library();
+        let wanted: Vec<(String, PlacemarkGeometry)> = library
+            .placemarks
+            .iter()
+            .filter(|placemark| library.is_placemark_visible(placemark))
+            .filter(|placemark| {
+                matches!(placemark.geometry, PlacemarkGeometry::GroundOverlay { .. })
+            })
+            .map(|placemark| (placemark.id.clone(), placemark.geometry.clone()))
+            .collect();
+
+        let mut overlays = Vec::new();
+        for (id, geometry) in wanted {
+            let PlacemarkGeometry::GroundOverlay {
+                bounds,
+                image_url,
+                rotation,
+                opacity,
+            } = geometry
+            else {
+                continue;
+            };
+            match self.images.get(&image_url) {
+                None => self.start_image_load(image_url),
+                Some(ImageState::Ready(image)) => overlays.push(ImageOverlay {
+                    id,
+                    north: bounds.north,
+                    south: bounds.south,
+                    east: bounds.east,
+                    west: bounds.west,
+                    rotation_deg: rotation.unwrap_or(0.0),
+                    opacity: opacity.unwrap_or(1.0) as f32,
+                    image: image.clone(),
+                }),
+                Some(ImageState::Loading | ImageState::Failed) => {}
+            }
+        }
+        if !same_overlays(&self.applied_images, &overlays) {
+            self.globe.set_image_overlays(overlays.clone());
+            self.applied_images = overlays;
+        }
+    }
+
+    fn start_image_load(&mut self, href: String) {
+        let source = match self.image_source(&href) {
+            Ok(source) => source,
+            Err(error) => {
+                self.notify_error(format!("could not load image {href}: {error}"));
+                self.images.insert(href, ImageState::Failed);
+                return;
+            }
+        };
+        self.images.insert(href.clone(), ImageState::Loading);
+        self.jobs.spawn(crate::tools::JobRequest::LoadImage {
+            href,
+            source,
+            files: self.deps.files.clone(),
+        });
+    }
+
+    pub fn images_loading(&self) -> bool {
+        self.images
+            .values()
+            .any(|state| matches!(state, ImageState::Loading))
+    }
+
+    /// Ground overlays currently handed to the globe.
+    pub fn image_overlays(&self) -> &[ImageOverlay] {
+        &self.applied_images
+    }
+
+    /// Asks for a picture and copies it into the asset store; returns its file
+    /// stem and the relative href that references the stored copy.
+    pub fn pick_image(&mut self) -> Option<(String, String)> {
+        let path = self.deps.files.pick_open_image()?;
+        let bytes = match self.deps.files.read(&path) {
+            Ok(bytes) => bytes,
+            Err(error) => {
+                self.notify_error(error);
+                return None;
+            }
+        };
+        let name = path
+            .file_stem()
+            .map(|stem| stem.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let href = asset_href(&path, &bytes);
+        if let Err(error) =
+            pollster::block_on(self.store.repository().put_asset(&href, bytes.clone()))
+        {
+            self.notify_error(format!("could not store the image: {error}"));
+            return None;
+        }
+        self.assets.insert(href.clone(), bytes);
+        Some((name, href))
+    }
+
+    /// Asks for a picture and adds it as a ground overlay covering the middle of the view.
+    pub fn add_image_overlay(&mut self) {
+        let Some((name, href)) = self.pick_image() else {
+            return;
+        };
+        let geometry = self
+            .view_bounds()
+            .and_then(|bounds| {
+                PlacemarkGeometry::ground_overlay(bounds, href, None, None)
+                    .map_err(|error| error.to_string())
+            })
+            .map_err(|error| self.notify_error(error))
+            .ok();
+        let Some(geometry) = geometry else {
+            return;
+        };
+        let folder = self.selected_folder.clone();
+        match self
+            .store
+            .create_named_placemark(geometry, folder, Some(name))
+        {
+            Ok(placemark) => {
+                self.select(Some(placemark.id.clone()));
+                self.autosave();
+                self.notify(format!("created {}", placemark.name));
+            }
+            Err(error) => self.notify_error(error.to_string()),
+        }
+    }
+
+    /// The central half of what the camera shows, falling back to a box around
+    /// the camera target when the view corners miss the globe.
+    pub fn view_bounds(&self) -> Result<RectangleBounds, String> {
+        let (width, height) = self.globe.viewport();
+        let (width, height) = (f64::from(width), f64::from(height));
+        let corners = [(0.25, 0.25), (0.75, 0.25), (0.75, 0.75), (0.25, 0.75)]
+            .map(|(x, y)| self.globe.pick((width * x, height * y)));
+        let picked: Vec<_> = corners.into_iter().flatten().collect();
+        let fold = |value: fn(&terra_globe::GlobePick) -> f64, pick: fn(f64, f64) -> f64| {
+            picked.iter().map(value).reduce(pick)
+        };
+        if picked.len() == 4 {
+            if let (Some(north), Some(south), Some(east), Some(west)) = (
+                fold(|p| p.lat_deg, f64::max),
+                fold(|p| p.lat_deg, f64::min),
+                fold(|p| p.lon_deg, f64::max),
+                fold(|p| p.lon_deg, f64::min),
+            ) {
+                if let Ok(bounds) = RectangleBounds::new(north, south, east, west) {
+                    return Ok(bounds);
+                }
+            }
+        }
+        let center = self.globe.pose();
+        let half = (self.globe.view_distance() / 6_371_000.0).to_degrees() * 0.25;
+        let half = half.clamp(0.001, 40.0);
+        let (lon, lat) = (center.lon_deg, center.lat_deg);
+        RectangleBounds::new(
+            (lat + half).min(90.0),
+            (lat - half).max(-90.0),
+            (lon + half).min(180.0),
+            (lon - half).max(-180.0),
+        )
+        .map_err(|error| error.to_string())
+    }
+
+    /// Replaces local picture references by archive paths for a KMZ export and
+    /// returns the files to embed. Pictures that cannot be read keep their href.
+    fn embed_overlay_images(
+        &mut self,
+        placemarks: &mut [terra_core::Placemark],
+    ) -> Vec<terra_kml::KmzEntry> {
+        let mut entries: Vec<terra_kml::KmzEntry> = Vec::new();
+        let mut embedded: BTreeMap<String, String> = BTreeMap::new();
+        let mut failures = Vec::new();
+        for placemark in placemarks {
+            let PlacemarkGeometry::GroundOverlay { image_url, .. } = &mut placemark.geometry else {
+                continue;
+            };
+            if let Some(name) = embedded.get(image_url.as_str()) {
+                *image_url = name.clone();
+                continue;
+            }
+            let source = match self.image_source(image_url) {
+                Ok(source) => source,
+                Err(error) => {
+                    failures.push(error);
+                    continue;
+                }
+            };
+            let (bytes, preferred) = match source {
+                ImageSource::Url(_) => continue,
+                ImageSource::Bytes(bytes) => {
+                    let extension = terra_kml::decode_data_url(image_url)
+                        .map_or("png", |decoded| {
+                            terra_kml::extension_for_mime_type(&decoded.mime_type)
+                        });
+                    let name = if terra_kml::decode_data_url(image_url).is_some() {
+                        format!("images/{}.{extension}", placemark.id)
+                    } else {
+                        terra_kml::normalize_asset_path(image_url)
+                    };
+                    (bytes, name)
+                }
+                ImageSource::Path(path) => match self.deps.files.read(&path) {
+                    Ok(bytes) => {
+                        let file = path
+                            .file_name()
+                            .map_or_else(|| "image".into(), |name| name.to_string_lossy());
+                        (bytes, format!("images/{file}"))
+                    }
+                    Err(error) => {
+                        failures.push(error);
+                        continue;
+                    }
+                },
+            };
+            let mut name = preferred.clone();
+            let mut counter = 1;
+            while entries.iter().any(|entry| entry.name == name) {
+                counter += 1;
+                name = format!(
+                    "images/{counter}-{}",
+                    preferred.trim_start_matches("images/")
+                );
+            }
+            entries.push(terra_kml::KmzEntry {
+                name: name.clone(),
+                bytes,
+            });
+            embedded.insert(image_url.clone(), name.clone());
+            *image_url = name;
+        }
+        for failure in failures {
+            self.notify_error(format!("could not embed image: {failure}"));
+        }
+        entries
+    }
+}
+
+fn same_overlays(a: &[ImageOverlay], b: &[ImageOverlay]) -> bool {
+    a.len() == b.len()
+        && a.iter().zip(b).all(|(x, y)| {
+            x.id == y.id
+                && x.north == y.north
+                && x.south == y.south
+                && x.east == y.east
+                && x.west == y.west
+                && x.rotation_deg == y.rotation_deg
+                && x.opacity == y.opacity
+                && Arc::ptr_eq(&x.image, &y.image)
+        })
+}
+
+/// Asset-store path for a picked picture: `images/<stem>-<content hash>.<ext>`.
+/// The hash keeps different pictures with the same file name apart and makes
+/// picking the same picture twice share one stored copy.
+fn asset_href(path: &Path, bytes: &[u8]) -> String {
+    use std::hash::{DefaultHasher, Hash, Hasher};
+    let stem: String = path
+        .file_stem()
+        .map(|stem| stem.to_string_lossy().into_owned())
+        .unwrap_or_default()
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == '_' {
+                c
+            } else {
+                '-'
+            }
+        })
+        .take(40)
+        .collect();
+    let stem = if stem.trim_matches('-').is_empty() {
+        "image".to_string()
+    } else {
+        stem
+    };
+    let extension: String = path
+        .extension()
+        .map(|extension| extension.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default()
+        .chars()
+        .filter(char::is_ascii_alphanumeric)
+        .take(8)
+        .collect();
+    let extension = if extension.is_empty() {
+        "bin"
+    } else {
+        &extension
+    };
+    let mut hasher = DefaultHasher::new();
+    bytes.hash(&mut hasher);
+    format!("images/{stem}-{:08x}.{extension}", hasher.finish() as u32)
+}
+
+/// Normalized hrefs of the ground overlays among `placemarks`.
+fn overlay_hrefs<'a>(
+    placemarks: impl Iterator<Item = &'a terra_core::Placemark>,
+) -> std::collections::HashSet<String> {
+    placemarks
+        .filter_map(|placemark| match &placemark.geometry {
+            PlacemarkGeometry::GroundOverlay { image_url, .. } => {
+                Some(terra_kml::normalize_asset_path(image_url))
+            }
+            _ => None,
+        })
+        .collect()
 }
 
 pub fn scene_mode_from_setting(value: &str) -> SceneMode {
@@ -638,13 +1229,33 @@ pub fn scene_mode_setting(mode: SceneMode) -> &'static str {
     }
 }
 
+/// The built-in base map with this id, OpenStreetMap when the id is unknown.
+pub fn tile_source_for(id: &str) -> TileSource {
+    terra_providers::builtin_tile_sources()
+        .into_iter()
+        .find(|source| source.id == id)
+        .unwrap_or_else(TileSource::open_street_map)
+}
+
 pub fn tile_provider(settings: &Settings) -> TileProvider {
-    let source = if settings.tile_source_id == "opentopomap" {
-        TileSource::open_topo_map()
-    } else {
-        TileSource::open_street_map()
-    };
-    TileProvider::new(source)
+    TileProvider::new(tile_source_for(&settings.tile_source_id))
+}
+
+/// Enabled overlay presets in catalog order; ids that are not presets are ignored.
+pub fn tile_overlays(settings: &Settings) -> Vec<TileOverlay> {
+    terra_providers::overlay_presets()
+        .into_iter()
+        .filter_map(|source| {
+            let layer = settings
+                .overlay_layers
+                .iter()
+                .find(|layer| layer.id == source.id && layer.enabled)?;
+            Some(TileOverlay {
+                source,
+                opacity: layer.opacity,
+            })
+        })
+        .collect()
 }
 
 pub struct TerraApp {
@@ -670,6 +1281,7 @@ impl TerraApp {
                 settings: Arc::new(crate::platform::InMemorySettingsStore::default()),
                 files: Arc::new(crate::platform::MemoryFileSystem::default()),
                 secrets: Arc::new(terra_providers::InMemorySecretStore::new()),
+                tile_cache: None,
             },
         )
     }
@@ -685,7 +1297,9 @@ impl eframe::App for TerraApp {
 
 /// Runs the native application.
 #[cfg(not(target_arch = "wasm32"))]
-pub fn run_native(deps: AppDeps) -> eframe::Result<()> {
+/// Starts the desktop app; `startup_file` is a KML/KMZ to open once the library is loaded,
+/// e.g. from a double-clicked file.
+pub fn run_native(deps: AppDeps, startup_file: Option<PathBuf>) -> eframe::Result<()> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1360.0, 860.0])
@@ -700,7 +1314,12 @@ pub fn run_native(deps: AppDeps) -> eframe::Result<()> {
         options,
         Box::new(move |cc| {
             TerraApp::new(cc, deps)
-                .map(|app| Box::new(app) as Box<dyn eframe::App>)
+                .map(|mut app| {
+                    if let Some(path) = startup_file {
+                        app.data.open_path(path);
+                    }
+                    Box::new(app) as Box<dyn eframe::App>
+                })
                 .map_err(|error| {
                     Box::new(std::io::Error::other(error))
                         as Box<dyn std::error::Error + Send + Sync>
@@ -732,5 +1351,78 @@ mod tests {
         assert_eq!(tile_provider(&settings).source.id, "osm");
         settings.tile_source_id = "opentopomap".to_string();
         assert_eq!(tile_provider(&settings).source.id, "opentopomap");
+    }
+
+    fn editor() -> OverlayEditor {
+        OverlayEditor {
+            north: "10".into(),
+            south: "0".into(),
+            east: "20".into(),
+            west: "5".into(),
+            rotation: "0".into(),
+            opacity: 1.0,
+            href: "a.png".into(),
+            error: None,
+        }
+    }
+
+    #[test]
+    fn overlay_editor_builds_a_valid_geometry() {
+        let mut fields = editor();
+        fields.rotation = " 30 ".into();
+        fields.opacity = 0.5;
+        let geometry = fields.to_geometry().expect("valid");
+        assert_eq!(OverlayEditor::from_geometry(&geometry), {
+            let mut expected = fields.clone();
+            expected.rotation = "30".into();
+            Some(expected)
+        });
+    }
+
+    #[test]
+    fn overlay_editor_rejects_invalid_input() {
+        type Case = (&'static str, fn(&mut OverlayEditor));
+        let cases: [Case; 7] = [
+            ("north below south", |e| e.north = "-5".into()),
+            ("latitude beyond the pole", |e| e.north = "91".into()),
+            ("longitude beyond the date line", |e| e.east = "181".into()),
+            ("west east of east", |e| e.west = "30".into()),
+            ("not a number", |e| e.south = "abc".into()),
+            ("bad rotation", |e| e.rotation = "spin".into()),
+            ("blank image", |e| e.href = "  ".into()),
+        ];
+        for (name, mutate) in cases {
+            let mut fields = editor();
+            mutate(&mut fields);
+            assert!(fields.to_geometry().is_err(), "{name}");
+        }
+    }
+
+    #[test]
+    fn unknown_basemaps_fall_back_to_openstreetmap() {
+        assert_eq!(tile_source_for("nope").id, "osm");
+        assert_eq!(tile_source_for("opentopomap").id, "opentopomap");
+    }
+
+    #[test]
+    fn tile_overlays_skip_disabled_and_unknown_layers() {
+        let layer = |id: &str, enabled| OverlayLayerSetting {
+            id: id.into(),
+            enabled,
+            opacity: 0.5,
+        };
+        let settings = Settings {
+            overlay_layers: vec![
+                layer("openseamap", true),
+                layer("openrailwaymap", false),
+                layer("ghost", true),
+            ],
+            ..Settings::default()
+        };
+        let ids: Vec<String> = tile_overlays(&settings)
+            .into_iter()
+            .map(|overlay| overlay.source.id)
+            .collect();
+        assert_eq!(ids, vec!["openseamap"]);
     }
 }

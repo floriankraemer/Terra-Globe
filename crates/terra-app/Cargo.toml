@@ -27,6 +27,7 @@ pollster = { workspace = true }
 [dev-dependencies]
 wgpu = { workspace = true }
 egui_kittest = "0.37"
+async-trait = { workspace = true }
 
 [lints]
 workspace = true
