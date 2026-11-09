@@ -56,7 +56,44 @@ impl TileProvider {
 #[derive(Debug)]
 pub struct FetchedTile {
     pub id: TileId,
-    pub result: Result<RgbaImage, String>,
+    pub result: Result<TilePixels, String>,
+}
+
+/// What a fetched tile carries.
+#[derive(Debug)]
+pub enum TilePixels {
+    /// The image as decoded: what a raw (elevation) fetcher delivers, and what
+    /// a caller that builds a tile by hand passes in.
+    Decoded(RgbaImage),
+    /// The mip chain to upload, largest level first, built where the tile was
+    /// decoded so the render thread only has to copy it to the GPU. Overlay
+    /// fetchers premultiply it as well.
+    Texture(Vec<RgbaImage>),
+}
+
+impl TilePixels {
+    /// The full-size image.
+    pub fn image(&self) -> Option<&RgbaImage> {
+        match self {
+            Self::Decoded(image) => Some(image),
+            Self::Texture(mips) => mips.first(),
+        }
+    }
+
+    /// The mip chain to upload. A tile that did not come prepared from a
+    /// fetcher is run through `prepare` and mipmapped here.
+    pub fn into_mips(self, prepare: impl FnOnce(RgbaImage) -> RgbaImage) -> Vec<RgbaImage> {
+        match self {
+            Self::Decoded(image) => mip_chain(prepare(image)),
+            Self::Texture(mips) => mips,
+        }
+    }
+}
+
+impl From<RgbaImage> for TilePixels {
+    fn from(image: RgbaImage) -> Self {
+        Self::Decoded(image)
+    }
 }
 
 /// Maximum concurrent tile requests. Browsers cap connections per host anyway;
@@ -107,10 +144,20 @@ pub type TileValidator = fn(&RgbaImage) -> Result<(), String>;
 /// How downloaded bytes become a tile.
 #[derive(Clone, Copy)]
 struct Decode {
-    /// Imagery is rescaled to 256x256; raw data (elevation) must arrive
-    /// exactly as served, because resampling would blend heights.
-    normalize: bool,
+    output: Output,
     validate: Option<TileValidator>,
+}
+
+/// What the fetch thread makes of a decoded tile.
+#[derive(Clone, Copy)]
+enum Output {
+    /// Rescaled to 256x256 and mipmapped.
+    Basemap,
+    /// As the basemap, with colour premultiplied by alpha first.
+    Overlay,
+    /// Exactly as served: resampling or mipmapping elevation would blend
+    /// heights.
+    Raw,
 }
 
 impl Default for TileFetcher {
@@ -132,18 +179,31 @@ impl TileFetcher {
             max_in_flight: MAX_IN_FLIGHT,
             cache: None,
             decode: Decode {
-                normalize: true,
+                output: Output::Basemap,
                 validate: None,
             },
         }
     }
 
-    /// A fetcher that hands tiles over at their served size instead of
-    /// normalising them to 256x256, for data that is not imagery.
+    /// A fetcher for a transparent tile layer: as [`Self::new`], but the tiles
+    /// arrive premultiplied, which is what blending them over the basemap
+    /// needs.
+    pub fn new_overlay() -> Self {
+        Self {
+            decode: Decode {
+                output: Output::Overlay,
+                validate: None,
+            },
+            ..Self::new()
+        }
+    }
+
+    /// A fetcher that hands tiles over as decoded, at their served size and
+    /// without a mip chain, for data that is not imagery.
     pub fn new_raw(validate: TileValidator) -> Self {
         Self {
             decode: Decode {
-                normalize: false,
+                output: Output::Raw,
                 validate: Some(validate),
             },
             ..Self::new()
@@ -230,8 +290,8 @@ impl TileFetcher {
 
         if let Some(cache) = &self.cache {
             if let Some(bytes) = cache.get(&provider.source, id) {
-                // Decoding off the render thread keeps a screenful of cache hits
-                // from stalling the frame.
+                // Decoding and mipmapping off the render thread keeps a
+                // screenful of cache hits from stalling the frame.
                 let sender = self.sender.clone();
                 let decode = self.decode;
                 #[cfg(not(target_arch = "wasm32"))]
@@ -314,31 +374,37 @@ impl TileFetcher {
     }
 }
 
-fn decode_response(response: ehttp::Response, decode: Decode) -> Result<RgbaImage, String> {
+fn decode_response(response: ehttp::Response, decode: Decode) -> Result<TilePixels, String> {
     if !response.ok {
         return Err(format!("HTTP {} {}", response.status, response.status_text));
     }
     decode_bytes(&response.bytes, decode)
 }
 
-fn decode_bytes(bytes: &[u8], decode: Decode) -> Result<RgbaImage, String> {
+fn decode_bytes(bytes: &[u8], decode: Decode) -> Result<TilePixels, String> {
     let rgba = decode_rgba(bytes)?;
     if let Some(validate) = decode.validate {
         validate(&rgba)?;
     }
-    if !decode.normalize
-        || (rgba.width() == TILE_TEXTURE_SIZE && rgba.height() == TILE_TEXTURE_SIZE)
-    {
-        return Ok(rgba);
+    Ok(match decode.output {
+        Output::Raw => TilePixels::Decoded(rgba),
+        Output::Basemap => TilePixels::Texture(mip_chain(normalize_tile(rgba))),
+        Output::Overlay => TilePixels::Texture(mip_chain(premultiply_srgb(&normalize_tile(rgba)))),
+    })
+}
+
+/// Providers occasionally serve other sizes; normalize so the atlas and the
+/// shader's UV math never depend on the response dimensions.
+fn normalize_tile(rgba: RgbaImage) -> RgbaImage {
+    if rgba.width() == TILE_TEXTURE_SIZE && rgba.height() == TILE_TEXTURE_SIZE {
+        return rgba;
     }
-    // Providers occasionally serve other sizes; normalize so the atlas and the
-    // shader's UV math never depend on the response dimensions.
-    Ok(image::imageops::resize(
+    image::imageops::resize(
         &rgba,
         TILE_TEXTURE_SIZE,
         TILE_TEXTURE_SIZE,
         image::imageops::FilterType::Triangle,
-    ))
+    )
 }
 
 fn decode_rgba(bytes: &[u8]) -> Result<RgbaImage, String> {
@@ -442,8 +508,8 @@ pub fn premultiply_srgb(image: &RgbaImage) -> RgbaImage {
 /// The average is taken in linear light and re-encoded to sRGB. Averaging the
 /// stored sRGB values directly would darken every mip level, which is very
 /// visible on a checkerboard of dark and light imagery.
-pub fn mip_chain(image: &RgbaImage) -> Vec<RgbaImage> {
-    let mut levels = vec![image.clone()];
+pub fn mip_chain(image: RgbaImage) -> Vec<RgbaImage> {
+    let mut levels = vec![image];
     while let Some(last) = levels.last() {
         if last.width() <= 1 && last.height() <= 1 {
             break;
@@ -454,41 +520,58 @@ pub fn mip_chain(image: &RgbaImage) -> Vec<RgbaImage> {
 }
 
 fn downsample_half(image: &RgbaImage) -> RgbaImage {
-    let (source_width, source_height) = (image.width() as usize, image.height() as usize);
+    let source_width = image.width() as usize;
     let width = (source_width / 2).max(1);
-    let height = (source_height / 2).max(1);
-    let source = image.as_raw();
+    let height = (image.height() as usize / 2).max(1);
+    let texels: &[[u8; 4]] = bytemuck::cast_slice(image.as_raw());
     let tables = srgb_tables();
     let mut out = Vec::with_capacity(width * height * 4);
-    for y in 0..height {
-        for x in 0..width {
-            let mut lin = [0.0f32; 4];
-            for dy in 0..2 {
-                for dx in 0..2 {
-                    let column = (x * 2 + dx).min(source_width - 1);
-                    let row = (y * 2 + dy).min(source_height - 1);
-                    let Some(px) = source
-                        .get((row * source_width + column) * 4..)
-                        .and_then(|rest| rest.get(..4))
-                    else {
-                        continue;
-                    };
-                    lin[0] += tables.linear[usize::from(px[0])];
-                    lin[1] += tables.linear[usize::from(px[1])];
-                    lin[2] += tables.linear[usize::from(px[2])];
-                    lin[3] += f32::from(px[3]) / 255.0;
-                }
+    let mut rows = texels.chunks_exact(source_width.max(1));
+    for _ in 0..height {
+        let Some(top) = rows.next() else {
+            break;
+        };
+        // A source one texel high or wide has no second row or column; its
+        // only one is sampled twice.
+        let bottom = rows.next().unwrap_or(top);
+        if let ([left], [right]) = (top, bottom) {
+            out.extend_from_slice(&average_texels(tables, [left, left, right, right]));
+            continue;
+        }
+        for pair in top.chunks_exact(2).zip(bottom.chunks_exact(2)) {
+            if let ([a, b], [c, d]) = pair {
+                out.extend_from_slice(&average_texels(tables, [a, b, c, d]));
             }
-            out.extend_from_slice(&[
-                linear_to_srgb(lin[0] / 4.0),
-                linear_to_srgb(lin[1] / 4.0),
-                linear_to_srgb(lin[2] / 4.0),
-                ((lin[3] / 4.0).clamp(0.0, 1.0) * 255.0).round() as u8,
-            ]);
         }
     }
     RgbaImage::from_raw(width as u32, height as u32, out)
         .unwrap_or_else(|| RgbaImage::new(width as u32, height as u32))
+}
+
+fn average_texels(tables: &SrgbTables, texels: [&[u8; 4]; 4]) -> [u8; 4] {
+    let mut lin = [0.0f32; 3];
+    for texel in texels {
+        lin[0] += tables.linear[usize::from(texel[0])];
+        lin[1] += tables.linear[usize::from(texel[1])];
+        lin[2] += tables.linear[usize::from(texel[2])];
+    }
+    // Basemap imagery is opaque throughout, and rounding the alpha average was
+    // a third of the time spent on such a tile.
+    let alpha = if texels.iter().all(|texel| texel[3] == u8::MAX) {
+        u8::MAX
+    } else {
+        let sum: f32 = texels
+            .iter()
+            .map(|texel| tables.unit[usize::from(texel[3])])
+            .sum();
+        ((sum / 4.0).clamp(0.0, 1.0) * 255.0).round() as u8
+    };
+    [
+        encode_srgb(tables, lin[0] / 4.0),
+        encode_srgb(tables, lin[1] / 4.0),
+        encode_srgb(tables, lin[2] / 4.0),
+        alpha,
+    ]
 }
 
 /// The sRGB transfer function, for a value in 0..=1.
@@ -501,19 +584,38 @@ fn srgb_decode(value: f32) -> f32 {
 }
 
 /// Linear value of each sRGB byte, and the linear value at which the encoded
-/// byte rounds up to the next one. Every tile's mip chain converts a few
-/// hundred thousand samples on the render thread, and `powf` per sample was
-/// several milliseconds per tile.
+/// byte rounds up to the next one. A tile's mip chain converts a few hundred
+/// thousand samples, and `powf` per sample was several milliseconds per tile.
 struct SrgbTables {
     linear: [f32; 256],
+    /// Each byte as a fraction of 255, for alpha.
+    unit: [f32; 256],
     round_up_at: [f32; 255],
+    /// The encoded byte at the low end of each of [`ENCODE_BUCKETS`] equal
+    /// slices of 0..1, so encoding starts at most one step below its answer
+    /// instead of searching all of `round_up_at`.
+    encode_from: [u8; ENCODE_BUCKETS],
 }
+
+/// A power of two, so that scaling a linear value to its bucket is exact and
+/// the bucket's first byte can never be above the value's own.
+const ENCODE_BUCKETS: usize = 4096;
 
 fn srgb_tables() -> &'static SrgbTables {
     static TABLES: OnceLock<SrgbTables> = OnceLock::new();
-    TABLES.get_or_init(|| SrgbTables {
-        linear: std::array::from_fn(|byte| srgb_decode(byte as f32 / 255.0)),
-        round_up_at: std::array::from_fn(|byte| srgb_decode((byte as f32 + 0.5) / 255.0)),
+    TABLES.get_or_init(|| {
+        let round_up_at: [f32; 255] =
+            std::array::from_fn(|byte| srgb_decode((byte as f32 + 0.5) / 255.0));
+        SrgbTables {
+            linear: std::array::from_fn(|byte| srgb_decode(byte as f32 / 255.0)),
+            unit: std::array::from_fn(|byte| byte as f32 / 255.0),
+            round_up_at,
+            encode_from: std::array::from_fn(|bucket| {
+                let low = bucket as f32 / ENCODE_BUCKETS as f32;
+                let steps = round_up_at.partition_point(|threshold| *threshold <= low);
+                u8::try_from(steps).unwrap_or(u8::MAX)
+            }),
+        }
     })
 }
 
@@ -522,10 +624,21 @@ fn srgb_to_linear(value: u8) -> f32 {
 }
 
 fn linear_to_srgb(value: f32) -> u8 {
-    let steps = srgb_tables()
+    encode_srgb(srgb_tables(), value)
+}
+
+fn encode_srgb(tables: &SrgbTables, value: f32) -> u8 {
+    // The cast saturates: negatives and NaN start at 0, anything above 1 in the
+    // last bucket. Encoded bytes are further apart in linear light than a
+    // bucket is wide, so the answer is the bucket's first byte or the one after
+    // it, and one comparison without a branch settles which.
+    let bucket = ((value * ENCODE_BUCKETS as f32) as usize).min(ENCODE_BUCKETS - 1);
+    let byte = tables.encode_from[bucket];
+    let round_up = tables
         .round_up_at
-        .partition_point(|threshold| *threshold <= value);
-    u8::try_from(steps).unwrap_or(u8::MAX)
+        .get(usize::from(byte))
+        .is_some_and(|threshold| *threshold <= value);
+    byte + u8::from(round_up)
 }
 
 /// The 1x1 texture used for tiles whose imagery has not loaded yet, and for the
@@ -609,7 +722,7 @@ mod tests {
     #[test]
     fn mip_chain_halves_down_to_one_pixel() {
         let image = RgbaImage::from_pixel(256, 256, image::Rgba([1, 2, 3, 255]));
-        let mips = mip_chain(&image);
+        let mips = mip_chain(image);
         assert_eq!(mips.len(), 9, "256 -> 128 -> ... -> 1");
         assert_eq!(mips[0].dimensions(), (256, 256));
         assert_eq!(mips[1].dimensions(), (128, 128));
@@ -620,6 +733,22 @@ mod tests {
     fn the_srgb_tables_agree_with_the_transfer_function() {
         for byte in 0..=255u8 {
             assert_eq!(linear_to_srgb(srgb_to_linear(byte)), byte);
+        }
+        // The shortcut into the threshold table must land on the same byte as
+        // searching all of it, or mip pixels would shift.
+        let searched = |linear: f32| {
+            srgb_tables()
+                .round_up_at
+                .partition_point(|threshold| *threshold <= linear)
+        };
+        for step in 0..=2_000_000u32 {
+            let linear = step as f32 / 1_000_000.0 - 0.5;
+            assert_eq!(usize::from(linear_to_srgb(linear)), searched(linear));
+        }
+        for threshold in srgb_tables().round_up_at {
+            for linear in [threshold.next_down(), threshold, threshold.next_up()] {
+                assert_eq!(usize::from(linear_to_srgb(linear)), searched(linear));
+            }
         }
         assert_eq!(linear_to_srgb(-1.0), 0);
         assert_eq!(linear_to_srgb(f32::NAN), 0);
@@ -646,7 +775,7 @@ mod tests {
         let mut image = RgbaImage::from_pixel(2, 2, image::Rgba([0, 0, 0, 255]));
         image.put_pixel(0, 0, image::Rgba([255, 255, 255, 255]));
         image.put_pixel(1, 0, image::Rgba([255, 255, 255, 255]));
-        let mips = mip_chain(&image);
+        let mips = mip_chain(image);
         let mid = mips[1].get_pixel(0, 0);
         // Half the texels are white: a numerical average would store 128, but in
         // linear light it is 0.5, which encodes to ~188 in sRGB.
@@ -658,9 +787,14 @@ mod tests {
     }
 
     const IMAGERY: Decode = Decode {
-        normalize: true,
+        output: Output::Basemap,
         validate: None,
     };
+
+    fn decoded_size(bytes: &[u8], decode: Decode) -> (u32, u32) {
+        let pixels = decode_bytes(bytes, decode).expect("valid png");
+        pixels.image().expect("level 0").dimensions()
+    }
 
     fn png(width: u32, height: u32) -> Vec<u8> {
         let pixels = [10u8, 20, 30, 255].repeat((width * height) as usize);
@@ -685,20 +819,21 @@ mod tests {
 
     #[test]
     fn tiles_stay_strict_while_images_are_not_resized() {
-        let decoded = decode_bytes(&png(300, 200), IMAGERY).expect("valid png");
-        assert_eq!(decoded.dimensions(), (TILE_TEXTURE_SIZE, TILE_TEXTURE_SIZE));
+        assert_eq!(
+            decoded_size(&png(300, 200), IMAGERY),
+            (TILE_TEXTURE_SIZE, TILE_TEXTURE_SIZE)
+        );
     }
 
     #[test]
     fn raw_fetching_keeps_the_served_size() {
         let raw = Decode {
-            normalize: false,
+            output: Output::Raw,
             validate: None,
         };
-        let image = decode_bytes(&png(300, 200), raw).expect("valid png");
-        assert_eq!(image.dimensions(), (300, 200));
+        assert_eq!(decoded_size(&png(300, 200), raw), (300, 200));
         let strict = Decode {
-            normalize: false,
+            output: Output::Raw,
             validate: Some(|image| {
                 if image.width() == 256 {
                     Ok(())
@@ -750,29 +885,102 @@ mod tests {
         fn put(&self, _source: &TileSource, _id: TileId, _bytes: &[u8]) {}
     }
 
-    #[test]
-    fn cached_tiles_are_served_without_a_network_request() {
-        let id = TileId::new(2, 1, 1).expect("tile");
-        let png = terra_testkit::rgba_to_png(&[255, 0, 0, 255], 1, 1);
-        let mut cache = HashMap::new();
-        cache.insert(id, png);
-        let mut fetcher = TileFetcher::new().with_cache(Arc::new(FakeCache(cache)));
-
+    fn offline_provider() -> TileProvider {
         let mut source = TileSource::open_street_map();
         source.url = "http://127.0.0.1:1/{z}/{x}/{y}.png".to_string();
-        let provider = TileProvider::new(source);
+        TileProvider::new(source)
+    }
 
+    /// Runs one tile through `fetcher`, served from a cache holding `png`.
+    fn fetch_cached(fetcher: TileFetcher, png: Vec<u8>) -> TilePixels {
+        let id = TileId::new(2, 1, 1).expect("tile");
+        let mut fetcher = fetcher.with_cache(Arc::new(FakeCache(HashMap::from([(id, png)]))));
+        let provider = offline_provider();
         fetcher.request(&provider, id);
         let deadline = Instant::now() + Duration::from_secs(5);
         loop {
             if let Some(tile) = fetcher.poll(&provider).into_iter().next() {
-                let image = tile.result.expect("cached bytes decode");
-                assert_eq!(image.dimensions(), (TILE_TEXTURE_SIZE, TILE_TEXTURE_SIZE));
-                assert_eq!(image.get_pixel(0, 0)[0], 255);
-                return;
+                assert_eq!(tile.id, id);
+                return tile.result.expect("cached bytes decode");
             }
             assert!(Instant::now() < deadline, "cached tile never arrived");
             std::thread::sleep(Duration::from_millis(10));
         }
+    }
+
+    #[test]
+    fn cached_tiles_are_served_without_a_network_request() {
+        let png = terra_testkit::rgba_to_png(&[255, 0, 0, 255], 1, 1);
+        let pixels = fetch_cached(TileFetcher::new(), png);
+        let image = pixels.image().expect("level 0");
+        assert_eq!(image.dimensions(), (TILE_TEXTURE_SIZE, TILE_TEXTURE_SIZE));
+        assert_eq!(image.get_pixel(0, 0)[0], 255);
+    }
+
+    #[test]
+    fn imagery_tiles_arrive_with_their_mip_chain_built() {
+        let TilePixels::Texture(mips) = fetch_cached(TileFetcher::new(), png(256, 256)) else {
+            panic!("an imagery fetcher delivers an uploadable mip chain");
+        };
+        let sides: Vec<u32> = mips.iter().map(RgbaImage::width).collect();
+        assert_eq!(sides, [256, 128, 64, 32, 16, 8, 4, 2, 1]);
+        for mip in &mips {
+            assert_eq!(mip.height(), mip.width());
+            assert_eq!(mip.get_pixel(0, 0).0, [10, 20, 30, 255]);
+        }
+    }
+
+    #[test]
+    fn overlay_tiles_arrive_premultiplied_with_their_mip_chain_built() {
+        let translucent = terra_testkit::rgba_to_png(&[255, 255, 255, 128].repeat(4), 2, 2);
+        let TilePixels::Texture(mips) = fetch_cached(TileFetcher::new_overlay(), translucent)
+        else {
+            panic!("an overlay fetcher delivers an uploadable mip chain");
+        };
+        assert_eq!(mips.len(), 9);
+        for mip in &mips {
+            let pixel = mip.get_pixel(0, 0);
+            assert_eq!(pixel[3], 128);
+            assert!((180..=195).contains(&pixel[0]), "got {}", pixel[0]);
+        }
+    }
+
+    #[test]
+    fn raw_tiles_arrive_as_decoded_without_mips() {
+        let fetcher = TileFetcher::new_raw(|_| Ok(()));
+        let TilePixels::Decoded(image) = fetch_cached(fetcher, png(256, 256)) else {
+            panic!("elevation data must not be mipmapped");
+        };
+        assert_eq!(image.dimensions(), (256, 256));
+    }
+
+    #[test]
+    fn hand_built_pixels_get_their_mips_on_demand() {
+        let pixels = TilePixels::from(RgbaImage::new(4, 4));
+        assert_eq!(pixels.image().map(RgbaImage::dimensions), Some((4, 4)));
+        assert_eq!(pixels.into_mips(|image| image).len(), 3);
+        let ready = TilePixels::Texture(vec![RgbaImage::new(1, 1)]);
+        let untouched = ready.into_mips(|_| panic!("already prepared by the fetcher"));
+        assert_eq!(untouched.len(), 1);
+    }
+
+    #[test]
+    fn mip_chain_clamps_at_the_edge_of_odd_and_one_texel_wide_images() {
+        let mut image = RgbaImage::from_pixel(3, 1, image::Rgba([0, 0, 0, 255]));
+        image.put_pixel(2, 0, image::Rgba([255, 255, 255, 255]));
+        let mips = mip_chain(image);
+        assert_eq!(mips.len(), 2);
+        // The third column has no partner and is dropped; the single row is
+        // sampled twice.
+        assert_eq!(mips[1].dimensions(), (1, 1));
+        assert_eq!(mips[1].get_pixel(0, 0).0, [0, 0, 0, 255]);
+
+        let mut column = RgbaImage::from_pixel(1, 2, image::Rgba([0, 0, 0, 0]));
+        column.put_pixel(0, 1, image::Rgba([255, 255, 255, 255]));
+        let mips = mip_chain(column);
+        assert_eq!(mips[1].dimensions(), (1, 1));
+        let pixel = mips[1].get_pixel(0, 0);
+        assert_eq!(pixel[3], 128);
+        assert!((180..=195).contains(&pixel[0]), "got {}", pixel[0]);
     }
 }

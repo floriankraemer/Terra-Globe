@@ -93,7 +93,7 @@ fn globe(terrain: bool) -> Option<Globe> {
             .into_iter()
             .map(|id| FetchedTile {
                 id,
-                result: Ok(checkerboard(u32::from(id.z) + id.x + id.y)),
+                result: Ok(checkerboard(u32::from(id.z) + id.x + id.y).into()),
             })
             .collect(),
     );

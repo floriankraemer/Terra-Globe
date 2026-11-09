@@ -26,8 +26,8 @@ pub use geo::{
 };
 pub use globe::{Globe, GlobePick};
 pub use imagery::{
-    FetchedTile, ImageOverlay, ImageRgba, TileCache, TileFetcher, TileOverlay, TileProvider,
-    decode_image,
+    FetchedTile, ImageOverlay, ImageRgba, TileCache, TileFetcher, TileOverlay, TilePixels,
+    TileProvider, decode_image,
 };
 pub use picking::{PickHit, pick};
 pub use renderer::{GlobeError, GlobeRenderer, RenderStats, SURFACE_FORMAT};

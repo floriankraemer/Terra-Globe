@@ -66,7 +66,7 @@ fn snapshot_globe() -> Option<Globe> {
         .into_iter()
         .map(|id| FetchedTile {
             id,
-            result: Ok(checkerboard(u32::from(id.z) + id.x + id.y)),
+            result: Ok(checkerboard(u32::from(id.z) + id.x + id.y).into()),
         })
         .collect();
     globe.renderer.ingest(fetched);
@@ -461,7 +461,7 @@ fn tiles_that_arrive_late_in_a_session_are_drawn() {
         .chain(TileId::new(3, 4, 2))
         .map(|id| FetchedTile {
             id,
-            result: Ok(checkerboard(id.x)),
+            result: Ok(checkerboard(id.x).into()),
         })
         .collect();
     globe.renderer.ingest(fetched);
@@ -521,7 +521,7 @@ mod overlays {
         globe.camera.pitch = std::f64::consts::FRAC_PI_2;
         globe.renderer.ingest(vec![FetchedTile {
             id: TileId::root(),
-            result: Ok(solid(TILE_TEXTURE_SIZE, TILE_TEXTURE_SIZE, GREEN)),
+            result: Ok(solid(TILE_TEXTURE_SIZE, TILE_TEXTURE_SIZE, GREEN).into()),
         }]);
         Some(globe)
     }
@@ -531,7 +531,7 @@ mod overlays {
             id,
             vec![FetchedTile {
                 id: TileId::root(),
-                result: Ok(solid(TILE_TEXTURE_SIZE, TILE_TEXTURE_SIZE, color)),
+                result: Ok(solid(TILE_TEXTURE_SIZE, TILE_TEXTURE_SIZE, color).into()),
             }],
         );
     }

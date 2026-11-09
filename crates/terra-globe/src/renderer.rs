@@ -822,13 +822,13 @@ impl GlobeRenderer {
     /// window is not visible.
     pub fn ingest(&mut self, fetched: Vec<FetchedTile>) {
         for tile in fetched {
-            let Ok(image) = tile.result else {
+            let Ok(pixels) = tile.result else {
                 continue;
             };
             let view = upload_srgb_texture(
                 &self.device,
                 &self.queue,
-                &mip_chain(&image),
+                &pixels.into_mips(|image| image),
                 "terra-globe tile texture",
             );
             self.textures.insert(
@@ -871,8 +871,8 @@ impl GlobeRenderer {
                     provider: TileProvider::new(overlay.source.clone()),
                     overlay: overlay.clone(),
                     fetcher: match &self.tile_cache {
-                        Some(cache) => TileFetcher::new().with_cache(Arc::clone(cache)),
-                        None => TileFetcher::new(),
+                        Some(cache) => TileFetcher::new_overlay().with_cache(Arc::clone(cache)),
+                        None => TileFetcher::new_overlay(),
                     },
                     textures: HashMap::new(),
                     bindings: HashMap::new(),
@@ -963,7 +963,7 @@ impl GlobeRenderer {
                     let view = upload_srgb_texture(
                         &self.device,
                         &self.queue,
-                        &mip_chain(&limited),
+                        &mip_chain(limited),
                         "terra-globe image overlay",
                     );
                     GpuImage {
@@ -1901,13 +1901,13 @@ fn ingest_layer(
     fetched: Vec<FetchedTile>,
 ) {
     for tile in fetched {
-        let Ok(image) = tile.result else {
+        let Ok(pixels) = tile.result else {
             continue;
         };
         let view = upload_srgb_texture(
             device,
             queue,
-            &mip_chain(&premultiply_srgb(&image)),
+            &pixels.into_mips(|image| premultiply_srgb(&image)),
             "terra-globe overlay tile texture",
         );
         // A bind group made for the replaced texture would keep showing it.

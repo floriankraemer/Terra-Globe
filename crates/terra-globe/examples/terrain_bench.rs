@@ -132,7 +132,7 @@ fn main() {
                 if !globe.renderer.has_texture(tile.id) {
                     textures.push(FetchedTile {
                         id: tile.id,
-                        result: Ok(image.clone()),
+                        result: Ok(image.clone().into()),
                     });
                 }
             }

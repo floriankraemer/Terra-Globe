@@ -613,7 +613,11 @@ impl Terrain {
         }
         let mut changed = false;
         for FetchedTile { id, result } in self.fetcher.poll(&self.provider) {
-            match result.and_then(|image| TerrainTile::from_rgba(&image)) {
+            let tile = result.and_then(|pixels| {
+                let image = pixels.image().ok_or("elevation tile has no pixels")?;
+                TerrainTile::from_rgba(image)
+            });
+            match tile {
                 Ok(tile) => {
                     self.cache.insert(id, tile);
                     changed = true;
