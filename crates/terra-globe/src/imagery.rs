@@ -66,9 +66,13 @@ pub enum TilePixels {
     /// a caller that builds a tile by hand passes in.
     Decoded(RgbaImage),
     /// The mip chain to upload, largest level first, built where the tile was
-    /// decoded so the render thread only has to copy it to the GPU. Overlay
-    /// fetchers premultiply it as well.
-    Texture(Vec<RgbaImage>),
+    /// decoded so the render thread only has to copy it to the GPU.
+    Texture {
+        mips: Vec<RgbaImage>,
+        /// Whether colour is already multiplied by alpha, as an overlay
+        /// fetcher delivers it and a basemap fetcher does not.
+        premultiplied: bool,
+    },
 }
 
 impl TilePixels {
@@ -76,17 +80,33 @@ impl TilePixels {
     pub fn image(&self) -> Option<&RgbaImage> {
         match self {
             Self::Decoded(image) => Some(image),
-            Self::Texture(mips) => mips.first(),
+            Self::Texture { mips, .. } => mips.first(),
         }
     }
 
-    /// The mip chain to upload. A tile that did not come prepared from a
-    /// fetcher is run through `prepare` and mipmapped here.
-    pub fn into_mips(self, prepare: impl FnOnce(RgbaImage) -> RgbaImage) -> Vec<RgbaImage> {
+    /// The mip chain of an opaque basemap tile.
+    pub fn into_basemap_mips(self) -> Vec<RgbaImage> {
         match self {
-            Self::Decoded(image) => mip_chain(prepare(image)),
-            Self::Texture(mips) => mips,
+            Self::Decoded(image) => mip_chain(image),
+            // Premultiplication cannot be undone exactly, and the base pass
+            // ignores alpha: a premultiplied chain is uploaded as it is and
+            // draws opaque, darker where the tile was translucent.
+            Self::Texture { mips, .. } => mips,
         }
+    }
+
+    /// The premultiplied mip chain of a transparent overlay tile. Pixels that
+    /// are not premultiplied yet are, and get their mips rebuilt from level 0.
+    pub fn into_overlay_mips(self) -> Vec<RgbaImage> {
+        let straight = match self {
+            Self::Texture {
+                mips,
+                premultiplied: true,
+            } => return mips,
+            Self::Texture { mips, .. } => mips.into_iter().next(),
+            Self::Decoded(image) => Some(image),
+        };
+        straight.map_or_else(Vec::new, |image| mip_chain(premultiply_srgb(&image)))
     }
 }
 
@@ -388,8 +408,14 @@ fn decode_bytes(bytes: &[u8], decode: Decode) -> Result<TilePixels, String> {
     }
     Ok(match decode.output {
         Output::Raw => TilePixels::Decoded(rgba),
-        Output::Basemap => TilePixels::Texture(mip_chain(normalize_tile(rgba))),
-        Output::Overlay => TilePixels::Texture(mip_chain(premultiply_srgb(&normalize_tile(rgba)))),
+        Output::Basemap => TilePixels::Texture {
+            mips: mip_chain(normalize_tile(rgba)),
+            premultiplied: false,
+        },
+        Output::Overlay => TilePixels::Texture {
+            mips: mip_chain(premultiply_srgb(&normalize_tile(rgba))),
+            premultiplied: true,
+        },
     })
 }
 
@@ -443,6 +469,12 @@ pub fn limit_image_size(image: RgbaImage, max_side: u32) -> RgbaImage {
         scaled(image.height()),
         image::imageops::FilterType::Triangle,
     )
+}
+
+/// The mip chain of an image overlay, ready to upload: premultiplied, no side
+/// above `max_side`.
+pub(crate) fn prepare_overlay_image(image: &RgbaImage, max_side: u32) -> Vec<RgbaImage> {
+    mip_chain(limit_image_size(premultiply_srgb(image), max_side))
 }
 
 /// A decoded raster in 8-bit sRGB with straight alpha.
@@ -919,8 +951,12 @@ mod tests {
 
     #[test]
     fn imagery_tiles_arrive_with_their_mip_chain_built() {
-        let TilePixels::Texture(mips) = fetch_cached(TileFetcher::new(), png(256, 256)) else {
-            panic!("an imagery fetcher delivers an uploadable mip chain");
+        let TilePixels::Texture {
+            mips,
+            premultiplied: false,
+        } = fetch_cached(TileFetcher::new(), png(256, 256))
+        else {
+            panic!("an imagery fetcher delivers an uploadable, straight-alpha mip chain");
         };
         let sides: Vec<u32> = mips.iter().map(RgbaImage::width).collect();
         assert_eq!(sides, [256, 128, 64, 32, 16, 8, 4, 2, 1]);
@@ -933,9 +969,12 @@ mod tests {
     #[test]
     fn overlay_tiles_arrive_premultiplied_with_their_mip_chain_built() {
         let translucent = terra_testkit::rgba_to_png(&[255, 255, 255, 128].repeat(4), 2, 2);
-        let TilePixels::Texture(mips) = fetch_cached(TileFetcher::new_overlay(), translucent)
+        let TilePixels::Texture {
+            mips,
+            premultiplied: true,
+        } = fetch_cached(TileFetcher::new_overlay(), translucent)
         else {
-            panic!("an overlay fetcher delivers an uploadable mip chain");
+            panic!("an overlay fetcher delivers an uploadable, premultiplied mip chain");
         };
         assert_eq!(mips.len(), 9);
         for mip in &mips {
@@ -958,10 +997,55 @@ mod tests {
     fn hand_built_pixels_get_their_mips_on_demand() {
         let pixels = TilePixels::from(RgbaImage::new(4, 4));
         assert_eq!(pixels.image().map(RgbaImage::dimensions), Some((4, 4)));
-        assert_eq!(pixels.into_mips(|image| image).len(), 3);
-        let ready = TilePixels::Texture(vec![RgbaImage::new(1, 1)]);
-        let untouched = ready.into_mips(|_| panic!("already prepared by the fetcher"));
-        assert_eq!(untouched.len(), 1);
+        assert_eq!(pixels.into_basemap_mips().len(), 3);
+    }
+
+    fn translucent_white() -> RgbaImage {
+        RgbaImage::from_pixel(2, 2, image::Rgba([255, 255, 255, 128]))
+    }
+
+    #[track_caller]
+    fn assert_premultiplied_white(mips: &[RgbaImage]) {
+        assert_eq!(mips.len(), 2);
+        for mip in mips {
+            let pixel = mip.get_pixel(0, 0);
+            assert_eq!(pixel[3], 128);
+            assert!((180..=195).contains(&pixel[0]), "got {}", pixel[0]);
+        }
+    }
+
+    #[test]
+    fn overlay_mips_are_premultiplied_whatever_the_tile_arrived_as() {
+        assert_premultiplied_white(&TilePixels::from(translucent_white()).into_overlay_mips());
+
+        let straight = TilePixels::Texture {
+            mips: mip_chain(translucent_white()),
+            premultiplied: false,
+        };
+        assert_premultiplied_white(&straight.into_overlay_mips());
+
+        let ready = TilePixels::Texture {
+            mips: mip_chain(premultiply_srgb(&translucent_white())),
+            premultiplied: true,
+        };
+        assert_premultiplied_white(&ready.into_overlay_mips());
+    }
+
+    #[test]
+    fn basemap_mips_are_uploaded_as_they_arrived() {
+        let straight = mip_chain(translucent_white());
+        let basemap = TilePixels::Texture {
+            mips: straight.clone(),
+            premultiplied: false,
+        };
+        assert_eq!(basemap.into_basemap_mips(), straight);
+
+        let premultiplied = mip_chain(premultiply_srgb(&translucent_white()));
+        let overlay = TilePixels::Texture {
+            mips: premultiplied.clone(),
+            premultiplied: true,
+        };
+        assert_eq!(overlay.into_basemap_mips(), premultiplied);
     }
 
     #[test]

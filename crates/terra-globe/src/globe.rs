@@ -297,11 +297,14 @@ impl Globe {
         self.fly_to(center.lon, center.lat, distance, now_seconds);
     }
 
-    /// True while imagery is still being fetched, so the UI can keep repainting
-    /// and pick up the tiles as they arrive instead of idling at a low frame rate.
+    /// True while imagery is still being fetched or an overlay picture is still
+    /// being prepared, so the UI can keep repainting and pick them up as they
+    /// arrive instead of idling at a low frame rate.
     pub fn is_loading_imagery(&self) -> bool {
         let stats = self.renderer.stats();
-        stats.requests_in_flight > 0 || stats.requests_queued > 0
+        stats.requests_in_flight > 0
+            || stats.requests_queued > 0
+            || self.renderer.has_pending_images()
     }
 
     pub fn render(&mut self, now_seconds: f64) -> RenderStats {

@@ -480,7 +480,8 @@ mod overlays {
     use std::sync::Arc;
 
     use super::*;
-    use terra_globe::{ImageOverlay, SceneMode, TileOverlay};
+    use terra_globe::imagery::mip_chain;
+    use terra_globe::{ImageOverlay, SceneMode, TileOverlay, TilePixels};
     use terra_providers::TileSource;
 
     const GREEN: [u8; 4] = [40, 160, 60, 255];
@@ -1017,6 +1018,146 @@ mod overlays {
             2,
             "a new picture uploads"
         );
+    }
+
+    /// Above the size the renderer prepares inside `set_image_overlays`.
+    fn large(color: [u8; 4]) -> RgbaImage {
+        solid(256, 256, color)
+    }
+
+    /// Renders until no picture is being prepared any more.
+    #[track_caller]
+    fn wait_for_pictures(globe: &mut Globe) {
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        while globe.renderer.has_pending_images() {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "the picture was never prepared"
+            );
+            globe.render(0.0);
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+    }
+
+    #[test]
+    fn large_pictures_are_prepared_in_the_background_and_then_drawn() {
+        let Some(mut globe) = overlay_globe() else {
+            return;
+        };
+        globe.set_image_overlays(vec![near_target(large(BLUE))]);
+        assert_eq!(
+            globe.renderer.image_upload_count(),
+            0,
+            "the call must not wait for the picture"
+        );
+        assert!(globe.renderer.has_pending_images());
+        assert!(
+            globe.is_loading_imagery(),
+            "a pending picture has to keep the app repainting"
+        );
+
+        wait_for_pictures(&mut globe);
+        assert_eq!(globe.renderer.image_upload_count(), 1);
+        assert_close(centre(&mut globe), BLUE, 2);
+    }
+
+    #[test]
+    fn a_picture_removed_while_pending_never_appears() {
+        let Some(mut globe) = overlay_globe() else {
+            return;
+        };
+        let (_, base) = frame(&mut globe);
+        globe.set_image_overlays(vec![near_target(large(BLUE))]);
+        globe.set_image_overlays(Vec::new());
+        assert!(!globe.renderer.has_pending_images());
+
+        // Pictures are prepared in order, so once this one has arrived the
+        // removed one has been through the worker too.
+        let elsewhere = image_overlay("later", (12.0, 34.0, 13.0, 36.0), large(RED));
+        globe.set_image_overlays(vec![elsewhere]);
+        wait_for_pictures(&mut globe);
+        assert_close(at(&mut globe, 12.5, 35.0), RED, 2);
+        assert_close(centre(&mut globe), GREEN, 2);
+        assert_eq!(globe.renderer.image_overlay_count(), 1);
+        assert_eq!(globe.renderer.image_upload_count(), 1);
+
+        globe.set_image_overlays(Vec::new());
+        let (_, restored) = frame(&mut globe);
+        assert_eq!(base, restored);
+    }
+
+    #[test]
+    fn a_picture_replaced_while_pending_shows_only_the_new_one() {
+        let Some(mut globe) = overlay_globe() else {
+            return;
+        };
+        globe.set_image_overlays(vec![near_target(large(BLUE))]);
+        globe.set_image_overlays(vec![near_target(large(RED))]);
+        wait_for_pictures(&mut globe);
+        assert_close(centre(&mut globe), RED, 2);
+        assert_eq!(globe.renderer.image_upload_count(), 1);
+    }
+
+    #[test]
+    fn a_pending_picture_is_prepared_once_and_takes_its_latest_placement() {
+        let Some(mut globe) = overlay_globe() else {
+            return;
+        };
+        let overlay = near_target(large(BLUE));
+        globe.set_image_overlays(vec![overlay.clone()]);
+        globe.set_image_overlays(vec![overlay.clone()]);
+        globe.set_image_overlays(vec![ImageOverlay {
+            west: 12.0,
+            east: 13.0,
+            opacity: 0.5,
+            ..overlay
+        }]);
+        wait_for_pictures(&mut globe);
+        assert_eq!(globe.renderer.image_upload_count(), 1);
+        assert_close(at(&mut globe, 12.5, 35.0), mix(BLUE, GREEN, 0.5), 3);
+        assert_close(centre(&mut globe), GREEN, 2);
+    }
+
+    #[test]
+    fn overlay_mips_that_are_not_premultiplied_are_premultiplied_on_ingest() {
+        let Some(mut globe) = overlay_globe() else {
+            return;
+        };
+        globe.set_tile_overlays(vec![layer("soft", 1.0)]);
+        // Dim on purpose: the shader divides by alpha, and a saturated colour
+        // would clip to the same value whether it was premultiplied or not.
+        let straight = solid(TILE_TEXTURE_SIZE, TILE_TEXTURE_SIZE, [100, 0, 0, 128]);
+        globe.renderer.ingest_overlay(
+            "soft",
+            vec![FetchedTile {
+                id: TileId::root(),
+                result: Ok(TilePixels::Texture {
+                    mips: mip_chain(straight),
+                    premultiplied: false,
+                }),
+            }],
+        );
+        assert_close(
+            centre(&mut globe),
+            mix([100, 0, 0, 255], GREEN, 128.0 / 255.0),
+            4,
+        );
+    }
+
+    #[test]
+    fn premultiplied_mips_given_to_the_basemap_are_drawn_opaque() {
+        let Some(mut globe) = overlay_globe() else {
+            return;
+        };
+        let premultiplied = solid(TILE_TEXTURE_SIZE, TILE_TEXTURE_SIZE, [188, 0, 0, 128]);
+        globe.renderer.ingest(vec![FetchedTile {
+            id: TileId::root(),
+            result: Ok(TilePixels::Texture {
+                mips: mip_chain(premultiplied),
+                premultiplied: true,
+            }),
+        }]);
+        assert_close(centre(&mut globe), [188, 0, 0, 255], 2);
     }
 
     #[test]

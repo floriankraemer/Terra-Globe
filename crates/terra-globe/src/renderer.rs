@@ -7,6 +7,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
+use std::sync::mpsc::{Receiver, Sender, TryRecvError};
 
 use glam::DVec3;
 use web_time::Instant;
@@ -19,7 +20,7 @@ use crate::flat::{
 use crate::geo::TileId;
 use crate::imagery::{
     FALLBACK_RGBA, FetchedTile, ImageOverlay, ImageRgba, MAX_OVERLAY_IMAGE_SIDE, TileCache,
-    TileFetcher, TileOverlay, TileProvider, limit_image_size, mip_chain, premultiply_srgb,
+    TileFetcher, TileOverlay, TileProvider, prepare_overlay_image,
 };
 use crate::primitives::{FillMesh, LineMesh, build_meshes};
 use crate::scene::{ROUTE_COLOR, Scene, TRANSIENT_COLOR, transient_style};
@@ -182,12 +183,36 @@ struct GpuImage {
     /// Kept so the pointer used to detect an unchanged image cannot be
     /// recycled by the allocator for a different one.
     source: Arc<ImageRgba>,
-    /// The second binding draws the copy shifted by one world width.
-    bindings: [OverlayBinding; 2],
+    texture: ImageTexture,
     globe_mesh: Option<GpuGeometry>,
     /// Terrain stamp `globe_mesh` was draped on.
     globe_stamp: u64,
     flat_mesh: Option<GpuGeometry>,
+}
+
+enum ImageTexture {
+    /// Being prepared on the worker thread; not drawn until it arrives.
+    Pending(Receiver<Vec<image::RgbaImage>>),
+    /// The second binding draws the copy shifted by one world width.
+    Ready([OverlayBinding; 2]),
+}
+
+struct ImageJob {
+    source: Arc<ImageRgba>,
+    max_side: u32,
+    reply: Sender<Vec<image::RgbaImage>>,
+}
+
+/// Largest picture, in texels, that `set_image_overlays` prepares itself:
+/// 128x128 takes about 0.2 ms even when every texel is translucent. Anything
+/// larger would be a visible hitch (a 4096x4096 one takes 130 to 280 ms) and
+/// goes to the worker thread.
+const SYNC_IMAGE_TEXELS: u64 = 128 * 128;
+
+/// The browser has no threads, so there every picture is prepared in place.
+fn prepared_in_background(image: &ImageRgba) -> bool {
+    cfg!(not(target_arch = "wasm32"))
+        && u64::from(image.width()) * u64::from(image.height()) > SYNC_IMAGE_TEXELS
 }
 
 type Draw = (wgpu::Buffer, wgpu::Buffer, u32, wgpu::BindGroup);
@@ -235,6 +260,10 @@ pub struct GlobeRenderer {
     tile_layers: Vec<TileLayer>,
     images: Vec<GpuImage>,
     image_uploads: u64,
+    /// Queue of the thread that prepares large pictures, started with the
+    /// first one. One thread, so a KML full of them is prepared one at a time
+    /// and does not hold every intermediate copy in memory at once.
+    image_jobs: Option<Sender<ImageJob>>,
     tile_cache: Option<Arc<dyn TileCache>>,
     terrain: Terrain,
     /// Terrain stamp the scene meshes were last built for, and the frame that
@@ -548,6 +577,7 @@ impl GlobeRenderer {
             tile_layers: Vec::new(),
             images: Vec::new(),
             image_uploads: 0,
+            image_jobs: None,
             tile_cache: None,
             terrain: Terrain::new(TileSource::terrain_terrarium()),
             scene_stamp: 0,
@@ -828,7 +858,7 @@ impl GlobeRenderer {
             let view = upload_srgb_texture(
                 &self.device,
                 &self.queue,
-                &pixels.into_mips(|image| image),
+                &pixels.into_basemap_mips(),
                 "terra-globe tile texture",
             );
             self.textures.insert(
@@ -923,17 +953,16 @@ impl GlobeRenderer {
     }
 
     /// Replaces the image overlays, drawn in the given order above the tile
-    /// layers. Matched by id: an unchanged picture is not uploaded again, and a
-    /// new box, rotation or opacity only rebuilds the cheap parts. Overlays with
-    /// an empty image or an unusable box are skipped.
+    /// layers. Matched by id: an unchanged picture is not prepared or uploaded
+    /// again, and a new box, rotation or opacity only rebuilds the cheap parts.
+    /// Overlays with an empty image or an unusable box are skipped.
+    ///
+    /// A large picture is prepared on a worker thread and drawn from the first
+    /// `render` after it is ready; see [`Self::has_pending_images`].
     pub fn set_image_overlays(&mut self, overlays: &[ImageOverlay]) {
         let mut previous = std::mem::take(&mut self.images);
         let mut next: Vec<GpuImage> = Vec::with_capacity(overlays.len());
-        let max_side = self
-            .device
-            .limits()
-            .max_texture_dimension_2d
-            .min(MAX_OVERLAY_IMAGE_SIDE);
+        let max_side = self.max_image_side();
         for overlay in overlays {
             if next.iter().any(|image| image.id == overlay.id) {
                 continue;
@@ -957,35 +986,21 @@ impl GlobeRenderer {
             });
             let mut image = match reusable {
                 Some(index) => previous.remove(index),
-                None => {
-                    self.image_uploads += 1;
-                    let limited = limit_image_size(premultiply_srgb(&overlay.image), max_side);
-                    let view = upload_srgb_texture(
-                        &self.device,
-                        &self.queue,
-                        &mip_chain(limited),
-                        "terra-globe image overlay",
-                    );
-                    GpuImage {
-                        id: overlay.id.clone(),
-                        rect,
-                        rotation_deg,
-                        opacity: 0.0,
-                        source: Arc::clone(&overlay.image),
-                        bindings: [0, 1].map(|_| {
-                            create_overlay_binding(
-                                &self.device,
-                                &self.tile_layout,
-                                &self.sampler,
-                                &self.fallback_view,
-                                Some(&view),
-                            )
-                        }),
-                        globe_mesh: None,
-                        globe_stamp: 0,
-                        flat_mesh: None,
-                    }
-                }
+                None => GpuImage {
+                    id: overlay.id.clone(),
+                    rect,
+                    rotation_deg,
+                    opacity: 0.0,
+                    source: Arc::clone(&overlay.image),
+                    texture: if prepared_in_background(&overlay.image) {
+                        ImageTexture::Pending(self.prepare_in_background(&overlay.image, max_side))
+                    } else {
+                        self.upload_image(&prepare_overlay_image(&overlay.image, max_side))
+                    },
+                    globe_mesh: None,
+                    globe_stamp: 0,
+                    flat_mesh: None,
+                },
             };
             if image.rect != rect || image.rotation_deg != rotation_deg {
                 image.rect = rect;
@@ -997,6 +1012,79 @@ impl GlobeRenderer {
             next.push(image);
         }
         self.images = next;
+    }
+
+    fn max_image_side(&self) -> u32 {
+        self.device
+            .limits()
+            .max_texture_dimension_2d
+            .min(MAX_OVERLAY_IMAGE_SIDE)
+    }
+
+    fn prepare_in_background(
+        &mut self,
+        source: &Arc<ImageRgba>,
+        max_side: u32,
+    ) -> Receiver<Vec<image::RgbaImage>> {
+        let (reply, prepared) = std::sync::mpsc::channel();
+        let jobs = self.image_jobs.get_or_insert_with(|| {
+            let (jobs, queue) = std::sync::mpsc::channel::<ImageJob>();
+            std::thread::spawn(move || {
+                for job in queue {
+                    // Nobody listens once the picture was removed or replaced.
+                    let _ = job
+                        .reply
+                        .send(prepare_overlay_image(&job.source, job.max_side));
+                }
+            });
+            jobs
+        });
+        // A dead worker drops the job, which `receive_image` notices.
+        let _ = jobs.send(ImageJob {
+            source: Arc::clone(source),
+            max_side,
+            reply,
+        });
+        prepared
+    }
+
+    fn upload_image(&mut self, mips: &[image::RgbaImage]) -> ImageTexture {
+        self.image_uploads += 1;
+        let view =
+            upload_srgb_texture(&self.device, &self.queue, mips, "terra-globe image overlay");
+        ImageTexture::Ready([0, 1].map(|_| {
+            create_overlay_binding(
+                &self.device,
+                &self.tile_layout,
+                &self.sampler,
+                &self.fallback_view,
+                Some(&view),
+            )
+        }))
+    }
+
+    /// Uploads a picture the worker thread has finished.
+    fn receive_image(&mut self, image: &mut GpuImage) {
+        let ImageTexture::Pending(prepared) = &image.texture else {
+            return;
+        };
+        let mips = match prepared.try_recv() {
+            Ok(mips) => mips,
+            Err(TryRecvError::Empty) => return,
+            // The worker died; the picture must still appear.
+            Err(TryRecvError::Disconnected) => {
+                prepare_overlay_image(&image.source, self.max_image_side())
+            }
+        };
+        image.texture = self.upload_image(&mips);
+    }
+
+    /// True while a picture is still being prepared. Arrivals are picked up
+    /// by `render`, so the caller has to keep rendering until this is false.
+    pub fn has_pending_images(&self) -> bool {
+        self.images
+            .iter()
+            .any(|image| matches!(image.texture, ImageTexture::Pending(_)))
     }
 
     pub fn image_overlay_count(&self) -> usize {
@@ -1329,6 +1417,7 @@ impl GlobeRenderer {
 
         let mut images = std::mem::take(&mut self.images);
         for image in &mut images {
+            self.receive_image(image);
             self.prepare_image(image, mode, eye, stamp, &mut draws);
         }
         self.images = images;
@@ -1453,6 +1542,9 @@ impl GlobeRenderer {
         if image.opacity <= 0.0 {
             return;
         }
+        let ImageTexture::Ready(bindings) = &image.texture else {
+            return;
+        };
         let flat = mode.is_flat();
         let (rect, rotation) = (image.rect, image.rotation_deg);
         if !flat && image.globe_stamp != stamp {
@@ -1497,7 +1589,7 @@ impl GlobeRenderer {
         } else {
             &[0.0]
         };
-        for (binding, shift) in image.bindings.iter().zip(shifts) {
+        for (binding, shift) in bindings.iter().zip(shifts) {
             let translation = (geometry.center - eye + DVec3::new(*shift, 0.0, 0.0)).as_vec3();
             write_overlay_uniform(
                 &self.queue,
@@ -1907,7 +1999,7 @@ fn ingest_layer(
         let view = upload_srgb_texture(
             device,
             queue,
-            &pixels.into_mips(|image| premultiply_srgb(&image)),
+            &pixels.into_overlay_mips(),
             "terra-globe overlay tile texture",
         );
         // A bind group made for the replaced texture would keep showing it.

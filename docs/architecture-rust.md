@@ -43,6 +43,8 @@ terra-app           egui state and views (consumes terra-globe + ports)
   `TileFetcher` uses `ehttp` (threads natively, `fetch` on wasm), keeps a priority queue rebuilt from the current selection every frame, runs at most 8 requests at a time, retries transient failures up to three times and holds a given-up tile back for 30 s before trying again, so a flaky network does not permanently punch a hole in the imagery.
   Decoded tiles are normalised to 256×256 and their mip chain is built in linear light, through lookup tables for the sRGB transfer function.
   That happens where the tile is decoded, on the fetch thread natively (the browser has no threads, so there it runs in the `fetch` callback): a `FetchedTile` carries `TilePixels::Texture`, the finished mip chain, premultiplied as well for a transparent tile layer (`TileFetcher::new_overlay`), and the render thread only copies it to the GPU.
+  `TilePixels::Texture` records whether its chain is premultiplied, so the pairing of fetcher and ingest is not left to the caller: `ingest_overlay` premultiplies a straight-alpha chain and rebuilds its mips from level 0.
+  Premultiplication cannot be undone, so a premultiplied chain handed to the basemap `ingest` is uploaded as it is and draws opaque, darker where the tile was translucent.
   Elevation tiles come from a raw fetcher and stay `TilePixels::Decoded`, with no mips; a tile handed to `ingest` that way is mipmapped on the spot.
   The sampler uses trilinear filtering with anisotropic filtering, so minified imagery does not shimmer at the horizon.
   The native shell also injects a `TileCache` that keeps downloaded tile bytes on disk (512 MB budget, pruned at startup), so revisiting an area does not hit the network again.
@@ -163,6 +165,12 @@ Transparent tile overlays and image overlays share one overlay pass.
   Layers that stay present keep their imagery when their opacity changes.
 - **Image overlays**: KML `GroundOverlay` pictures are passed to `Globe::set_image_overlays`, with rotation applied.
   Opacity is the alpha byte of the KML colour.
+  A picture is premultiplied, limited to 4096 texels per side and mipmapped before it is uploaded.
+  Up to 128×128 texels that takes about 0.2 ms and happens inside `set_image_overlays`; a 4096×4096 picture takes 130 to 280 ms, so natively anything larger is prepared on one worker thread, one picture at a time.
+  `render` uploads the finished mip chain when it arrives, and the picture is not drawn until then.
+  `Globe::is_loading_imagery` stays true while a picture is pending, which keeps the app repainting until it appears.
+  A pending picture that is removed or replaced drops its end of the channel, so the result is discarded; one that only moves, rotates or changes opacity keeps waiting for the same result.
+  The browser build has no threads and prepares every picture in place.
 - **Asset store**: pictures from imports and from "Image Overlay…" are stored through `PlacesRepository` (`put_asset`, `get_asset`, `delete_asset`, `list_assets`), keyed by their normalised path.
   The SQLite schema v3 adds an `assets` table, and the IndexedDB database moves to version 3 with an `assets` store.
   Unreferenced assets are deleted once at startup, when no undo history can still need them.
