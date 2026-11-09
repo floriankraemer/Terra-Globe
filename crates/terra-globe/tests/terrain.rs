@@ -496,3 +496,29 @@ fn flat_meshes_are_never_stitched() {
         assert_eq!(globe.renderer.mesh_stitching(tile.id), Some([0; 4]));
     }
 }
+
+#[test]
+fn a_still_view_stops_rebuilding_meshes_and_a_flight_keeps_the_mesh_cache_bounded() {
+    let Some(mut globe) = globe(true) else {
+        return;
+    };
+    for _ in 0..40 {
+        globe.render(0.0);
+    }
+    let settled = globe.render(0.0);
+    assert_eq!(settled.meshes_built, 0, "a still view must not rebuild");
+
+    // Every step shows tiles the view has not seen; the cache must not keep
+    // them all, and must never drop one that is being drawn.
+    for step in 0..400 {
+        globe.camera.target_lon_deg = SUMMIT.0 + f64::from(step) * 0.02;
+        globe.settle_camera();
+        let stats = globe.render(0.0);
+        assert!(
+            stats.meshes_resident <= 3 * terra_globe::tiles::DEFAULT_MAX_TILES,
+            "{} meshes resident at step {step}",
+            stats.meshes_resident
+        );
+        assert!(stats.meshes_resident >= stats.tiles_drawn);
+    }
+}

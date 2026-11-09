@@ -50,9 +50,41 @@ pub fn build_tile_mesh(id: TileId, subdivisions: u32) -> TileMesh {
     build_tile_mesh_on(id, subdivisions, None, [0; 4], &|tile, _| tile.z)
 }
 
-/// Terrain height `(lon_deg, lat_deg, level) -> metres` from elevation no
-/// deeper than `level`; `None` where nothing is loaded.
-pub type TerrainSampler<'a> = dyn Fn(f64, f64, u8) -> Option<f64> + 'a;
+/// Terrain heights for building tile meshes. Any
+/// `Fn(lon_deg, lat_deg, level) -> Option<metres>` is one.
+pub trait TerrainSampler {
+    /// Height from elevation no deeper than `level`; `None` where nothing is
+    /// loaded.
+    fn height(&self, lon_deg: f64, lat_deg: f64, level: u8) -> Option<f64>;
+
+    /// [`Self::height`] at every node of a longitude/latitude grid, row-major
+    /// (one row per latitude), with 0 where nothing is loaded. A mesh asks for
+    /// its whole grid at once so that a sampler can share work between nodes.
+    fn heights(&self, lons_deg: &[f64], lats_deg: &[f64], level: u8, out: &mut [f64]) {
+        let mut nodes = out.iter_mut();
+        for lat in lats_deg {
+            for (lon, node) in lons_deg.iter().zip(&mut nodes) {
+                *node = self.height(*lon, *lat, level).unwrap_or(0.0);
+            }
+        }
+    }
+}
+
+impl<F: Fn(f64, f64, u8) -> Option<f64>> TerrainSampler for F {
+    fn height(&self, lon_deg: f64, lat_deg: f64, level: u8) -> Option<f64> {
+        self(lon_deg, lat_deg, level)
+    }
+}
+
+impl TerrainSampler for crate::terrain::Terrain {
+    fn height(&self, lon_deg: f64, lat_deg: f64, level: u8) -> Option<f64> {
+        self.ground_at_level(lon_deg, lat_deg, level)
+    }
+
+    fn heights(&self, lons_deg: &[f64], lats_deg: &[f64], level: u8, out: &mut [f64]) {
+        self.ground_grid_at_level(lons_deg, lats_deg, level, out);
+    }
+}
 
 /// Levels of detail a tile edge can be stitched across; beyond this the
 /// neighbour's grid is too coarse to line up with ours and the skirt covers it.
@@ -141,33 +173,58 @@ pub fn corner_level(id: TileId, corner: usize, is_leaf: &dyn Fn(TileId) -> bool)
 pub fn build_tile_mesh_on(
     id: TileId,
     subdivisions: u32,
-    ground: Option<&TerrainSampler<'_>>,
+    ground: Option<&dyn TerrainSampler>,
     coarser_by: [u8; 4],
     corner_level: &dyn Fn(TileId, usize) -> u8,
 ) -> TileMesh {
-    let subdivisions = subdivisions.clamp(1, 128);
+    let vertices = build_tile_vertices_on(id, subdivisions, ground, coarser_by, corner_level);
+    TileMesh {
+        positions: vertices.positions,
+        uvs: vertices.uvs,
+        indices: tile_mesh_indices(subdivisions),
+        center_ecef: vertices.center_ecef,
+    }
+}
+
+/// The vertices of a tile mesh without its triangles, which depend only on
+/// the grid resolution (see [`tile_mesh_indices`]).
+#[derive(Debug, Clone)]
+pub struct TileVertices {
+    pub positions: Vec<[f32; 3]>,
+    pub uvs: Vec<[f32; 2]>,
+    pub center_ecef: DVec3,
+}
+
+/// The vertices [`build_tile_mesh_on`] builds. Every tile mesh of one grid
+/// resolution has the same triangles, so a renderer keeps those once and only
+/// asks for the vertices when the terrain under a tile changes.
+pub fn build_tile_vertices_on(
+    id: TileId,
+    subdivisions: u32,
+    ground: Option<&dyn TerrainSampler>,
+    coarser_by: [u8; 4],
+    corner_level: &dyn Fn(TileId, usize) -> u8,
+) -> TileVertices {
+    let subdivisions = subdivisions.clamp(1, MAX_TILE_SUBDIVISIONS);
     let bounds = id.bounds();
     let center = geodetic_to_ecef(bounds.center());
     let count = subdivisions + 1;
 
-    let mut positions = Vec::with_capacity((count * count) as usize);
-    let mut uvs = Vec::with_capacity((count * count) as usize);
-    let mut indices = Vec::with_capacity((subdivisions * subdivisions * 6) as usize);
+    let vertex_count = (count * count + 4 * count) as usize;
+    let mut positions = Vec::with_capacity(vertex_count);
+    let mut uvs = Vec::with_capacity(vertex_count);
 
     let node_lon = |column: u32| {
         bounds.west + bounds.width_deg() * f64::from(column) / f64::from(subdivisions)
     };
     let node_lat =
         |row: u32| bounds.south + bounds.height_deg() * f64::from(row) / f64::from(subdivisions);
+    let lons: Vec<f64> = (0..count).map(node_lon).collect();
+    let lats: Vec<f64> = (0..count).map(node_lat).collect();
     let mut heights = vec![0.0f64; (count * count) as usize];
     if let Some(ground) = ground {
         let own_level = id.z.min(crate::terrain::MAX_TERRAIN_LEVEL);
-        for row in 0..count {
-            for column in 0..count {
-                heights[(row * count + column) as usize] =
-                    ground(node_lon(column), node_lat(row), own_level).unwrap_or(0.0);
-            }
-        }
+        ground.heights(&lons, &lats, own_level, &mut heights);
         let cap = |level: u8| level.min(crate::terrain::MAX_TERRAIN_LEVEL);
         for (corner, (row, column)) in [
             (0, 0),
@@ -178,12 +235,13 @@ pub fn build_tile_mesh_on(
         .into_iter()
         .enumerate()
         {
-            heights[(row * count + column) as usize] = ground(
-                node_lon(column),
-                node_lat(row),
-                cap(corner_level(id, corner)),
-            )
-            .unwrap_or(0.0);
+            heights[(row * count + column) as usize] = ground
+                .height(
+                    node_lon(column),
+                    node_lat(row),
+                    cap(corner_level(id, corner)),
+                )
+                .unwrap_or(0.0);
         }
         // [west, east, south, north]: the node on each edge for index `k`.
         let node_of: [&dyn Fn(u32) -> (u32, u32); 4] =
@@ -244,7 +302,7 @@ pub fn build_tile_mesh_on(
                 } else {
                     (along, node_lat(fixed_row))
                 };
-                ground(lon, lat, sample_level).unwrap_or(0.0)
+                ground.height(lon, lat, sample_level).unwrap_or(0.0)
             };
             let mut lattice: HashMap<u32, f64> = HashMap::new();
             for k in 0..=subdivisions {
@@ -269,23 +327,53 @@ pub fn build_tile_mesh_on(
         }
     }
 
+    // `geodetic_to_ecef` for the whole grid, with the trigonometry done once
+    // per row and per column instead of once per vertex.
+    let meridians: Vec<(f64, f64)> = lons.iter().map(|lon| lon.to_radians().sin_cos()).collect();
     let (mut lowest, mut highest) = (0.0f64, 0.0f64);
-    for row in 0..count {
-        for column in 0..count {
-            let (lon, lat) = (node_lon(column), node_lat(row));
-            let height = heights[(row * count + column) as usize];
+    for (row, lat) in lats.iter().enumerate() {
+        let (sin_lat, cos_lat) = lat.to_radians().sin_cos();
+        let prime_vertical =
+            crate::geo::WGS84_A / (1.0 - crate::geo::WGS84_E2 * sin_lat * sin_lat).sqrt();
+        let v = 1.0 - row as f32 / subdivisions as f32;
+        for (column, (sin_lon, cos_lon)) in meridians.iter().enumerate() {
+            let height = heights[row * count as usize + column];
             lowest = lowest.min(height);
             highest = highest.max(height);
-            let ecef = geodetic_to_ecef(Geodetic::from_degrees(lon, lat, height));
-            let local = (ecef - center).as_vec3();
-            positions.push(local.to_array());
-            uvs.push([
-                f32::from(u16::try_from(column).unwrap_or(0)) / subdivisions as f32,
-                1.0 - f32::from(u16::try_from(row).unwrap_or(0)) / subdivisions as f32,
-            ]);
+            let ecef = DVec3::new(
+                (prime_vertical + height) * cos_lat * cos_lon,
+                (prime_vertical + height) * cos_lat * sin_lon,
+                (prime_vertical * (1.0 - crate::geo::WGS84_E2) + height) * sin_lat,
+            );
+            positions.push((ecef - center).as_vec3().to_array());
+            uvs.push([column as f32 / subdivisions as f32, v]);
         }
     }
 
+    append_skirt_vertices(
+        &mut positions,
+        &mut uvs,
+        id,
+        subdivisions,
+        center,
+        (highest - lowest) * 0.5,
+    );
+    TileVertices {
+        positions,
+        uvs,
+        center_ecef: center,
+    }
+}
+
+/// Finest grid a tile mesh is built on.
+const MAX_TILE_SUBDIVISIONS: u32 = 128;
+
+/// The triangles of every tile mesh with `subdivisions` cells per side: the
+/// grid, then the four skirts.
+pub fn tile_mesh_indices(subdivisions: u32) -> Vec<u32> {
+    let subdivisions = subdivisions.clamp(1, MAX_TILE_SUBDIVISIONS);
+    let count = subdivisions + 1;
+    let mut indices = Vec::with_capacity(((subdivisions + 4) * subdivisions * 6) as usize);
     for row in 0..subdivisions {
         for column in 0..subdivisions {
             let top_left = row * count + column;
@@ -302,22 +390,17 @@ pub fn build_tile_mesh_on(
             ]);
         }
     }
-
-    append_skirts(
-        &mut positions,
-        &mut uvs,
-        &mut indices,
-        id,
-        subdivisions,
-        center,
-        (highest - lowest) * 0.5,
-    );
-    TileMesh {
-        positions,
-        uvs,
-        indices,
-        center_ecef: center,
+    for (edge, vertices) in skirt_edges(subdivisions).into_iter().enumerate() {
+        let base = count * count + edge as u32 * count;
+        for pair in 0..subdivisions {
+            let top_a = vertices(pair);
+            let top_b = vertices(pair + 1);
+            let bottom_a = base + pair;
+            let bottom_b = base + pair + 1;
+            indices.extend_from_slice(&[top_a, bottom_a, top_b, top_b, bottom_a, bottom_b]);
+        }
     }
+    indices
 }
 
 /// Longest edge of an image-overlay grid cell. Matches the vector fills, so the
@@ -551,47 +634,40 @@ pub fn build_flat_rect_mesh(rect: &LonLatRect, rotation_deg: f64) -> TileMesh {
     }
 }
 
-/// Adds a downward skirt on all four edges. The skirt depth scales with the
-/// tile's ground size, which is what makes it hide cracks at coarse levels too.
-fn append_skirts(
+/// The grid vertex under skirt vertex `k` of each of the four skirts: the
+/// south row, the north row, the west column and the east column.
+fn skirt_edges(subdivisions: u32) -> [Box<dyn Fn(u32) -> u32>; 4] {
+    let count = subdivisions + 1;
+    [
+        Box::new(|column| column),
+        Box::new(move |column| subdivisions * count + column),
+        Box::new(move |row| row * count),
+        Box::new(move |row| row * count + subdivisions),
+    ]
+}
+
+/// Adds the vertices of a downward skirt on all four edges. The skirt depth
+/// scales with the tile's ground size, which is what makes it hide cracks at
+/// coarse levels too.
+fn append_skirt_vertices(
     positions: &mut Vec<[f32; 3]>,
     uvs: &mut Vec<[f32; 2]>,
-    indices: &mut Vec<u32>,
     id: TileId,
     subdivisions: u32,
     center: DVec3,
     min_depth: f64,
 ) {
-    let count = subdivisions + 1;
     let skirt_depth = (id.ground_size_m() * 0.02)
         .clamp(20.0, 200_000.0)
         .max(min_depth);
-    let edges: [Vec<usize>; 4] = [
-        (0..count).map(|column| column as usize).collect(),
-        (0..count)
-            .map(|column| (subdivisions * count + column) as usize)
-            .collect(),
-        (0..count).map(|row| (row * count) as usize).collect(),
-        (0..count)
-            .map(|row| (row * count + subdivisions) as usize)
-            .collect(),
-    ];
-
-    for edge in edges {
-        let base = positions.len() as u32;
-        for &original in &edge {
+    for vertices in skirt_edges(subdivisions) {
+        for k in 0..=subdivisions {
+            let original = vertices(k) as usize;
             let local = Vec3::from_array(positions[original]);
             let world = center + local.as_dvec3();
             let normal = ellipsoid_normal(world).as_vec3();
             positions.push((local - normal * skirt_depth as f32).to_array());
             uvs.push(uvs[original]);
-        }
-        for pair in 0..edge.len().saturating_sub(1) {
-            let top_a = edge[pair] as u32;
-            let top_b = edge[pair + 1] as u32;
-            let bottom_a = base + pair as u32;
-            let bottom_b = base + pair as u32 + 1;
-            indices.extend_from_slice(&[top_a, bottom_a, top_b, top_b, bottom_a, bottom_b]);
         }
     }
 }
@@ -922,7 +998,7 @@ mod tests {
     fn mesh_on(
         id: TileId,
         cells: u32,
-        ground: Option<&TerrainSampler<'_>>,
+        ground: Option<&dyn TerrainSampler>,
         stitched: [u8; 4],
     ) -> TileMesh {
         build_tile_mesh_on(id, cells, ground, stitched, &|tile, _| tile.z)

@@ -19,9 +19,12 @@ ehttp = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 serde = { workspace = true }
+web-time = { workspace = true }
 
 [dev-dependencies]
 pollster = { workspace = true }
+# The no-op backend gives the benchmark example a GPU-free device.
+wgpu = { workspace = true, features = ["noop"] }
 proptest = "1.12"
 terra-testkit = { workspace = true }
 tiny_http = "0.12"

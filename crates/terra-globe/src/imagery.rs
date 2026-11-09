@@ -5,9 +5,11 @@
 //! honest without a second implementation.
 
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender};
-use std::time::{Duration, Instant};
+use std::sync::{Arc, OnceLock};
+use std::time::Duration;
+
+use web_time::Instant;
 
 use image::RgbaImage;
 use terra_providers::TileSource;
@@ -442,50 +444,55 @@ pub fn premultiply_srgb(image: &RgbaImage) -> RgbaImage {
 /// visible on a checkerboard of dark and light imagery.
 pub fn mip_chain(image: &RgbaImage) -> Vec<RgbaImage> {
     let mut levels = vec![image.clone()];
-    let mut current = image.clone();
-    while current.width() > 1 || current.height() > 1 {
-        current = downsample_half(&current);
-        levels.push(current.clone());
+    while let Some(last) = levels.last() {
+        if last.width() <= 1 && last.height() <= 1 {
+            break;
+        }
+        levels.push(downsample_half(last));
     }
     levels
 }
 
 fn downsample_half(image: &RgbaImage) -> RgbaImage {
-    let width = (image.width() / 2).max(1);
-    let height = (image.height() / 2).max(1);
-    let mut out = RgbaImage::new(width, height);
+    let (source_width, source_height) = (image.width() as usize, image.height() as usize);
+    let width = (source_width / 2).max(1);
+    let height = (source_height / 2).max(1);
+    let source = image.as_raw();
+    let tables = srgb_tables();
+    let mut out = Vec::with_capacity(width * height * 4);
     for y in 0..height {
         for x in 0..width {
             let mut lin = [0.0f32; 4];
             for dy in 0..2 {
                 for dx in 0..2 {
-                    let px = image.get_pixel(
-                        (x * 2 + dx).min(image.width() - 1),
-                        (y * 2 + dy).min(image.height() - 1),
-                    );
-                    lin[0] += srgb_to_linear(px[0]);
-                    lin[1] += srgb_to_linear(px[1]);
-                    lin[2] += srgb_to_linear(px[2]);
+                    let column = (x * 2 + dx).min(source_width - 1);
+                    let row = (y * 2 + dy).min(source_height - 1);
+                    let Some(px) = source
+                        .get((row * source_width + column) * 4..)
+                        .and_then(|rest| rest.get(..4))
+                    else {
+                        continue;
+                    };
+                    lin[0] += tables.linear[usize::from(px[0])];
+                    lin[1] += tables.linear[usize::from(px[1])];
+                    lin[2] += tables.linear[usize::from(px[2])];
                     lin[3] += f32::from(px[3]) / 255.0;
                 }
             }
-            out.put_pixel(
-                x,
-                y,
-                image::Rgba([
-                    linear_to_srgb(lin[0] / 4.0),
-                    linear_to_srgb(lin[1] / 4.0),
-                    linear_to_srgb(lin[2] / 4.0),
-                    ((lin[3] / 4.0).clamp(0.0, 1.0) * 255.0).round() as u8,
-                ]),
-            );
+            out.extend_from_slice(&[
+                linear_to_srgb(lin[0] / 4.0),
+                linear_to_srgb(lin[1] / 4.0),
+                linear_to_srgb(lin[2] / 4.0),
+                ((lin[3] / 4.0).clamp(0.0, 1.0) * 255.0).round() as u8,
+            ]);
         }
     }
-    out
+    RgbaImage::from_raw(width as u32, height as u32, out)
+        .unwrap_or_else(|| RgbaImage::new(width as u32, height as u32))
 }
 
-fn srgb_to_linear(value: u8) -> f32 {
-    let value = f32::from(value) / 255.0;
+/// The sRGB transfer function, for a value in 0..=1.
+fn srgb_decode(value: f32) -> f32 {
     if value <= 0.04045 {
         value / 12.92
     } else {
@@ -493,14 +500,32 @@ fn srgb_to_linear(value: u8) -> f32 {
     }
 }
 
+/// Linear value of each sRGB byte, and the linear value at which the encoded
+/// byte rounds up to the next one. Every tile's mip chain converts a few
+/// hundred thousand samples on the render thread, and `powf` per sample was
+/// several milliseconds per tile.
+struct SrgbTables {
+    linear: [f32; 256],
+    round_up_at: [f32; 255],
+}
+
+fn srgb_tables() -> &'static SrgbTables {
+    static TABLES: OnceLock<SrgbTables> = OnceLock::new();
+    TABLES.get_or_init(|| SrgbTables {
+        linear: std::array::from_fn(|byte| srgb_decode(byte as f32 / 255.0)),
+        round_up_at: std::array::from_fn(|byte| srgb_decode((byte as f32 + 0.5) / 255.0)),
+    })
+}
+
+fn srgb_to_linear(value: u8) -> f32 {
+    srgb_tables().linear[usize::from(value)]
+}
+
 fn linear_to_srgb(value: f32) -> u8 {
-    let value = value.clamp(0.0, 1.0);
-    let encoded = if value <= 0.003_130_8 {
-        value * 12.92
-    } else {
-        1.055 * value.powf(1.0 / 2.4) - 0.055
-    };
-    (encoded * 255.0).round().clamp(0.0, 255.0) as u8
+    let steps = srgb_tables()
+        .round_up_at
+        .partition_point(|threshold| *threshold <= value);
+    u8::try_from(steps).unwrap_or(u8::MAX)
 }
 
 /// The 1x1 texture used for tiles whose imagery has not loaded yet, and for the
@@ -589,6 +614,31 @@ mod tests {
         assert_eq!(mips[0].dimensions(), (256, 256));
         assert_eq!(mips[1].dimensions(), (128, 128));
         assert_eq!(mips[8].dimensions(), (1, 1));
+    }
+
+    #[test]
+    fn the_srgb_tables_agree_with_the_transfer_function() {
+        for byte in 0..=255u8 {
+            assert_eq!(linear_to_srgb(srgb_to_linear(byte)), byte);
+        }
+        assert_eq!(linear_to_srgb(-1.0), 0);
+        assert_eq!(linear_to_srgb(f32::NAN), 0);
+        assert_eq!(linear_to_srgb(2.0), 255);
+        for step in 0..=100_000u32 {
+            let linear = step as f32 / 100_000.0;
+            let encoded = if linear <= 0.003_130_8 {
+                linear * 12.92
+            } else {
+                1.055 * linear.powf(1.0 / 2.4) - 0.055
+            } * 255.0;
+            let byte = f32::from(linear_to_srgb(linear));
+            // Equal to rounding the formula, except within float error of a
+            // rounding boundary, where either neighbour is right.
+            assert!(
+                (byte - encoded).abs() <= 0.5 + 1e-3,
+                "{linear}: {byte} vs {encoded}"
+            );
+        }
     }
 
     #[test]

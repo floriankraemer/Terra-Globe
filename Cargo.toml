@@ -59,3 +59,12 @@ unsafe_code = "forbid"
 dbg_macro = "deny"
 todo = "deny"
 unimplemented = "deny"
+
+# A debug build of the globe is otherwise too slow to judge anything by: tile
+# meshes, image decoding and mip chains are tight numeric loops that run ten
+# times slower unoptimised. Debug assertions and overflow checks stay on.
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.dev.package.terra-globe]
+opt-level = 2

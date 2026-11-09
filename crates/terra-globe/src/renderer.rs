@@ -9,6 +9,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use glam::DVec3;
+use web_time::Instant;
 use wgpu::util::DeviceExt;
 
 use crate::camera::Camera;
@@ -25,8 +26,8 @@ use crate::scene::{ROUTE_COLOR, Scene, TRANSIENT_COLOR, transient_style};
 use crate::terrain::{Terrain, elevation_tile_for};
 use crate::tiles::{
     LonLatRect, SelectedTile, SelectionOptions, TileMesh, build_flat_rect_mesh, build_polar_cap,
-    build_rect_mesh_on, build_tile_mesh_on, coarser_neighbours, corner_level,
-    nearest_ready_texture, select_tiles_with_relief, terrain_subdivisions,
+    build_rect_mesh_on, build_tile_vertices_on, coarser_neighbours, corner_level,
+    nearest_ready_texture, select_tiles_with_relief, terrain_subdivisions, tile_mesh_indices,
 };
 use terra_providers::TileSource;
 
@@ -39,6 +40,9 @@ const TERRAIN_DEPTH_PULL: f32 = 0.003;
 /// Meshes of resident tiles rebuilt per frame when new elevation arrives;
 /// the rest keep their old shape (their skirts cover the seams) until their turn.
 const MESH_REBUILDS_PER_FRAME: usize = 12;
+/// Frames a tile texture or mesh may go undrawn before it is dropped, once
+/// its cache is over budget.
+const RESOURCE_IDLE_FRAMES: u64 = 240;
 /// Frames between re-tessellations of the placemark scene while elevation
 /// tiles keep arriving.
 const SCENE_REBUILD_INTERVAL_FRAMES: u64 = 30;
@@ -71,6 +75,11 @@ pub struct RenderStats {
     pub terrain_requests: usize,
     /// Elevation tiles resident.
     pub terrain_tiles: usize,
+    /// Globe tile meshes built or rebuilt this frame.
+    pub meshes_built: usize,
+    /// CPU time spent preparing the frame (selection, meshes, uploads),
+    /// before the draw calls are recorded.
+    pub prepare_micros: u32,
 }
 
 #[repr(C)]
@@ -107,6 +116,9 @@ struct GpuMesh {
     stitched: [u8; 4],
     /// Levels the corners were sampled at (see `corner_level`).
     corners: [u8; 4],
+    /// Grid cells per side; 0 for meshes that are not tile grids.
+    subdivisions: u32,
+    last_used_frame: u64,
 }
 
 struct GpuSceneBuffer {
@@ -195,6 +207,9 @@ pub struct GlobeRenderer {
     sampler: wgpu::Sampler,
     fallback_view: wgpu::TextureView,
     meshes: HashMap<TileId, GpuMesh>,
+    /// Triangles of the globe tile grids by cells per side. Every tile of one
+    /// resolution shares them.
+    grid_indices: HashMap<u32, (wgpu::Buffer, u32)>,
     flat_meshes: HashMap<TileId, GpuMesh>,
     mode: SceneMode,
     textures: HashMap<TileId, GpuTexture>,
@@ -226,6 +241,7 @@ pub struct GlobeRenderer {
     /// happened on, so arriving elevation tiles do not re-tessellate every frame.
     scene_stamp: u64,
     scene_built_frame: u64,
+    meshes_built: usize,
 }
 
 impl GlobeRenderer {
@@ -483,7 +499,6 @@ impl GlobeRenderer {
             &sampler,
             &fallback_view,
             &build_polar_cap(true, 96, 6),
-            None,
         );
         let south_cap = upload_mesh(
             &device,
@@ -491,7 +506,6 @@ impl GlobeRenderer {
             &sampler,
             &fallback_view,
             &build_polar_cap(false, 96, 6),
-            None,
         );
 
         let (color_texture, color_view, msaa_view, depth_view) =
@@ -512,6 +526,7 @@ impl GlobeRenderer {
             sampler,
             fallback_view,
             meshes: HashMap::new(),
+            grid_indices: HashMap::new(),
             flat_meshes: HashMap::new(),
             mode: SceneMode::Scene3D,
             textures: HashMap::new(),
@@ -537,6 +552,7 @@ impl GlobeRenderer {
             terrain: Terrain::new(TileSource::terrain_terrarium()),
             scene_stamp: 0,
             scene_built_frame: 0,
+            meshes_built: 0,
         }
     }
 
@@ -1006,7 +1022,9 @@ impl GlobeRenderer {
         provider: &TileProvider,
         fetcher: &mut TileFetcher,
     ) -> RenderStats {
+        let started = Instant::now();
         self.frame_index += 1;
+        self.meshes_built = 0;
         if mode != self.mode {
             self.mode = mode;
             self.scene_dirty = true;
@@ -1103,8 +1121,20 @@ impl GlobeRenderer {
 
         // Keep a little history for parent fallback when the camera jitters,
         // but never let the caches grow without bound.
-        if self.meshes.len() > self.options.max_tiles.saturating_mul(2) {
-            self.meshes.retain(|id, _| selected_ids.contains(id));
+        // Tiles that left the view usually come back (the camera turns, or
+        // zooms out again), so the meshes used longest ago go first, rather
+        // than everything that is not on screen at once.
+        let mesh_budget = self.options.max_tiles.saturating_mul(2);
+        if self.meshes.len() > mesh_budget {
+            let mut used: Vec<u64> = self
+                .meshes
+                .values()
+                .map(|mesh| mesh.last_used_frame)
+                .collect();
+            used.sort_unstable_by(|a, b| b.cmp(a));
+            let oldest_kept = used.get(mesh_budget - 1).copied().unwrap_or(0);
+            self.meshes
+                .retain(|_, mesh| mesh.last_used_frame >= oldest_kept);
         }
         if self.flat_meshes.len() > self.options.max_tiles.saturating_mul(4) {
             self.flat_meshes.retain(|id, _| selected_ids.contains(id));
@@ -1112,7 +1142,8 @@ impl GlobeRenderer {
         if self.textures.len() > self.options.max_tiles.saturating_mul(2) {
             let mut evicted = Vec::new();
             self.textures.retain(|id, texture| {
-                let keep = self.frame_index.saturating_sub(texture.last_used_frame) < 240;
+                let keep =
+                    self.frame_index.saturating_sub(texture.last_used_frame) < RESOURCE_IDLE_FRAMES;
                 if !keep {
                     evicted.push(*id);
                 }
@@ -1175,6 +1206,7 @@ impl GlobeRenderer {
         }
         let pull = if stamp == 0 { 0.0 } else { TERRAIN_DEPTH_PULL };
         let scene_draws = self.prepare_scene_draws(eye, pull);
+        let prepare_micros = u32::try_from(started.elapsed().as_micros()).unwrap_or(u32::MAX);
 
         let mut encoder = self
             .device
@@ -1274,6 +1306,8 @@ impl GlobeRenderer {
             scene_items: self.scene_items.len(),
             terrain_requests: self.terrain.in_flight() + self.terrain.queued(),
             terrain_tiles: self.terrain.cache().len(),
+            meshes_built: self.meshes_built,
+            prepare_micros,
         };
         self.stats
     }
@@ -1392,7 +1426,7 @@ impl GlobeRenderer {
         let budget = self.options.max_tiles.saturating_mul(2);
         if layer.textures.len() > budget {
             layer.textures.retain(|_, texture| {
-                self.frame_index.saturating_sub(texture.last_used_frame) < 240
+                self.frame_index.saturating_sub(texture.last_used_frame) < RESOURCE_IDLE_FRAMES
             });
         }
         // A binding keeps its texture alive, so drop those whose texture is
@@ -1495,6 +1529,7 @@ impl GlobeRenderer {
         rebuilds_left: &mut usize,
     ) {
         if let Some(mesh) = self.meshes.get_mut(&id) {
+            mesh.last_used_frame = self.frame_index;
             // New elevation only matters to the meshes it can change; the rest
             // keep their shape, so neighbours stay consistent while tiles stream in.
             if mesh.stitched == stitched
@@ -1523,37 +1558,67 @@ impl GlobeRenderer {
             Some(_) => *rebuilds_left = rebuilds_left.saturating_sub(1),
             None => {}
         }
-        let mesh = if stamp == 0 {
-            build_tile_mesh_on(
-                id,
-                crate::tiles::DEFAULT_SUBDIVISIONS,
-                None,
-                [0; 4],
-                &|tile, _| tile.z,
-            )
+        self.meshes_built += 1;
+        let subdivisions = if stamp == 0 {
+            crate::tiles::DEFAULT_SUBDIVISIONS
         } else {
-            let ground =
-                |lon: f64, lat: f64, level: u8| self.terrain.ground_at_level(lon, lat, level);
-            build_tile_mesh_on(
+            terrain_subdivisions(id.z)
+        };
+        let built = if stamp == 0 {
+            build_tile_vertices_on(id, subdivisions, None, [0; 4], &|tile, _| tile.z)
+        } else {
+            build_tile_vertices_on(
                 id,
-                terrain_subdivisions(id.z),
-                Some(&ground),
+                subdivisions,
+                Some(&self.terrain),
                 stitched,
                 &|tile, corner| corner_level(tile, corner, &|other| leaves.contains(&other)),
             )
         };
-        let mut gpu = upload_mesh(
-            &self.device,
-            &self.tile_layout,
-            &self.sampler,
-            &self.fallback_view,
-            &mesh,
-            None,
-        );
-        gpu.terrain_stamp = stamp;
-        gpu.stitched = stitched;
-        gpu.corners = corners;
-        self.meshes.insert(id, gpu);
+        let vertices = interleave(&built.positions, &built.uvs);
+        match self.meshes.get_mut(&id) {
+            // Same grid, new heights: the buffers, the uniform and the texture
+            // binding all stay, only the vertex data is replaced.
+            Some(mesh) if mesh.subdivisions == subdivisions => {
+                self.queue
+                    .write_buffer(&mesh.vertex_buffer, 0, bytemuck::cast_slice(&vertices));
+                mesh.terrain_stamp = stamp;
+                mesh.stitched = stitched;
+                mesh.corners = corners;
+            }
+            _ => {
+                let indices = self
+                    .grid_indices
+                    .entry(subdivisions)
+                    .or_insert_with(|| {
+                        let indices = tile_mesh_indices(subdivisions);
+                        let buffer =
+                            self.device
+                                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                                    label: Some("terra-globe tile grid indices"),
+                                    contents: bytemuck::cast_slice(&indices),
+                                    usage: wgpu::BufferUsages::INDEX,
+                                });
+                        (buffer, u32::try_from(indices.len()).unwrap_or(u32::MAX))
+                    })
+                    .clone();
+                let mut gpu = create_mesh(
+                    &self.device,
+                    &self.tile_layout,
+                    &self.sampler,
+                    &self.fallback_view,
+                    &vertices,
+                    indices,
+                    built.center_ecef,
+                );
+                gpu.terrain_stamp = stamp;
+                gpu.stitched = stitched;
+                gpu.corners = corners;
+                gpu.subdivisions = subdivisions;
+                gpu.last_used_frame = self.frame_index;
+                self.meshes.insert(id, gpu);
+            }
+        }
     }
 
     fn ensure_flat_mesh(&mut self, id: TileId) {
@@ -1567,7 +1632,6 @@ impl GlobeRenderer {
             &self.sampler,
             &self.fallback_view,
             &mesh,
-            None,
         );
         self.flat_meshes.insert(id, gpu);
     }
@@ -2053,27 +2117,56 @@ fn create_bind_group(
     })
 }
 
+/// Position and texture coordinate of each vertex, as the tile pipelines
+/// read them.
+fn interleave(positions: &[[f32; 3]], uvs: &[[f32; 2]]) -> Vec<f32> {
+    let mut vertices = Vec::with_capacity(positions.len() * 5);
+    for (position, uv) in positions.iter().zip(uvs.iter()) {
+        vertices.extend_from_slice(&[position[0], position[1], position[2], uv[0], uv[1]]);
+    }
+    vertices
+}
+
 fn upload_mesh(
     device: &wgpu::Device,
     layout: &wgpu::BindGroupLayout,
     sampler: &wgpu::Sampler,
     fallback_view: &wgpu::TextureView,
     mesh: &TileMesh,
-    texture: Option<&wgpu::TextureView>,
 ) -> GpuMesh {
-    let mut vertices = Vec::with_capacity(mesh.positions.len() * 5);
-    for (position, uv) in mesh.positions.iter().zip(mesh.uvs.iter()) {
-        vertices.extend_from_slice(&[position[0], position[1], position[2], uv[0], uv[1]]);
-    }
-    let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("terra-globe tile vertices"),
-        contents: bytemuck::cast_slice(&vertices),
-        usage: wgpu::BufferUsages::VERTEX,
-    });
     let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("terra-globe tile indices"),
         contents: bytemuck::cast_slice(&mesh.indices),
         usage: wgpu::BufferUsages::INDEX,
+    });
+    create_mesh(
+        device,
+        layout,
+        sampler,
+        fallback_view,
+        &interleave(&mesh.positions, &mesh.uvs),
+        (
+            index_buffer,
+            u32::try_from(mesh.indices.len()).unwrap_or(u32::MAX),
+        ),
+        mesh.center_ecef,
+    )
+}
+
+fn create_mesh(
+    device: &wgpu::Device,
+    layout: &wgpu::BindGroupLayout,
+    sampler: &wgpu::Sampler,
+    fallback_view: &wgpu::TextureView,
+    vertices: &[f32],
+    (index_buffer, index_count): (wgpu::Buffer, u32),
+    center: DVec3,
+) -> GpuMesh {
+    let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        label: Some("terra-globe tile vertices"),
+        contents: bytemuck::cast_slice(vertices),
+        // Rewritten in place when the terrain under the tile changes.
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
     });
     let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("terra-globe tile uniform"),
@@ -2086,20 +2179,22 @@ fn upload_mesh(
         layout,
         sampler,
         fallback_view,
-        texture,
+        None,
         &uniform_buffer,
     );
     GpuMesh {
         vertex_buffer,
         index_buffer,
-        index_count: u32::try_from(mesh.indices.len()).unwrap_or(u32::MAX),
-        center: mesh.center_ecef,
+        index_count,
+        center,
         uniform_buffer,
         bind_group,
         bound_texture: None,
         terrain_stamp: 0,
         stitched: [0; 4],
         corners: [0; 4],
+        subdivisions: 0,
+        last_used_frame: 0,
     }
 }
 

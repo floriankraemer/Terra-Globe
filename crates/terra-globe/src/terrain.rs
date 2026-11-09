@@ -5,6 +5,7 @@
 //! meshes with [`TerrainCache::height_at_level`], and the placemark, picking
 //! and camera code share the same lookup through [`crate::geo::GroundFn`].
 
+use std::cell::Cell;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::Arc;
 
@@ -244,93 +245,69 @@ impl TerrainCache {
     /// Coarse meshes sample coarse tiles, which keeps them from aliasing the
     /// detail of the deepest level.
     pub fn height_at_level(&self, lon_deg: f64, lat_deg: f64, max_level: u8) -> Option<f64> {
-        if !lon_deg.is_finite() || !lat_deg.is_finite() || lat_deg.abs() > MERCATOR_MAX_LAT_DEG {
-            return None;
-        }
-        let lon = (lon_deg + 180.0).rem_euclid(360.0) - 180.0;
-        let (u, v) = lon_lat_to_mercator_uv(lon, lat_deg);
-        let top = max_level.min(MAX_TERRAIN_LEVEL);
-        (0..=top)
-            .rev()
-            .filter(|level| self.levels & (1 << level) != 0)
-            .find_map(|level| self.sample(level, u, v))
+        let (u, v) = (mercator_u(lon_deg)?, mercator_v(lat_deg)?);
+        self.deepest_sample(
+            &|id| self.tiles.get(&id).map(|tile| &**tile),
+            u,
+            v,
+            max_level,
+        )
     }
 
-    /// Bilinear sample at one level, or `None` when the tile under the point
-    /// is not resident. Neighbouring tiles supply the interpolation taps
-    /// across a tile edge; where the neighbour is missing the edge sample is
-    /// repeated.
-    fn sample(&self, level: u8, u: f64, v: f64) -> Option<f64> {
-        let tiles_per_side = 1u64 << level;
-        let size = u64::from(TERRAIN_TILE_SIZE);
-        let pixels = tiles_per_side * size;
-        let global_x = u * pixels as f64;
-        let global_y = v * pixels as f64;
-        let home_x = (global_x / size as f64)
-            .floor()
-            .clamp(0.0, (tiles_per_side - 1) as f64) as u64;
-        let home_y = (global_y / size as f64)
-            .floor()
-            .clamp(0.0, (tiles_per_side - 1) as f64) as u64;
-        let x = global_x - 0.5;
-        let y = global_y - 0.5;
-        let (x0, y0) = (x.floor(), y.floor());
-        let (fx, fy) = (x - x0, y - y0);
-        // The tile the taps fall back on when a neighbour is missing. Normally
-        // the one under the point; but a point on the boundary between two
-        // tiles belongs to either, and when only one is loaded it has to be
-        // that one. Otherwise every vertex on the shared edge would fall back
-        // to a coarser level than the vertices beside it, which is a ridge one
-        // cell wide along the whole edge of the tile.
-        let tile_at = |tx: u64, ty: u64| {
-            Some(TileId {
-                z: level,
-                x: u32::try_from(tx).ok()?,
-                y: u32::try_from(ty).ok()?,
-            })
-        };
-        let (mut home_x, mut home_y) = (home_x, home_y);
-        if !tile_at(home_x, home_y).is_some_and(|id| self.tiles.contains_key(&id)) {
-            let column = |offset: i64| (x0 as i64 + offset).rem_euclid(pixels as i64) as u64 / size;
-            let row = |offset: i64| (y0 as i64 + offset).clamp(0, pixels as i64 - 1) as u64 / size;
-            let (lo_x, hi_x, lo_y, hi_y) = (column(0), column(1), row(0), row(1));
-            let mut found = None;
-            for ty in [lo_y, hi_y] {
-                for tx in [lo_x, hi_x] {
-                    if tile_at(tx, ty).is_some_and(|id| self.tiles.contains_key(&id)) {
-                        found.get_or_insert((tx, ty));
-                    }
-                }
-            }
-            (home_x, home_y) = found?;
-        }
-        let home = self.tiles.get(&tile_at(home_x, home_y)?)?;
-        let tap = |dx: i64, dy: i64| -> f64 {
-            let px = (x0 as i64 + dx).rem_euclid(pixels as i64) as u64;
-            let py = (y0 as i64 + dy).clamp(0, pixels as i64 - 1) as u64;
-            let neighbour = u32::try_from(px / size)
-                .ok()
-                .zip(u32::try_from(py / size).ok())
-                .and_then(|(tx, ty)| {
-                    self.tiles.get(&TileId {
-                        z: level,
-                        x: tx,
-                        y: ty,
+    /// [`Self::height_at_level`] at every node of a longitude/latitude grid,
+    /// written row-major (one row per latitude) into `out`, with 0 where
+    /// nothing answers. The answers are the same; a tile mesh asks for
+    /// thousands of nodes that mostly fall in one elevation tile, so the
+    /// projection is done once per row and column and the tile lookups are
+    /// remembered between nodes instead of being hashed again for each.
+    pub fn heights_at_level(
+        &self,
+        lons_deg: &[f64],
+        lats_deg: &[f64],
+        max_level: u8,
+        out: &mut [f64],
+    ) {
+        let memo = TileMemo::new(&self.tiles);
+        let get = |id: TileId| memo.get(id);
+        let top = max_level.min(MAX_TERRAIN_LEVEL);
+        let top_resident = self.levels & (1 << top) != 0;
+        // A mesh samples its own level, which is the deepest one here as soon
+        // as its elevation tile has arrived, so the pixel positions at that
+        // level are worked out once per column and row.
+        let columns: Vec<Option<(f64, Axis)>> = lons_deg
+            .iter()
+            .map(|lon| mercator_u(*lon).map(|u| (u, Axis::at(top, u))))
+            .collect();
+        let mut nodes = out.iter_mut();
+        for lat in lats_deg {
+            let row = mercator_v(*lat).map(|v| (v, Axis::at(top, v)));
+            for (column, node) in columns.iter().zip(&mut nodes) {
+                *node = column
+                    .zip(row)
+                    .and_then(|((u, column), (v, row))| {
+                        top_resident
+                            .then(|| sample(&get, top, column, row))
+                            .flatten()
+                            .or_else(|| self.deepest_sample(&get, u, v, top.checked_sub(1)?))
                     })
-                });
-            let (tile, local_x, local_y) = match neighbour {
-                Some(tile) => (tile, px % size, py % size),
-                None => (
-                    home,
-                    px.clamp(home_x * size, home_x * size + size - 1) - home_x * size,
-                    py.clamp(home_y * size, home_y * size + size - 1) - home_y * size,
-                ),
-            };
-            f64::from(tile.at(local_x as u32, local_y as u32))
-        };
-        let top = tap(0, 0) * (1.0 - fx) + tap(1, 0) * fx;
-        let bottom = tap(0, 1) * (1.0 - fx) + tap(1, 1) * fx;
-        Some(top * (1.0 - fy) + bottom * fy)
+                    .unwrap_or(0.0);
+            }
+        }
+    }
+
+    /// The sample from the deepest resident level, no deeper than `max_level`,
+    /// that covers the point.
+    fn deepest_sample<'a>(
+        &self,
+        get: &impl Fn(TileId) -> Option<&'a TerrainTile>,
+        u: f64,
+        v: f64,
+        max_level: u8,
+    ) -> Option<f64> {
+        (0..=max_level.min(MAX_TERRAIN_LEVEL))
+            .rev()
+            .filter(|level| self.levels & (1 << level) != 0)
+            .find_map(|level| sample(get, level, Axis::at(level, u), Axis::at(level, v)))
     }
 
     /// Lowest and highest sample of the nearest resident tile that covers
@@ -350,6 +327,176 @@ impl TerrainCache {
         }
         None
     }
+}
+
+/// Horizontal Web-Mercator coordinate of a longitude, wrapped into the world;
+/// `None` for garbage.
+fn mercator_u(lon_deg: f64) -> Option<f64> {
+    lon_deg
+        .is_finite()
+        .then(|| lon_lat_to_mercator_uv((lon_deg + 180.0).rem_euclid(360.0) - 180.0, 0.0).0)
+}
+
+/// Vertical Web-Mercator coordinate of a latitude; `None` for garbage and
+/// beyond the latitude limit, where no elevation tile exists.
+fn mercator_v(lat_deg: f64) -> Option<f64> {
+    (lat_deg.is_finite() && lat_deg.abs() <= MERCATOR_MAX_LAT_DEG)
+        .then(|| lon_lat_to_mercator_uv(0.0, lat_deg).1)
+}
+
+/// Remembers the last tile looked up at each level. Neighbouring samples
+/// nearly always land in the same tile, so a run of them hashes once.
+struct TileMemo<'a> {
+    tiles: &'a HashMap<TileId, Arc<TerrainTile>>,
+    last: [Cell<Option<Remembered<'a>>>; MAX_TERRAIN_LEVEL as usize + 1],
+}
+
+/// A tile address and what the cache holds for it.
+type Remembered<'a> = (TileId, Option<&'a TerrainTile>);
+
+impl<'a> TileMemo<'a> {
+    fn new(tiles: &'a HashMap<TileId, Arc<TerrainTile>>) -> Self {
+        Self {
+            tiles,
+            last: Default::default(),
+        }
+    }
+
+    fn get(&self, id: TileId) -> Option<&'a TerrainTile> {
+        let slot = self.last.get(usize::from(id.z))?;
+        match slot.get() {
+            Some((known, tile)) if known == id => tile,
+            _ => {
+                let tile = self.tiles.get(&id).map(|tile| &**tile);
+                slot.set(Some((id, tile)));
+                tile
+            }
+        }
+    }
+}
+
+/// Where a Web-Mercator coordinate falls in the pixel grid of one level,
+/// along one axis.
+#[derive(Clone, Copy)]
+struct Axis {
+    /// Index of the tile under the coordinate.
+    home: u64,
+    /// Global index of the first of the two pixels interpolated between; -1
+    /// in the half pixel before the first one.
+    first: i64,
+    /// Weight of the second pixel.
+    blend: f64,
+}
+
+impl Axis {
+    fn at(level: u8, coordinate: f64) -> Self {
+        let tiles_per_side = 1u64 << level;
+        let size = u64::from(TERRAIN_TILE_SIZE);
+        let global = coordinate * (tiles_per_side * size) as f64;
+        let position = global - 0.5;
+        Self {
+            home: (global / size as f64)
+                .floor()
+                .clamp(0.0, (tiles_per_side - 1) as f64) as u64,
+            first: position.floor() as i64,
+            blend: position - position.floor(),
+        }
+    }
+
+    /// Offset of `first` inside the home tile, when both pixels are in it.
+    fn inside_home(self) -> Option<usize> {
+        let offset = self.first - (self.home * u64::from(TERRAIN_TILE_SIZE)) as i64;
+        (0..i64::from(TERRAIN_TILE_SIZE) - 1)
+            .contains(&offset)
+            .then_some(offset as usize)
+    }
+}
+
+/// Bilinear sample at one level, or `None` when the tile under the point
+/// is not resident. Neighbouring tiles supply the interpolation taps
+/// across a tile edge; where the neighbour is missing the edge sample is
+/// repeated.
+fn sample<'a>(
+    get: &impl Fn(TileId) -> Option<&'a TerrainTile>,
+    level: u8,
+    column: Axis,
+    row: Axis,
+) -> Option<f64> {
+    let size = u64::from(TERRAIN_TILE_SIZE);
+    let pixels = (1u64 << level) * size;
+    let (x0, y0) = (column.first, row.first);
+    let (fx, fy) = (column.blend, row.blend);
+    let tile_at = |tx: u64, ty: u64| {
+        Some(TileId {
+            z: level,
+            x: u32::try_from(tx).ok()?,
+            y: u32::try_from(ty).ok()?,
+        })
+    };
+    let (mut home_x, mut home_y) = (column.home, row.home);
+    let resident = tile_at(home_x, home_y).and_then(get);
+    // Away from the tile's border all four taps are its own samples; this is
+    // nearly every lookup, so it skips the neighbour search below.
+    if let (Some(home), Some(left), Some(top)) = (resident, column.inside_home(), row.inside_home())
+    {
+        let upper = top * TERRAIN_TILE_SIZE as usize + left;
+        let lower = upper + TERRAIN_TILE_SIZE as usize;
+        if let (Some(upper), Some(lower)) = (
+            home.heights.get(upper..upper + 2),
+            home.heights.get(lower..lower + 2),
+        ) {
+            let top = f64::from(upper[0]) * (1.0 - fx) + f64::from(upper[1]) * fx;
+            let bottom = f64::from(lower[0]) * (1.0 - fx) + f64::from(lower[1]) * fx;
+            return Some(top * (1.0 - fy) + bottom * fy);
+        }
+    }
+    // The tile the taps fall back on when a neighbour is missing. Normally
+    // the one under the point; but a point on the boundary between two
+    // tiles belongs to either, and when only one is loaded it has to be
+    // that one. Otherwise every vertex on the shared edge would fall back
+    // to a coarser level than the vertices beside it, which is a ridge one
+    // cell wide along the whole edge of the tile.
+    if resident.is_none() {
+        let across = |offset: i64| (x0 + offset).rem_euclid(pixels as i64) as u64 / size;
+        let down = |offset: i64| (y0 + offset).clamp(0, pixels as i64 - 1) as u64 / size;
+        let (lo_x, hi_x, lo_y, hi_y) = (across(0), across(1), down(0), down(1));
+        let mut found = None;
+        for ty in [lo_y, hi_y] {
+            for tx in [lo_x, hi_x] {
+                if tile_at(tx, ty).is_some_and(|id| get(id).is_some()) {
+                    found.get_or_insert((tx, ty));
+                }
+            }
+        }
+        (home_x, home_y) = found?;
+    }
+    let home = get(tile_at(home_x, home_y)?)?;
+    let tap = |dx: i64, dy: i64| -> f64 {
+        let px = (x0 + dx).rem_euclid(pixels as i64) as u64;
+        let py = (y0 + dy).clamp(0, pixels as i64 - 1) as u64;
+        let neighbour = u32::try_from(px / size)
+            .ok()
+            .zip(u32::try_from(py / size).ok())
+            .and_then(|(tx, ty)| {
+                get(TileId {
+                    z: level,
+                    x: tx,
+                    y: ty,
+                })
+            });
+        let (tile, local_x, local_y) = match neighbour {
+            Some(tile) => (tile, px % size, py % size),
+            None => (
+                home,
+                px.clamp(home_x * size, home_x * size + size - 1) - home_x * size,
+                py.clamp(home_y * size, home_y * size + size - 1) - home_y * size,
+            ),
+        };
+        f64::from(tile.at(local_x as u32, local_y as u32))
+    };
+    let top = tap(0, 0) * (1.0 - fx) + tap(1, 0) * fx;
+    let bottom = tap(0, 1) * (1.0 - fx) + tap(1, 1) * fx;
+    Some(top * (1.0 - fy) + bottom * fy)
 }
 
 /// The terrain model of a globe: whether it is on, where its tiles come from,
@@ -437,6 +584,26 @@ impl Terrain {
             .then(|| self.cache.height_at_level(lon_deg, lat_deg, max_level))
             .flatten()
             .map(|height| height.max(0.0))
+    }
+
+    /// [`Self::ground_at_level`] at every node of a grid (see
+    /// [`TerrainCache::heights_at_level`]), with 0 where it has no answer.
+    pub fn ground_grid_at_level(
+        &self,
+        lons_deg: &[f64],
+        lats_deg: &[f64],
+        max_level: u8,
+        out: &mut [f64],
+    ) {
+        if !self.enabled {
+            out.fill(0.0);
+            return;
+        }
+        self.cache
+            .heights_at_level(lons_deg, lats_deg, max_level, out);
+        for height in out {
+            *height = height.max(0.0);
+        }
     }
 
     /// Takes in tiles that finished downloading. Returns whether any arrived.
@@ -694,6 +861,73 @@ mod tests {
         // Capping the level skips the deep tile.
         assert_eq!(cache.height_at_level(in_deep.0, in_deep.1, 3), Some(10.0));
         assert_eq!(cache.height_at_level(in_deep.0, in_deep.1, 4), Some(900.0));
+    }
+
+    /// Heights that differ at every pixel and between tiles.
+    fn bumpy(seed: f32) -> TerrainTile {
+        let heights = (0..SAMPLES)
+            .map(|index| ((index as f32 * 0.37 + seed).sin() * 500.0) + seed)
+            .collect();
+        TerrainTile::from_heights(heights).expect("valid tile")
+    }
+
+    #[test]
+    fn a_grid_of_heights_is_the_same_as_asking_point_by_point() {
+        let mut cache = TerrainCache::new();
+        // A coarse tile, two of its children (so a neighbour is missing next
+        // to a loaded one), and one grandchild.
+        cache.insert(tile_id(3, 4, 2), bumpy(100.0));
+        cache.insert(tile_id(4, 8, 4), bumpy(200.0));
+        cache.insert(tile_id(4, 9, 5), bumpy(300.0));
+        cache.insert(tile_id(5, 16, 8), bumpy(400.0));
+        let area = tile_id(3, 4, 2).bounds();
+        // Past every edge of the loaded area, and through the tile boundaries.
+        let lons: Vec<f64> = (0..=90)
+            .map(|step| area.west - 3.0 + (area.width_deg() + 6.0) * f64::from(step) / 90.0)
+            .chain([f64::NAN, 180.0, -180.0, 540.0])
+            .collect();
+        let lats: Vec<f64> = (0..=70)
+            .map(|step| area.south - 3.0 + (area.height_deg() + 6.0) * f64::from(step) / 70.0)
+            .chain([f64::INFINITY, 89.0, -89.0])
+            .collect();
+        for max_level in [0, 3, 4, 5, MAX_TERRAIN_LEVEL] {
+            let mut grid = vec![f64::NAN; lons.len() * lats.len()];
+            cache.heights_at_level(&lons, &lats, max_level, &mut grid);
+            let mut answered = 0;
+            for (row, lat) in lats.iter().enumerate() {
+                for (column, lon) in lons.iter().enumerate() {
+                    let single = cache.height_at_level(*lon, *lat, max_level);
+                    answered += usize::from(single.is_some());
+                    assert_eq!(
+                        grid[row * lons.len() + column],
+                        single.unwrap_or(0.0),
+                        "level {max_level} at ({lon}, {lat})"
+                    );
+                }
+            }
+            assert_eq!(answered > 0, max_level >= 3, "level {max_level}");
+        }
+    }
+
+    #[test]
+    fn a_ground_grid_is_flat_while_terrain_is_off_and_never_below_the_sea() {
+        let mut terrain = Terrain::new(TileSource::terrain_terrarium());
+        terrain.cache_mut().insert(tile_id(0, 0, 0), bumpy(0.0));
+        let (lons, lats) = ([-20.0, 0.0, 20.0], [-10.0, 10.0]);
+        let mut grid = [f64::NAN; 6];
+        terrain.ground_grid_at_level(&lons, &lats, 0, &mut grid);
+        assert_eq!(grid, [0.0; 6]);
+
+        terrain.set_enabled(true);
+        terrain.ground_grid_at_level(&lons, &lats, 0, &mut grid);
+        for (row, lat) in lats.iter().enumerate() {
+            for (column, lon) in lons.iter().enumerate() {
+                let single = terrain.ground_at_level(*lon, *lat, 0).unwrap_or(0.0);
+                assert_eq!(grid[row * 3 + column], single);
+                assert!(single >= 0.0);
+            }
+        }
+        assert!(grid.iter().any(|height| *height > 0.0));
     }
 
     #[test]
